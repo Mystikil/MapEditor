@@ -1,4 +1,3 @@
-
 #ifndef RME_AUTOMAGIC_SETTINGS_H_
 #define RME_AUTOMAGIC_SETTINGS_H_
 
@@ -17,6 +16,7 @@ public:
     // Get the current settings from the dialog
     bool IsAutomagicEnabled() const;
     bool IsSameGroundTypeBorderEnabled() const;
+    bool IsLayerCarpetsEnabled() const;
 
 protected:
     // Event handlers
@@ -29,6 +29,7 @@ protected:
     // UI elements
     wxCheckBox* automagic_enabled_checkbox;
     wxCheckBox* same_ground_type_checkbox;
+    wxCheckBox* layer_carpets_checkbox;
     wxStdDialogButtonSizer* buttons_sizer;
     wxButton* ok_button;
     wxButton* cancel_button;
