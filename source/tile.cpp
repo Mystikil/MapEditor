@@ -539,6 +539,12 @@ GroundBrush* Tile::getGroundBrush() const {
 }
 
 void Tile::cleanBorders() {
+	// If Same Ground Type Border is enabled, we don't clean all borders
+	// This will be handled in the GroundBrush::doBorders method
+	if (g_settings.getBoolean(Config::SAME_GROUND_TYPE_BORDER)) {
+		return;
+	}
+
 	ItemVector::iterator it;
 
 	it = items.begin();

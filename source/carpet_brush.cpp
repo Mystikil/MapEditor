@@ -148,7 +148,10 @@ bool CarpetBrush::canDraw(BaseMap* map, const Position& position) const {
 }
 
 void CarpetBrush::draw(BaseMap* map, Tile* tile, void* parameter) {
-	undraw(map, tile); // Remove old
+	// Only remove old carpets if layering is disabled
+	if (!g_settings.getBoolean(Config::LAYER_CARPETS)) {
+		undraw(map, tile);
+	}
 	tile->addItem(Item::Create(getRandomCarpet(CARPET_CENTER)));
 }
 

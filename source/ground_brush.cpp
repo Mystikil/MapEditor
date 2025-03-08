@@ -885,7 +885,41 @@ void GroundBrush::doBorders(BaseMap* map, Tile* tile) {
 	}
 
 	std::sort(borderList.begin(), borderList.end());
-	tile->cleanBorders();
+	
+	// Check if we should preserve existing borders from other ground types
+	if (g_settings.getBoolean(Config::SAME_GROUND_TYPE_BORDER)) {
+		// If we are preserving borders, we need to identify and remove only
+		// the borders that belong to the current ground brush
+		ItemVector::iterator it = tile->items.begin();
+		while (it != tile->items.end()) {
+			if ((*it)->isBorder()) {
+				// Check if this border belongs to the current border group
+				// by comparing its ID with the IDs in our border list
+				bool is_current_border = false;
+				for (const auto& borderCluster : borderList) {
+					if (borderCluster.border && borderCluster.border->hasItemId((*it)->getID())) {
+						is_current_border = true;
+						break;
+					}
+				}
+				
+				if (is_current_border) {
+					// Remove only borders from the current border group
+					delete *it;
+					it = tile->items.erase(it);
+				} else {
+					// Keep borders from other border groups
+					++it;
+				}
+			} else {
+				// Not a border item, keep it
+				++it;
+			}
+		}
+	} else {
+		// Use the standard clean borders method if we're not preserving borders
+		tile->cleanBorders();
+	}
 
 	while (!borderList.empty()) {
 		BorderCluster& borderCluster = borderList.back();
