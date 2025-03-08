@@ -1648,8 +1648,11 @@ void Editor::drawInternal(const PositionVector& tilestodraw, PositionVector& til
 			if (tile) {
 				Tile* new_tile = tile->deepCopy(map);
 				if (g_settings.getInteger(Config::USE_AUTOMAGIC)) {
-					new_tile->cleanBorders();
-				}
+					// Only clean borders if we're not preserving borders from other ground types
+					if (!g_settings.getBoolean(Config::SAME_GROUND_TYPE_BORDER)) {
+						new_tile->cleanBorders();
+					}
+				} 
 				if (dodraw) {
 					if (brush->isGround() && alt) {
 						std::pair<bool, GroundBrush*> param;

@@ -441,6 +441,16 @@ public:
 	static int edgeNameToID(const std::string& edgename);
 	bool load(pugi::xml_node node, wxArrayString& warnings, GroundBrush* owner = nullptr, uint16_t ground_equivalent = 0);
 
+	// Check if this border contains the specified item ID
+	bool hasItemId(uint16_t id) const {
+		for (int i = 0; i < 13; ++i) {
+			if (tiles[i] == id) {
+				return true;
+			}
+		}
+		return false;
+	}
+
 	uint32_t tiles[13];
 	uint32_t id;
 	uint16_t group;

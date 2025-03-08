@@ -15,6 +15,42 @@
 // along with this program. If not, see <http://www.gnu.org/licenses/>.
 //////////////////////////////////////////////////////////////////////
 
+	/*
+	 * AUTOMAGIC SYSTEM OVERVIEW
+	 * -------------------------
+	 * The Automagic system in Remere's Map Editor provides automatic border and wall handling.
+	 * 
+	 * Files involved:
+	 * - settings.h/cpp: Defines USE_AUTOMAGIC, BORDERIZE_PASTE, BORDERIZE_DRAG settings
+	 * - main_menubar.h/cpp: Implements menu options for toggling Automagic and borderizing
+	 * - tile.h/cpp: Contains borderize() and wallize() methods that apply automatic borders/walls
+	 * - ground_brush.cpp: Implements GroundBrush::doBorders() which handles automatic borders
+	 * - wall_brush.cpp: Implements WallBrush::doWalls() which handles automatic walls
+	 * - borderize_window.cpp: UI for borderizing large selections or the entire map
+	 * - editor.cpp: Contains borderizeSelection() and borderizeMap() methods
+	 * - copybuffer.cpp: Applies borderize to pasted content
+	 * 
+	 * How it works:
+	 * 1. When enabled (via Config::USE_AUTOMAGIC), the editor automatically applies borders
+	 *    and wall connections when tiles are placed, moved, or modified.
+	 * 2. Borderizing examines neighboring tiles to determine appropriate borders between
+	 *    different terrain types.
+	 * 3. Wallizing connects wall segments automatically based on adjacent walls.
+	 * 4. The system can be triggered:
+	 *    - Automatically during editing when Automagic is enabled
+	 *    - Manually via Map > Borderize Selection (Ctrl+B)
+	 *    - Manually via Map > Borderize Map (processes the entire map)
+	 * 
+	 * Settings:
+	 * - BORDERIZE_PASTE: Automatically borderize after pasting
+	 * - BORDERIZE_DRAG: Automatically borderize after drag operations
+	 * - BORDERIZE_DRAG_THRESHOLD: Maximum selection size for auto-borderizing during drag
+	 * - BORDERIZE_PASTE_THRESHOLD: Maximum selection size for auto-borderizing during paste
+	 * 
+	 * The BorderizeWindow provides a UI for processing large maps in chunks to avoid
+	 * performance issues when borderizing extensive areas.
+	 */
+
 #include "main.h"
 
 #include "main_menubar.h"
@@ -27,6 +63,7 @@
 #include "extension_window.h"
 #include "find_item_window.h"
 #include "settings.h"
+#include "automagic_settings.h"
 
 #include "gui.h"
 
@@ -1320,12 +1357,14 @@ void MainMenuBar::OnPaste(wxCommandEvent& WXUNUSED(event)) {
 }
 
 void MainMenuBar::OnToggleAutomagic(wxCommandEvent& WXUNUSED(event)) {
-	g_settings.setInteger(Config::USE_AUTOMAGIC, IsItemChecked(MenuBar::AUTOMAGIC));
-	g_settings.setInteger(Config::BORDER_IS_GROUND, IsItemChecked(MenuBar::AUTOMAGIC));
-	if (g_settings.getInteger(Config::USE_AUTOMAGIC)) {
-		g_gui.SetStatusText("Automagic enabled.");
+	AutomagicSettingsDialog dialog(frame);
+	if (dialog.ShowModal() == wxID_OK) {
+		// Settings are saved in the dialog's OnClickOK method
+		// Update the menu item check state
+		CheckItem(MenuBar::AUTOMAGIC, g_settings.getBoolean(Config::USE_AUTOMAGIC));
 	} else {
-		g_gui.SetStatusText("Automagic disabled.");
+		// Restore the menu item check state to match the current setting
+		CheckItem(MenuBar::AUTOMAGIC, g_settings.getBoolean(Config::USE_AUTOMAGIC));
 	}
 }
 
@@ -1526,7 +1565,7 @@ namespace OnMapRemoveUnreachable {
 			if (pos.z <= GROUND_LAYER) {
 				sz = 0;
 				ez = 9;
-			} else {
+	} else {
 				// underground
 				sz = std::max(pos.z - 2, GROUND_LAYER);
 				ez = std::min(pos.z + 2, MAP_MAX_LAYER);
@@ -2700,7 +2739,7 @@ void MainMenuBar::OnMapRemoveDuplicates(wxCommandEvent& WXUNUSED(event)) {
     // Cancel button at bottom
     wxButton* cancel = new wxButton(&dialog, wxID_CANCEL, "Cancel");
     main_sizer->Add(cancel, 0, wxALL | wxCENTER, 5);
-
+//main_sizer 
     dialog.SetSizer(main_sizer);
 
     // Previous button handlers remain the same, but need to capture checkbox states
