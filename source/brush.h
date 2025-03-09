@@ -451,6 +451,23 @@ public:
 		return false;
 	}
 
+	// Get the item ID for a specific border alignment
+	uint16_t getItemId(uint32_t alignment) const {
+		// For now, just return the first matching tile
+		if (alignment < 13 && tiles[alignment] != 0) {
+			return tiles[alignment];
+		}
+		
+		// If no direct match, return the first non-zero tile
+		for (int i = 0; i < 13; ++i) {
+			if (tiles[i] != 0) {
+				return tiles[i];
+			}
+		}
+		
+		return 0; // No valid item ID found
+	}
+
 	uint32_t tiles[13];
 	uint32_t id;
 	uint16_t group;

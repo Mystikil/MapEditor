@@ -653,6 +653,27 @@ void GroundBrush::doBorders(BaseMap* map, Tile* tile) {
 		return nullptr;
 	};
 
+	// Helper function to check if a tile has a wall that should block borders
+	static const auto hasWallOrBlockingItem = [](BaseMap* map, uint32_t x, uint32_t y, uint32_t z) -> bool {
+		if (!g_settings.getBoolean(Config::WALLS_REPEL_BORDERS)) {
+			return false;
+		}
+		
+		Tile* tile = map->getTile(x, y, z);
+		if (!tile) {
+			return false;
+		}
+		
+		// Check if the tile has a wall
+		for (Item* item : tile->items) {
+			if (item->isWall()) {
+				return true;
+			}
+		}
+		
+		return false;
+	};
+
 	ASSERT(tile);
 
 	GroundBrush* borderBrush;
@@ -670,44 +691,85 @@ void GroundBrush::doBorders(BaseMap* map, Tile* tile) {
 
 	// Pair of visited / what border type
 	std::pair<bool, GroundBrush*> neighbours[8];
-	if (x == 0) {
+	
+	if (g_settings.getBoolean(Config::WALLS_REPEL_BORDERS)) {
+		// When walls repel borders, check each neighbor for walls
+		neighbours[0] = hasWallOrBlockingItem(map, x - 1, y - 1, z) ? std::make_pair(true, nullptr) : std::make_pair(false, extractGroundBrushFromTile(map, x - 1, y - 1, z));
+		neighbours[1] = hasWallOrBlockingItem(map, x, y - 1, z) ? std::make_pair(true, nullptr) : std::make_pair(false, extractGroundBrushFromTile(map, x, y - 1, z));
+		neighbours[2] = hasWallOrBlockingItem(map, x + 1, y - 1, z) ? std::make_pair(true, nullptr) : std::make_pair(false, extractGroundBrushFromTile(map, x + 1, y - 1, z));
+		neighbours[3] = hasWallOrBlockingItem(map, x - 1, y, z) ? std::make_pair(true, nullptr) : std::make_pair(false, extractGroundBrushFromTile(map, x - 1, y, z));
+		neighbours[4] = hasWallOrBlockingItem(map, x + 1, y, z) ? std::make_pair(true, nullptr) : std::make_pair(false, extractGroundBrushFromTile(map, x + 1, y, z));
+		neighbours[5] = hasWallOrBlockingItem(map, x - 1, y + 1, z) ? std::make_pair(true, nullptr) : std::make_pair(false, extractGroundBrushFromTile(map, x - 1, y + 1, z));
+		neighbours[6] = hasWallOrBlockingItem(map, x, y + 1, z) ? std::make_pair(true, nullptr) : std::make_pair(false, extractGroundBrushFromTile(map, x, y + 1, z));
+		neighbours[7] = hasWallOrBlockingItem(map, x + 1, y + 1, z) ? std::make_pair(true, nullptr) : std::make_pair(false, extractGroundBrushFromTile(map, x + 1, y + 1, z));
+		
+		// If the tile is on the edge of the map, set those neighbors as visited (no borders needed)
+		if (x == 0) {
+			neighbours[0].first = true;
+			neighbours[3].first = true;
+			neighbours[5].first = true;
+		}
 		if (y == 0) {
+			neighbours[0].first = true;
+			neighbours[1].first = true;
+			neighbours[2].first = true;
+		}
+		
+		// Check right and bottom edges - use a safer approach than direct map width/height
+		// Right edge - if we can't get a tile at x+1, we're at the edge
+		if (!map->getTile(x + 1, y, z)) {
+			neighbours[2].first = true;
+			neighbours[4].first = true;
+			neighbours[7].first = true;
+		}
+		
+		// Bottom edge - if we can't get a tile at y+1, we're at the edge
+		if (!map->getTile(x, y + 1, z)) {
+			neighbours[5].first = true;
+			neighbours[6].first = true;
+			neighbours[7].first = true;
+		}
+	} else {
+		// Standard border handling without wall repelling
+		if (x == 0) {
+			if (y == 0) {
+				neighbours[0] = { false, nullptr };
+				neighbours[1] = { false, nullptr };
+				neighbours[2] = { false, nullptr };
+				neighbours[3] = { false, nullptr };
+				neighbours[4] = { false, extractGroundBrushFromTile(map, x + 1, y, z) };
+				neighbours[5] = { false, nullptr };
+				neighbours[6] = { false, extractGroundBrushFromTile(map, x, y + 1, z) };
+				neighbours[7] = { false, extractGroundBrushFromTile(map, x + 1, y + 1, z) };
+			} else {
+				neighbours[0] = { false, nullptr };
+				neighbours[1] = { false, extractGroundBrushFromTile(map, x, y - 1, z) };
+				neighbours[2] = { false, extractGroundBrushFromTile(map, x + 1, y - 1, z) };
+				neighbours[3] = { false, nullptr };
+				neighbours[4] = { false, extractGroundBrushFromTile(map, x + 1, y, z) };
+				neighbours[5] = { false, nullptr };
+				neighbours[6] = { false, extractGroundBrushFromTile(map, x, y + 1, z) };
+				neighbours[7] = { false, extractGroundBrushFromTile(map, x + 1, y + 1, z) };
+			}
+		} else if (y == 0) {
 			neighbours[0] = { false, nullptr };
 			neighbours[1] = { false, nullptr };
 			neighbours[2] = { false, nullptr };
-			neighbours[3] = { false, nullptr };
+			neighbours[3] = { false, extractGroundBrushFromTile(map, x - 1, y, z) };
 			neighbours[4] = { false, extractGroundBrushFromTile(map, x + 1, y, z) };
-			neighbours[5] = { false, nullptr };
+			neighbours[5] = { false, extractGroundBrushFromTile(map, x - 1, y + 1, z) };
 			neighbours[6] = { false, extractGroundBrushFromTile(map, x, y + 1, z) };
 			neighbours[7] = { false, extractGroundBrushFromTile(map, x + 1, y + 1, z) };
 		} else {
-			neighbours[0] = { false, nullptr };
+			neighbours[0] = { false, extractGroundBrushFromTile(map, x - 1, y - 1, z) };
 			neighbours[1] = { false, extractGroundBrushFromTile(map, x, y - 1, z) };
 			neighbours[2] = { false, extractGroundBrushFromTile(map, x + 1, y - 1, z) };
-			neighbours[3] = { false, nullptr };
+			neighbours[3] = { false, extractGroundBrushFromTile(map, x - 1, y, z) };
 			neighbours[4] = { false, extractGroundBrushFromTile(map, x + 1, y, z) };
-			neighbours[5] = { false, nullptr };
+			neighbours[5] = { false, extractGroundBrushFromTile(map, x - 1, y + 1, z) };
 			neighbours[6] = { false, extractGroundBrushFromTile(map, x, y + 1, z) };
 			neighbours[7] = { false, extractGroundBrushFromTile(map, x + 1, y + 1, z) };
 		}
-	} else if (y == 0) {
-		neighbours[0] = { false, nullptr };
-		neighbours[1] = { false, nullptr };
-		neighbours[2] = { false, nullptr };
-		neighbours[3] = { false, extractGroundBrushFromTile(map, x - 1, y, z) };
-		neighbours[4] = { false, extractGroundBrushFromTile(map, x + 1, y, z) };
-		neighbours[5] = { false, extractGroundBrushFromTile(map, x - 1, y + 1, z) };
-		neighbours[6] = { false, extractGroundBrushFromTile(map, x, y + 1, z) };
-		neighbours[7] = { false, extractGroundBrushFromTile(map, x + 1, y + 1, z) };
-	} else {
-		neighbours[0] = { false, extractGroundBrushFromTile(map, x - 1, y - 1, z) };
-		neighbours[1] = { false, extractGroundBrushFromTile(map, x, y - 1, z) };
-		neighbours[2] = { false, extractGroundBrushFromTile(map, x + 1, y - 1, z) };
-		neighbours[3] = { false, extractGroundBrushFromTile(map, x - 1, y, z) };
-		neighbours[4] = { false, extractGroundBrushFromTile(map, x + 1, y, z) };
-		neighbours[5] = { false, extractGroundBrushFromTile(map, x - 1, y + 1, z) };
-		neighbours[6] = { false, extractGroundBrushFromTile(map, x, y + 1, z) };
-		neighbours[7] = { false, extractGroundBrushFromTile(map, x + 1, y + 1, z) };
 	}
 
 	static std::vector<const BorderBlock*> specificList;

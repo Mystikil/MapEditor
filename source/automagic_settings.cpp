@@ -48,6 +48,12 @@ AutomagicSettingsDialog::AutomagicSettingsDialog(wxWindow* parent) :
     same_ground_type_checkbox->Enable(automagic_enabled_checkbox->GetValue());
     settings_sizer->Add(same_ground_type_checkbox, 0, wxALL, 5);
     
+    walls_repel_borders_checkbox = newd wxCheckBox(this, wxID_ANY, "Walls Repel Borders");
+    walls_repel_borders_checkbox->SetValue(g_settings.getBoolean(Config::WALLS_REPEL_BORDERS));
+    walls_repel_borders_checkbox->SetToolTip("When enabled, walls will block border generation, preventing borders from crossing through walls");
+    walls_repel_borders_checkbox->Enable(automagic_enabled_checkbox->GetValue());
+    settings_sizer->Add(walls_repel_borders_checkbox, 0, wxALL, 5);
+    
     layer_carpets_checkbox = newd wxCheckBox(this, wxID_ANY, "Layer Carpets");
     layer_carpets_checkbox->SetValue(g_settings.getBoolean(Config::LAYER_CARPETS));
     layer_carpets_checkbox->SetToolTip("When enabled, carpet brushes will be placed on top of existing carpets instead of replacing them");
@@ -61,6 +67,10 @@ AutomagicSettingsDialog::AutomagicSettingsDialog(wxWindow* parent) :
         "- Only apply borders for the current ground type\n"
         "- Respect Z-axis positioning of existing borders\n"
         "- Allow multiple border layering\n\n"
+        "When 'Walls Repel Borders' is enabled, the editor will:\n"
+        "- Prevent borders from crossing through walls\n"
+        "- Treat walls as barriers for border generation\n"
+        "- Preserve the structure of buildings and houses\n\n"
         "When 'Layer Carpets' is enabled, the editor will:\n"
         "- Place new carpets on top of existing carpets\n"
         "- Allow creating multi-layered carpet designs");
@@ -97,6 +107,10 @@ bool AutomagicSettingsDialog::IsSameGroundTypeBorderEnabled() const {
     return same_ground_type_checkbox->GetValue();
 }
 
+bool AutomagicSettingsDialog::IsWallsRepelBordersEnabled() const {
+    return walls_repel_borders_checkbox->GetValue();
+}
+
 bool AutomagicSettingsDialog::IsLayerCarpetsEnabled() const {
     return layer_carpets_checkbox->GetValue();
 }
@@ -106,6 +120,7 @@ void AutomagicSettingsDialog::OnClickOK(wxCommandEvent& event) {
     g_settings.setInteger(Config::USE_AUTOMAGIC, IsAutomagicEnabled() ? 1 : 0);
     g_settings.setInteger(Config::BORDER_IS_GROUND, IsAutomagicEnabled() ? 1 : 0);
     g_settings.setInteger(Config::SAME_GROUND_TYPE_BORDER, IsSameGroundTypeBorderEnabled() ? 1 : 0);
+    g_settings.setInteger(Config::WALLS_REPEL_BORDERS, IsWallsRepelBordersEnabled() ? 1 : 0);
     g_settings.setInteger(Config::LAYER_CARPETS, IsLayerCarpetsEnabled() ? 1 : 0);
     
     // Update status text
@@ -126,6 +141,7 @@ void AutomagicSettingsDialog::OnClickCancel(wxCommandEvent& event) {
 void AutomagicSettingsDialog::OnAutomagicCheck(wxCommandEvent& event) {
     // Enable/disable the Same Ground Type checkbox based on Automagic checkbox
     same_ground_type_checkbox->Enable(automagic_enabled_checkbox->GetValue());
+    walls_repel_borders_checkbox->Enable(automagic_enabled_checkbox->GetValue());
     layer_carpets_checkbox->Enable(automagic_enabled_checkbox->GetValue());
 }
 

@@ -398,12 +398,24 @@ public:
 		return frame;
 	}
 
+	// Item locking
+	bool isLocked() const {return locked;}
+	void setLocked(bool b) {locked = b;}
+
+	
+	
+	// Check if item blocks creatures (for border generation)
+	bool isBlockingCreature() const {
+		return g_items[id].unpassable;
+	}
+
 protected:
 	uint16_t id; // the same id as in ItemType
 	// Subtype is either fluid type, count, subtype or charges
 	uint16_t subtype;
 	bool selected;
 	int frame;
+	bool locked;
 
 private:
 	Item& operator=(const Item& i); // Can't copy

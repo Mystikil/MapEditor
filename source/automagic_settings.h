@@ -16,6 +16,7 @@ public:
     // Get the current settings from the dialog
     bool IsAutomagicEnabled() const;
     bool IsSameGroundTypeBorderEnabled() const;
+    bool IsWallsRepelBordersEnabled() const;
     bool IsLayerCarpetsEnabled() const;
 
 protected:
@@ -29,6 +30,7 @@ protected:
     // UI elements
     wxCheckBox* automagic_enabled_checkbox;
     wxCheckBox* same_ground_type_checkbox;
+    wxCheckBox* walls_repel_borders_checkbox;
     wxCheckBox* layer_carpets_checkbox;
     wxStdDialogButtonSizer* buttons_sizer;
     wxButton* ok_button;
