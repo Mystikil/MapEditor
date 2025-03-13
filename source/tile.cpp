@@ -518,7 +518,13 @@ void Tile::update() {
 }
 
 void Tile::borderize(BaseMap* parent) {
-	GroundBrush::doBorders(parent, this);
+	if (g_settings.getBoolean(Config::SAME_GROUND_TYPE_BORDER)) {
+		// Use the custom reborderize method for better border placement
+		GroundBrush::reborderizeTile(parent, this);
+	} else {
+		// Standard border handling
+		GroundBrush::doBorders(parent, this);
+	}
 }
 
 void Tile::addBorderItem(Item* item) {
@@ -526,7 +532,15 @@ void Tile::addBorderItem(Item* item) {
 		return;
 	}
 	ASSERT(item->isBorder());
-	items.insert(items.begin(), item);
+	
+	if (g_settings.getBoolean(Config::SAME_GROUND_TYPE_BORDER)) {
+		// When Same Ground Type Border is enabled, add borders at the end (top) of the stack
+		// This ensures borders appear on top of existing items
+		items.push_back(item);
+	} else {
+		// Standard behavior (borders at the bottom of the stack)
+		items.insert(items.begin(), item);
+	}
 }
 
 GroundBrush* Tile::getGroundBrush() const {
@@ -545,16 +559,13 @@ void Tile::cleanBorders() {
 		return;
 	}
 
-	ItemVector::iterator it;
-
-	it = items.begin();
-	while (it != items.end()) {
+	// When Same Ground Type Border is disabled, remove all border items
+	for (ItemVector::iterator it = items.begin(); it != items.end();) {
 		if ((*it)->isBorder()) {
 			delete *it;
 			it = items.erase(it);
 		} else {
-			// Borders should only be on the bottom, we can ignore the rest of the items
-			return;
+			++it;
 		}
 	}
 }

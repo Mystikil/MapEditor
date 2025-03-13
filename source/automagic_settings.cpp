@@ -60,6 +60,12 @@ AutomagicSettingsDialog::AutomagicSettingsDialog(wxWindow* parent) :
     layer_carpets_checkbox->Enable(automagic_enabled_checkbox->GetValue());
     settings_sizer->Add(layer_carpets_checkbox, 0, wxALL, 5);
     
+    borderize_delete_checkbox = newd wxCheckBox(this, wxID_ANY, "Borderize on Delete");
+    borderize_delete_checkbox->SetValue(g_settings.getBoolean(Config::BORDERIZE_DELETE));
+    borderize_delete_checkbox->SetToolTip("When enabled, deleting items will trigger automatic bordering of surrounding tiles");
+    borderize_delete_checkbox->Enable(automagic_enabled_checkbox->GetValue());
+    settings_sizer->Add(borderize_delete_checkbox, 0, wxALL, 5);
+    
     // Add description text
     wxStaticText* description = newd wxStaticText(this, wxID_ANY, 
         "When 'Same Ground Type Border' is enabled, the editor will:\n"

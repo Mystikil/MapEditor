@@ -18,6 +18,7 @@ public:
     bool IsSameGroundTypeBorderEnabled() const;
     bool IsWallsRepelBordersEnabled() const;
     bool IsLayerCarpetsEnabled() const;
+    bool IsBorderizeDeleteEnabled() const;
 
 protected:
     // Event handlers
@@ -32,6 +33,7 @@ protected:
     wxCheckBox* same_ground_type_checkbox;
     wxCheckBox* walls_repel_borders_checkbox;
     wxCheckBox* layer_carpets_checkbox;
+    wxCheckBox* borderize_delete_checkbox;
     wxStdDialogButtonSizer* buttons_sizer;
     wxButton* ok_button;
     wxButton* cancel_button;

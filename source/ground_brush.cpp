@@ -556,6 +556,8 @@ void GroundBrush::draw(BaseMap* map, Tile* tile, void* parameter) {
 			return;
 		}
 	}
+	
+	// Get a random ground ID
 	int chance = random(1, total_chance);
 	uint16_t id = 0;
 	for (std::vector<ItemChanceBlock>::const_iterator it = border_items.begin(); it != border_items.end(); ++it) {
@@ -568,7 +570,26 @@ void GroundBrush::draw(BaseMap* map, Tile* tile, void* parameter) {
 		id = border_items.front().id;
 	}
 
-	tile->addItem(Item::Create(id));
+	// For Same Ground Type Border enabled, special handling to ensure ground is on top
+	if (g_settings.getBoolean(Config::SAME_GROUND_TYPE_BORDER)) {
+		// Create the ground item
+		Item* groundItem = Item::Create(id);
+		
+		// If we already have a ground, remove it
+		Item* oldGround = tile->ground;
+		if (oldGround) {
+			tile->ground = nullptr;
+			delete oldGround;
+		}
+		
+		// For Same Ground Type Border enabled, add ground at the top of the stack
+		// This ensures it visually covers other items
+		tile->items.push_back(groundItem);
+		tile->ground = groundItem;
+	} else {
+		// Standard behavior - add to the bottom
+		tile->addItem(Item::Create(id));
+	}
 }
 
 const GroundBrush::BorderBlock* GroundBrush::getBrushTo(GroundBrush* first, GroundBrush* second) {
@@ -971,6 +992,7 @@ void GroundBrush::doBorders(BaseMap* map, Tile* tile) {
 					it = tile->items.erase(it);
 				} else {
 					// Keep borders from other border groups
+					// We'll move these non-current borders to the top of the stack later
 					++it;
 				}
 			} else {
@@ -978,51 +1000,113 @@ void GroundBrush::doBorders(BaseMap* map, Tile* tile) {
 				++it;
 			}
 		}
+		
+		// If we're adding new borders, add them all at the top of the stack
+		// Save the border items we're going to add
+		std::vector<Item*> borderItemsToAdd;
+		
+		while (!borderList.empty()) {
+			BorderCluster& borderCluster = borderList.back();
+			if (!borderCluster.border) {
+				borderList.pop_back();
+				continue;
+			}
+
+			BorderType directions[4] = {
+				static_cast<BorderType>((border_types[borderCluster.alignment] & 0x000000FF) >> 0),
+				static_cast<BorderType>((border_types[borderCluster.alignment] & 0x0000FF00) >> 8),
+				static_cast<BorderType>((border_types[borderCluster.alignment] & 0x00FF0000) >> 16),
+				static_cast<BorderType>((border_types[borderCluster.alignment] & 0xFF000000) >> 24)
+			};
+
+			for (int32_t i = 0; i < 4; ++i) {
+				BorderType direction = directions[i];
+				if (direction == BORDER_NONE) {
+					break;
+				}
+
+				if (borderCluster.border->tiles[direction]) {
+					Item* borderItem = Item::Create(borderCluster.border->tiles[direction]);
+					borderItemsToAdd.push_back(borderItem);
+				} else {
+					if (direction == NORTHWEST_DIAGONAL) {
+						borderItemsToAdd.push_back(Item::Create(borderCluster.border->tiles[WEST_HORIZONTAL]));
+						borderItemsToAdd.push_back(Item::Create(borderCluster.border->tiles[NORTH_HORIZONTAL]));
+					} else if (direction == NORTHEAST_DIAGONAL) {
+						borderItemsToAdd.push_back(Item::Create(borderCluster.border->tiles[EAST_HORIZONTAL]));
+						borderItemsToAdd.push_back(Item::Create(borderCluster.border->tiles[NORTH_HORIZONTAL]));
+					} else if (direction == SOUTHWEST_DIAGONAL) {
+						borderItemsToAdd.push_back(Item::Create(borderCluster.border->tiles[SOUTH_HORIZONTAL]));
+						borderItemsToAdd.push_back(Item::Create(borderCluster.border->tiles[WEST_HORIZONTAL]));
+					} else if (direction == SOUTHEAST_DIAGONAL) {
+						borderItemsToAdd.push_back(Item::Create(borderCluster.border->tiles[SOUTH_HORIZONTAL]));
+						borderItemsToAdd.push_back(Item::Create(borderCluster.border->tiles[EAST_HORIZONTAL]));
+					}
+				}
+			}
+
+			borderList.pop_back();
+		}
+		
+		// Now add all borders to the end of the items list (top of the stack)
+		for (Item* borderItem : borderItemsToAdd) {
+			tile->items.push_back(borderItem);
+		}
+		
 	} else {
 		// Use the standard clean borders method if we're not preserving borders
 		tile->cleanBorders();
-	}
-
-	while (!borderList.empty()) {
-		BorderCluster& borderCluster = borderList.back();
-		if (!borderCluster.border) {
-			borderList.pop_back();
-			continue;
-		}
-
-		BorderType directions[4] = {
-			static_cast<BorderType>((border_types[borderCluster.alignment] & 0x000000FF) >> 0),
-			static_cast<BorderType>((border_types[borderCluster.alignment] & 0x0000FF00) >> 8),
-			static_cast<BorderType>((border_types[borderCluster.alignment] & 0x00FF0000) >> 16),
-			static_cast<BorderType>((border_types[borderCluster.alignment] & 0xFF000000) >> 24)
-		};
-
-		for (int32_t i = 0; i < 4; ++i) {
-			BorderType direction = directions[i];
-			if (direction == BORDER_NONE) {
-				break;
+		
+		while (!borderList.empty()) {
+			BorderCluster& borderCluster = borderList.back();
+			if (!borderCluster.border) {
+				borderList.pop_back();
+				continue;
 			}
 
-			if (borderCluster.border->tiles[direction]) {
-				tile->addBorderItem(Item::Create(borderCluster.border->tiles[direction]));
-			} else {
-				if (direction == NORTHWEST_DIAGONAL) {
-					tile->addBorderItem(Item::Create(borderCluster.border->tiles[WEST_HORIZONTAL]));
-					tile->addBorderItem(Item::Create(borderCluster.border->tiles[NORTH_HORIZONTAL]));
-				} else if (direction == NORTHEAST_DIAGONAL) {
-					tile->addBorderItem(Item::Create(borderCluster.border->tiles[EAST_HORIZONTAL]));
-					tile->addBorderItem(Item::Create(borderCluster.border->tiles[NORTH_HORIZONTAL]));
-				} else if (direction == SOUTHWEST_DIAGONAL) {
-					tile->addBorderItem(Item::Create(borderCluster.border->tiles[SOUTH_HORIZONTAL]));
-					tile->addBorderItem(Item::Create(borderCluster.border->tiles[WEST_HORIZONTAL]));
-				} else if (direction == SOUTHEAST_DIAGONAL) {
-					tile->addBorderItem(Item::Create(borderCluster.border->tiles[SOUTH_HORIZONTAL]));
-					tile->addBorderItem(Item::Create(borderCluster.border->tiles[EAST_HORIZONTAL]));
+			BorderType directions[4] = {
+				static_cast<BorderType>((border_types[borderCluster.alignment] & 0x000000FF) >> 0),
+				static_cast<BorderType>((border_types[borderCluster.alignment] & 0x0000FF00) >> 8),
+				static_cast<BorderType>((border_types[borderCluster.alignment] & 0x00FF0000) >> 16),
+				static_cast<BorderType>((border_types[borderCluster.alignment] & 0xFF000000) >> 24)
+			};
+
+			for (int32_t i = 0; i < 4; ++i) {
+				BorderType direction = directions[i];
+				if (direction == BORDER_NONE) {
+					break;
+				}
+
+				if (borderCluster.border->tiles[direction]) {
+					Item* borderItem = Item::Create(borderCluster.border->tiles[direction]);
+					tile->addBorderItem(borderItem);
+				} else {
+					if (direction == NORTHWEST_DIAGONAL) {
+						Item* borderItem1 = Item::Create(borderCluster.border->tiles[WEST_HORIZONTAL]);
+						Item* borderItem2 = Item::Create(borderCluster.border->tiles[NORTH_HORIZONTAL]);
+						tile->addBorderItem(borderItem1);
+						tile->addBorderItem(borderItem2);
+					} else if (direction == NORTHEAST_DIAGONAL) {
+						Item* borderItem1 = Item::Create(borderCluster.border->tiles[EAST_HORIZONTAL]);
+						Item* borderItem2 = Item::Create(borderCluster.border->tiles[NORTH_HORIZONTAL]);
+						tile->addBorderItem(borderItem1);
+						tile->addBorderItem(borderItem2);
+					} else if (direction == SOUTHWEST_DIAGONAL) {
+						Item* borderItem1 = Item::Create(borderCluster.border->tiles[SOUTH_HORIZONTAL]);
+						Item* borderItem2 = Item::Create(borderCluster.border->tiles[WEST_HORIZONTAL]);
+						tile->addBorderItem(borderItem1);
+						tile->addBorderItem(borderItem2);
+					} else if (direction == SOUTHEAST_DIAGONAL) {
+						Item* borderItem1 = Item::Create(borderCluster.border->tiles[SOUTH_HORIZONTAL]);
+						Item* borderItem2 = Item::Create(borderCluster.border->tiles[EAST_HORIZONTAL]);
+						tile->addBorderItem(borderItem1);
+						tile->addBorderItem(borderItem2);
+					}
 				}
 			}
-		}
 
-		borderList.pop_back();
+			borderList.pop_back();
+		}
 	}
 
 	for (const BorderBlock* borderBlock : specificList) {
@@ -1099,4 +1183,29 @@ void GroundBrush::doBorders(BaseMap* map, Tile* tile) {
 			}
 		}
 	}
+}
+
+// Add a custom method to reset borderize for the auto-magic behavior
+void GroundBrush::reborderizeTile(BaseMap* map, Tile* tile) {
+	// First, clean any existing borders on the tile
+	if (g_settings.getBoolean(Config::SAME_GROUND_TYPE_BORDER)) {
+		// When Same Ground Type Border is enabled, we need to identify and remove
+		// only the borders that might interfere with the new ground type
+		ItemVector::iterator it = tile->items.begin();
+		while (it != tile->items.end()) {
+			if ((*it)->isBorder() && (*it) != tile->ground) {
+				// For each border item, check if it belongs to a non-current border group
+				// For now, just remove all borders for simplicity
+				delete *it;
+				it = tile->items.erase(it);
+			} else {
+				++it;
+			}
+		}
+	} else {
+		tile->cleanBorders();
+	}
+	
+	// Now add new borders
+	doBorders(map, tile);
 }

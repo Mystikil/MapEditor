@@ -1287,7 +1287,8 @@ void Editor::destroySelection() {
 				newtile->spawn = nullptr;
 			}
 
-			if (g_settings.getInteger(Config::USE_AUTOMAGIC)) {
+			// Only gather border tiles if both automagic and borderize on delete are enabled
+			if (g_settings.getInteger(Config::USE_AUTOMAGIC) && g_settings.getInteger(Config::BORDERIZE_DELETE)) {
 				for (int y = -1; y <= 1; y++) {
 					for (int x = -1; x <= 1; x++) {
 						tilestoborder.push_back(
@@ -1301,7 +1302,8 @@ void Editor::destroySelection() {
 
 		batch->addAndCommitAction(action);
 
-		if (g_settings.getInteger(Config::USE_AUTOMAGIC)) {
+		// Only do automagic if both automagic and borderize on delete are enabled
+		if (g_settings.getInteger(Config::USE_AUTOMAGIC) && g_settings.getInteger(Config::BORDERIZE_DELETE)) {
 			// Remove duplicates
 			tilestoborder.sort();
 			tilestoborder.unique();

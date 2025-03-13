@@ -334,6 +334,13 @@ public:
 	// Border aligment (south, west etc.)
 	BorderType getBorderAlignment() const;
 
+	// Get the border type for z-ordering
+	BorderType getBorderType() const;
+	
+	// Set the z-ordering location value for the item
+	void setLocation(int z_level);
+	int getLocation() const;
+
 	// Get the name!
 	const std::string getName() const {
 		return g_items[id].name;
