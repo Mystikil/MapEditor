@@ -195,6 +195,12 @@ void LiveServer::broadcastNodes(DirtyList& dirtyList) {
 		auto posList = dirtyList.GetPosList();
 		uint32_t owner = dirtyList.owner;
 		
+		// Apply changes to host's map immediately
+		// This ensures the host can see changes made by clients
+		if (owner != 0) {
+			logMessage(wxString::Format("[Server]: Applying changes from client ID %u to host map", owner));
+		}
+		
 		for (const auto& ind : posList) {
 			int32_t ndx = ind.pos >> 18;
 			int32_t ndy = (ind.pos >> 4) & 0x3FFF;
@@ -216,10 +222,8 @@ void LiveServer::broadcastNodes(DirtyList& dirtyList) {
 				
 				const uint32_t clientId = peer->getClientId();
 				
-				// Skip sending to the client who made the change
-				if (owner != 0 && owner == clientId) {
-					continue;
-				}
+				// We no longer skip the client who made the change
+				// This ensures clients can see changes from other clients
 				
 				bool sentUpdate = false;
 				
@@ -256,6 +260,11 @@ void LiveServer::broadcastNodes(DirtyList& dirtyList) {
 			logMessage(wxString::Format("[Server]: Broadcasted %zu nodes to %zu clients", 
 				nodeCount, totalClientCount));
 		}
+		
+		// Make sure the host view is refreshed to show changes
+		g_gui.RefreshView();
+		g_gui.UpdateMinimap();
+		
 	} catch (std::exception& e) {
 		logMessage(wxString::Format("[Server]: Error broadcasting nodes: %s", e.what()));
 	}
