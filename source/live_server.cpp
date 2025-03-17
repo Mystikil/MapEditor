@@ -175,36 +175,81 @@ std::string LiveServer::getHostName() const {
 }
 
 void LiveServer::broadcastNodes(DirtyList& dirtyList) {
-	if (dirtyList.Empty()) {
+	if (dirtyList.Empty() || !editor) {
 		return;
 	}
-
-	for (const auto& ind : dirtyList.GetPosList()) {
-		int32_t ndx = ind.pos >> 18;
-		int32_t ndy = (ind.pos >> 4) & 0x3FFF;
-		uint32_t floors = ind.floors;
-
-		QTreeNode* node = editor->map.getLeaf(ndx * 4, ndy * 4);
-		if (!node) {
-			continue;
-		}
-
-		for (auto& clientEntry : clients) {
-			LivePeer* peer = clientEntry.second;
-
-			const uint32_t clientId = peer->getClientId();
-			if (dirtyList.owner != 0 && dirtyList.owner == clientId) {
+	
+	try {
+		size_t nodeCount = 0;
+		size_t totalClientCount = 0;
+		
+		// Create a copy of the position list to work with
+		auto posList = dirtyList.GetPosList();
+		uint32_t owner = dirtyList.owner;
+		
+		for (const auto& ind : posList) {
+			int32_t ndx = ind.pos >> 18;
+			int32_t ndy = (ind.pos >> 4) & 0x3FFF;
+			uint32_t floors = ind.floors;
+			
+			QTreeNode* node = editor->map.getLeaf(ndx * 4, ndy * 4);
+			if (!node) {
 				continue;
 			}
-
-			if (node->isVisible(clientId, true)) {
-				peer->sendNode(clientId, node, ndx, ndy, floors & 0xFF00);
+			
+			nodeCount++;
+			
+			// Track clients who receive updates
+			std::vector<uint32_t> updatedClientIds;
+			
+			for (auto& clientEntry : clients) {
+				LivePeer* peer = clientEntry.second;
+				if (!peer) continue;
+				
+				const uint32_t clientId = peer->getClientId();
+				
+				// Skip sending to the client who made the change
+				if (owner != 0 && owner == clientId) {
+					continue;
+				}
+				
+				bool sentUpdate = false;
+				
+				// Check if the node is visible to this client
+				if (node->isVisible(clientId, true)) {
+					try {
+						peer->sendNode(clientId, node, ndx, ndy, floors & 0xFF00);
+						sentUpdate = true;
+					} catch (std::exception& e) {
+						logMessage(wxString::Format("[Server]: Error sending underground node to client %s: %s", 
+							peer->getName(), e.what()));
+					}
+				}
+				
+				if (node->isVisible(clientId, false)) {
+					try {
+						peer->sendNode(clientId, node, ndx, ndy, floors & 0x00FF);
+						sentUpdate = true;
+					} catch (std::exception& e) {
+						logMessage(wxString::Format("[Server]: Error sending surface node to client %s: %s", 
+							peer->getName(), e.what()));
+					}
+				}
+				
+				if (sentUpdate && std::find(updatedClientIds.begin(), updatedClientIds.end(), clientId) == updatedClientIds.end()) {
+					updatedClientIds.push_back(clientId);
+				}
 			}
-
-			if (node->isVisible(clientId, false)) {
-				peer->sendNode(clientId, node, ndx, ndy, floors & 0x00FF);
-			}
+			
+			totalClientCount += updatedClientIds.size();
 		}
+		
+		if (nodeCount > 0) {
+			logMessage(wxString::Format("[Server]: Broadcasted %zu nodes to %zu clients", 
+				nodeCount, totalClientCount));
+		}
+	} catch (std::exception& e) {
+		logMessage(wxString::Format("[Server]: Error broadcasting nodes: %s", e.what()));
 	}
 }
 

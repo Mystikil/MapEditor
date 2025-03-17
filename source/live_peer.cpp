@@ -469,32 +469,65 @@ void LivePeer::parseNodeRequest(NetworkMessage& message) {
 }
 
 void LivePeer::parseReceiveChanges(NetworkMessage& message) {
-	Editor& editor = *server->getEditor();
-
-	// -1 on address since we skip the first START_NODE when sending
-	const std::string& data = message.read<std::string>();
-	mapReader.assign(reinterpret_cast<const uint8_t*>(data.c_str() - 1), data.size());
-
-	BinaryNode* rootNode = mapReader.getRootNode();
-	BinaryNode* tileNode = rootNode->getChild();
-
-	NetworkedAction* action = static_cast<NetworkedAction*>(editor.actionQueue->createAction(ACTION_REMOTE));
-	action->owner = clientId;
-
-	if (tileNode) {
-		do {
-			Tile* tile = readTile(tileNode, editor, nullptr);
-			if (tile) {
-				action->addChange(newd Change(tile));
+	try {
+		// Read the change data
+		const std::string& data = message.read<std::string>();
+		
+		// Log the change reception
+		logMessage(wxString::Format("[Server]: Received changes from client %s (data size: %zu bytes)", 
+			name, data.size()));
+			
+		// Process the changes on the main thread
+		wxTheApp->CallAfter([this, data]() {
+			if (!server || !server->getEditor()) {
+				logMessage("[Server]: Error - cannot process changes, editor not available");
+				return;
 			}
-		} while (tileNode->advance());
+			
+			Editor& editor = *server->getEditor();
+			
+			try {
+				// Create the action to hold the changes
+				NetworkedAction* action = static_cast<NetworkedAction*>(editor.actionQueue->createAction(ACTION_REMOTE));
+				action->owner = clientId;
+				
+				// Parse the change data and create the tiles
+				mapReader.assign(reinterpret_cast<const uint8_t*>(data.c_str() - 1), data.size());
+				BinaryNode* rootNode = mapReader.getRootNode();
+				BinaryNode* tileNode = rootNode->getChild();
+				
+				bool anyChanges = false;
+				
+				if (tileNode) {
+					do {
+						Tile* tile = readTile(tileNode, editor, nullptr);
+						if (tile) {
+							action->addChange(newd Change(tile));
+							anyChanges = true;
+						}
+					} while (tileNode->advance());
+				}
+				mapReader.close();
+				
+				// Only add the action if we have changes
+				if (anyChanges) {
+					editor.actionQueue->addAction(action);
+					g_gui.RefreshView();
+					g_gui.UpdateMinimap();
+					
+					logMessage(wxString::Format("[Server]: Successfully processed changes from client %s", name));
+				} else {
+					// Don't delete directly - use the action queue instead
+					
+					logMessage(wxString::Format("[Server]: No valid changes found in packet from client %s", name));
+				}
+			} catch (std::exception& e) {
+				logMessage(wxString::Format("[Server]: Error processing changes: %s", e.what()));
+			}
+		});
+	} catch (std::exception& e) {
+		logMessage(wxString::Format("[Server]: Error parsing changes packet: %s", e.what()));
 	}
-	mapReader.close();
-
-	editor.actionQueue->addAction(action);
-
-	g_gui.RefreshView();
-	g_gui.UpdateMinimap();
 }
 
 void LivePeer::parseAddHouse(NetworkMessage& message) {

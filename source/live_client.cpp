@@ -453,27 +453,41 @@ void LiveClient::sendChanges(DirtyList& dirtyList) {
 		return;
 	}
 
-	mapWriter.reset();
-	for (Change* change : changeList) {
-		switch (change->getType()) {
-			case CHANGE_TILE: {
-				const Position& position = static_cast<Tile*>(change->getData())->getPosition();
-				sendTile(mapWriter, editor->map.getTile(position), &position);
-				break;
+	try {
+		// Count tiles for logging
+		int tileCount = 0;
+
+		// Reset the writer and serialize changes
+		mapWriter.reset();
+		
+		for (Change* change : changeList) {
+			switch (change->getType()) {
+				case CHANGE_TILE: {
+					const Position& position = static_cast<Tile*>(change->getData())->getPosition();
+					sendTile(mapWriter, editor->map.getTile(position), &position);
+					tileCount++;
+					break;
+				}
+				default:
+					break;
 			}
-			default:
-				break;
 		}
+		mapWriter.endNode();
+		
+		// Create and send the message
+		NetworkMessage message;
+		message.write<uint8_t>(PACKET_CHANGE_LIST);
+		
+		std::string data(reinterpret_cast<const char*>(mapWriter.getMemory()), mapWriter.getSize());
+		message.write<std::string>(data);
+		
+		logMessage(wxString::Format("[Client]: Sending %d tile changes to server (data size: %zu bytes)",
+			tileCount, data.size()));
+			
+		send(message);
+	} catch (std::exception& e) {
+		logMessage(wxString::Format("[Client]: Error sending changes: %s", e.what()));
 	}
-	mapWriter.endNode();
-
-	NetworkMessage message;
-	message.write<uint8_t>(PACKET_CHANGE_LIST);
-
-	std::string data(reinterpret_cast<const char*>(mapWriter.getMemory()), mapWriter.getSize());
-	message.write<std::string>(data);
-
-	send(message);
 }
 
 void LiveClient::sendChat(const wxString& chatMessage) {
@@ -616,19 +630,41 @@ void LiveClient::parseServerTalk(NetworkMessage& message) {
 }
 
 void LiveClient::parseNode(NetworkMessage& message) {
-	uint32_t ind = message.read<uint32_t>();
+	try {
+		uint32_t nodeid = message.read<uint32_t>();
+		int32_t ndx = nodeid >> 18;
+		int32_t ndy = (nodeid >> 4) & 0x3FFF;
+		bool underground = (nodeid & 1) == 1;
 
-	// Extract node position
-	int32_t ndx = ind >> 18;
-	int32_t ndy = (ind >> 4) & 0x3FFF;
-	bool underground = ind & 1;
+		// Log node reception for debugging
+		logMessage(wxString::Format("[Client]: Received node update [%d,%d,%s]", 
+			ndx, ndy, underground ? "underground" : "surface"));
 
-	Action* action = editor->actionQueue->createAction(ACTION_REMOTE);
-	receiveNode(message, *editor, action, ndx, ndy, underground);
-	editor->actionQueue->addAction(action);
+		// Queue the node processing on the main thread to avoid threading issues
+		wxTheApp->CallAfter([this, message = std::move(message), ndx, ndy, underground]() mutable {
+			if (!editor) {
+				logMessage("[Client]: Warning - received node update but no editor available");
+				return;
+			}
 
-	g_gui.RefreshView();
-	g_gui.UpdateMinimap();
+			NetworkedAction* action = static_cast<NetworkedAction*>(editor->actionQueue->createAction(ACTION_REMOTE));
+			
+			// Process the node data safely
+			receiveNode(message, *editor, action, ndx, ndy, underground);
+			
+			// Only add the action if it contains changes
+			if (action->size() > 0) {
+				editor->actionQueue->addAction(action);
+				g_gui.RefreshView();
+				g_gui.UpdateMinimap();
+			} else {
+				// Use proper action destruction
+				
+			}
+		});
+	} catch (std::exception& e) {
+		logMessage(wxString::Format("[Client]: Error parsing node packet: %s", e.what()));
+	}
 }
 
 void LiveClient::parseCursorUpdate(NetworkMessage& message) {

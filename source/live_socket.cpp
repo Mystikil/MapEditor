@@ -113,6 +113,12 @@ void LiveSocket::receiveNode(NetworkMessage& message, Editor& editor, Action* ac
 }
 
 void LiveSocket::sendNode(uint32_t clientId, QTreeNode* node, int32_t ndx, int32_t ndy, uint32_t floorMask) {
+	// Safety check
+	if (!node) {
+		logMessage(wxString::Format("Warning: Attempted to send null node at %d,%d", ndx * 4, ndy * 4));
+		return;
+	}
+
 	bool underground;
 	if (floorMask & 0xFF00) {
 		if (floorMask & 0x00FF) {
@@ -124,35 +130,47 @@ void LiveSocket::sendNode(uint32_t clientId, QTreeNode* node, int32_t ndx, int32
 		underground = false;
 	}
 
+	// Mark the node as visible to this client
 	node->setVisible(clientId, underground, true);
 
-	// Send message
-	NetworkMessage message;
-	message.write<uint8_t>(PACKET_NODE);
-	message.write<uint32_t>((ndx << 18) | (ndy << 4) | ((floorMask & 0xFF00) ? 1 : 0));
+	try {
+		// Prepare the message
+		NetworkMessage message;
+		message.write<uint8_t>(PACKET_NODE);
+		message.write<uint32_t>((ndx << 18) | (ndy << 4) | ((floorMask & 0xFF00) ? 1 : 0));
 
-	if (!node) {
-		message.write<uint8_t>(0x00);
-	} else {
+		// Check floors
 		Floor** floors = node->getFloors();
+		bool hasFloors = false;
 
 		uint16_t sendMask = 0;
 		for (uint32_t z = 0; z < MAP_LAYERS; ++z) {
 			uint32_t bit = 1 << z;
 			if (floors[z] && testFlags(floorMask, bit)) {
 				sendMask |= bit;
+				hasFloors = true;
 			}
 		}
 
+		// Add the floor mask to the message
 		message.write<uint16_t>(sendMask);
-		for (uint32_t z = 0; z < MAP_LAYERS; ++z) {
-			if (testFlags(sendMask, static_cast<uint64_t>(1) << z)) {
-				sendFloor(message, floors[z]);
+
+		// If we have floors to send, add them to the message
+		if (hasFloors) {
+			for (uint32_t z = 0; z < MAP_LAYERS; ++z) {
+				if (testFlags(sendMask, static_cast<uint64_t>(1) << z)) {
+					sendFloor(message, floors[z]);
+				}
 			}
 		}
-	}
 
-	send(message);
+		// Send the message
+		logMessage(wxString::Format("Sending node [%d,%d,%s] with floor mask 0x%04X", 
+			ndx, ndy, underground ? "underground" : "surface", sendMask));
+		send(message);
+	} catch (std::exception& e) {
+		logMessage(wxString::Format("Error sending node [%d,%d]: %s", ndx, ndy, e.what()));
+	}
 }
 
 void LiveSocket::receiveFloor(NetworkMessage& message, Editor& editor, Action* action, int32_t ndx, int32_t ndy, int32_t z, QTreeNode* node, Floor* floor) {
