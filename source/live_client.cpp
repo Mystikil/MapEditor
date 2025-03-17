@@ -50,12 +50,30 @@ bool LiveClient::connect(const std::string& address, uint16_t port) {
 	if (!socket) {
 		socket = std::make_shared<boost::asio::ip::tcp::socket>(service);
 	}
+	
+	// Set socket options for better error detection
+	boost::system::error_code ec;
+	socket->set_option(boost::asio::socket_base::keep_alive(true), ec);
+	if (ec) {
+		logMessage("Warning: Could not set keep_alive option: " + ec.message());
+	}
+	
+	// Set connection timeout options
+	socket->set_option(boost::asio::socket_base::linger(true, 10), ec);
+	if (ec) {
+		logMessage("Warning: Could not set linger option: " + ec.message());
+	}
+
+	// Log connection attempt
+	logMessage(wxString::Format("Attempting to connect to %s:%d...", address, port));
 
 	boost::asio::ip::tcp::resolver::query query(address, std::to_string(port));
 	resolver->async_resolve(query, [this](const boost::system::error_code& error, boost::asio::ip::tcp::resolver::iterator endpoint_iterator) -> void {
 		if (error) {
-			logMessage("Error: " + error.message());
+			wxString errorMsg = wxString::Format("Resolution error: %s", error.message());
+			logMessage(errorMsg);
 		} else {
+			logMessage(wxString::Format("Host resolved. Connecting to endpoint..."));
 			tryConnect(endpoint_iterator);
 		}
 	});
@@ -89,10 +107,12 @@ bool LiveClient::connect(const std::string& address, uint16_t port) {
 
 void LiveClient::tryConnect(boost::asio::ip::tcp::resolver::iterator endpoint_iterator) {
 	if (stopped) {
+		logMessage("Connection attempt aborted: Connection was stopped.");
 		return;
 	}
 
 	if (endpoint_iterator == boost::asio::ip::tcp::resolver::iterator()) {
+		logMessage("Connection attempt failed: No more endpoints to try.");
 		return;
 	}
 
@@ -100,12 +120,18 @@ void LiveClient::tryConnect(boost::asio::ip::tcp::resolver::iterator endpoint_it
 
 	boost::asio::async_connect(*socket, endpoint_iterator, [this](boost::system::error_code error, boost::asio::ip::tcp::resolver::iterator endpoint_iterator) -> void {
 		if (!socket->is_open()) {
+			logMessage(wxString::Format("Connection failed: Socket is not open. Trying next endpoint..."));
 			tryConnect(++endpoint_iterator);
 		} else if (error) {
+			wxString errorMsg = wxString::Format("Connection error: %s (code: %d)", error.message(), error.value());
+			logMessage(errorMsg);
+			
 			if (handleError(error)) {
+				logMessage("Trying next endpoint...");
 				tryConnect(++endpoint_iterator);
 			} else {
 				wxTheApp->CallAfter([this]() {
+					logMessage("All connection attempts failed. Closing connection.");
 					close();
 					g_gui.CloseLiveEditors(this);
 				});
@@ -113,11 +139,14 @@ void LiveClient::tryConnect(boost::asio::ip::tcp::resolver::iterator endpoint_it
 		} else {
 			socket->set_option(boost::asio::ip::tcp::no_delay(true), error);
 			if (error) {
+				logMessage(wxString::Format("Warning: Could not set TCP no_delay option: %s", error.message()));
 				wxTheApp->CallAfter([this]() {
 					close();
 				});
 				return;
 			}
+			
+			logMessage("Connection established successfully. Sending hello packet...");
 			sendHello();
 			receiveHeader();
 		}
@@ -171,7 +200,13 @@ void LiveClient::receiveHeader() {
 				logMessage(wxString() + getHostName() + ": " + error.message());
 			}
 		} else if (bytesReceived < 4) {
-			logMessage(wxString() + getHostName() + ": Could not receive header[size: " + std::to_string(bytesReceived) + "], disconnecting client.");
+			wxString errorMsg = wxString::Format("%s: Could not receive header [size: %zu], disconnecting client.", 
+			                                    getHostName(), bytesReceived);
+			logMessage(errorMsg);
+			
+			// Additional debug information about the connection
+			logMessage(wxString::Format("Connection details: Host=%s, Buffer size=%zu", 
+			                           getHostName(), readMessage.buffer.size()));
 		} else {
 			receive(readMessage.read<uint32_t>());
 		}
@@ -183,10 +218,29 @@ void LiveClient::receive(uint32_t packetSize) {
 	boost::asio::async_read(*socket, boost::asio::buffer(&readMessage.buffer[readMessage.position], packetSize), [this](const boost::system::error_code& error, size_t bytesReceived) -> void {
 		if (error) {
 			if (!handleError(error)) {
-				logMessage(wxString() + getHostName() + ": " + error.message());
+				wxString errorMsg = wxString::Format("%s: Network error: %s", getHostName(), error.message());
+				logMessage(errorMsg);
 			}
 		} else if (bytesReceived < readMessage.buffer.size() - 4) {
-			logMessage(wxString() + getHostName() + ": Could not receive packet[size: " + std::to_string(bytesReceived) + "], disconnecting client.");
+			wxString errorMsg = wxString::Format("%s: Incomplete packet received [got: %zu, expected: %zu], disconnecting client.",
+				getHostName(), bytesReceived, readMessage.buffer.size() - 4);
+			logMessage(errorMsg);
+			
+			// Log packet details for debugging
+			logMessage(wxString::Format("Packet details: Buffer size=%zu, Position=%zu", 
+				readMessage.buffer.size(), readMessage.position));
+			
+			// Try to recover if possible, otherwise close the connection
+			wxTheApp->CallAfter([this]() {
+				try {
+					// Attempt to receive the header again
+					receiveHeader();
+				} catch (std::exception& e) {
+					logMessage(wxString::Format("Recovery failed: %s", e.what()));
+					close();
+					g_gui.CloseLiveEditors(this);
+				}
+			});
 		} else {
 			wxTheApp->CallAfter([this]() {
 				parsePacket(std::move(readMessage));

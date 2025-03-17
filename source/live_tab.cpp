@@ -39,8 +39,15 @@ public:
 
 IMPLEMENT_CLASS(myGrid, wxGrid)
 
+// Menu IDs for the context menu
+enum {
+    LIVE_LOG_COPY_SELECTED = 10001
+};
+
 BEGIN_EVENT_TABLE(LiveLogTab, wxPanel)
 EVT_TEXT(LIVE_CHAT_TEXTBOX, LiveLogTab::OnChat)
+EVT_RIGHT_DOWN(LiveLogTab::OnLogRightClick)
+EVT_MENU(LIVE_LOG_COPY_SELECTED, LiveLogTab::OnCopySelectedLogText)
 END_EVENT_TABLE()
 
 LiveLogTab::LiveLogTab(MapTabbook* aui, LiveSocket* server) :
@@ -59,28 +66,13 @@ LiveLogTab::LiveLogTab(MapTabbook* aui, LiveSocket* server) :
 
 	wxFont time_font(*wxSWISS_FONT);
 
-	log = newd myGrid(left_pane, wxID_ANY, wxDefaultPosition, wxDefaultSize);
-	log->SetDefaultCellFont(time_font);
-	log->CreateGrid(0, 3);
-	log->DisableDragRowSize();
-	log->DisableDragColSize();
-	log->SetSelectionMode(wxGrid::wxGridSelectRows);
-	log->SetRowLabelSize(0);
-	// log->SetColLabelSize(0);
-	// log->EnableGridLines(false);
-	log->EnableEditing(false);
+	// Replace wxGrid with wxTextCtrl for the log
+	log = newd wxTextCtrl(left_pane, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize, 
+                      wxTE_MULTILINE | wxTE_READONLY | wxTE_RICH | wxTE_AUTO_URL);
+	log->SetFont(time_font);
 
-	log->SetColLabelValue(0, "Time");
-	log->SetColMinimalWidth(0, 60);
-	log->SetColSize(0, 60);
-	log->SetColLabelValue(1, "User");
-	log->SetColMinimalWidth(1, 100);
-	log->SetColSize(1, 100);
-	log->SetColLabelValue(2, "Message");
-	log->SetColMinimalWidth(2, 100);
-	log->SetColSize(2, 100);
-
-	log->Connect(wxEVT_SIZE, wxSizeEventHandler(LiveLogTab::OnResizeChat), nullptr, this);
+	// Connect right-click event to show context menu
+	log->Connect(wxEVT_RIGHT_DOWN, wxMouseEventHandler(LiveLogTab::OnLogRightClick), nullptr, this);
 
 	left_sizer->Add(log, 1, wxEXPAND);
 
@@ -107,8 +99,6 @@ LiveLogTab::LiveLogTab(MapTabbook* aui, LiveSocket* server) :
 	user_list->SetColLabelValue(2, "Name");
 	user_list->SetColSize(2, 200);
 
-	// user_list->GetGridWindow()->
-
 	// Finalize
 	SetSizerAndFit(topsizer);
 
@@ -116,7 +106,6 @@ LiveLogTab::LiveLogTab(MapTabbook* aui, LiveSocket* server) :
 	split_sizer->Add(left_pane, wxSizerFlags(1).Expand());
 	split_sizer->Add(user_list, wxSizerFlags(0).Expand());
 	splitter->SetSizerAndFit(split_sizer);
-	// splitter->SplitVertically(left_pane, user_list, max(this->GetSize().GetWidth() - 200, 0));
 
 	aui->AddTab(this, true);
 }
@@ -149,39 +138,46 @@ wxString format00(wxDateTime::wxDateTime_t t) {
 
 void LiveLogTab::Message(const wxString& str) {
 	wxDateTime t = wxDateTime::Now();
-	wxString time, speaker;
+	wxString time, speaker, message;
 	time << format00(t.GetHour()) << ":"
 		 << format00(t.GetMinute()) << ":"
 		 << format00(t.GetSecond());
 
 	speaker << "Server";
-
-	log->AppendRows(1);
-	int n = log->GetNumberRows() - 1;
-	log->SetCellValue(n, 0, time);
-	log->SetCellValue(n, 1, speaker);
-	log->SetCellValue(n, 2, str);
+	
+	// Format the message with timestamp and speaker
+	message << time << " [" << speaker << "]: " << str << "\n";
+	
+	// Add text to the log
+	log->AppendText(message);
+	
+	// Auto-scroll to the bottom
+	log->SetInsertionPointEnd();
 }
 
 void LiveLogTab::Chat(const wxString& speaker, const wxString& str) {
 	wxDateTime t = wxDateTime::Now();
-	wxString time;
+	wxString time, message;
 	time << format00(t.GetHour()) << ":"
 		 << format00(t.GetMinute()) << ":"
 		 << format00(t.GetSecond());
-
-	log->AppendRows(1);
-	int n = log->GetNumberRows() - 1;
-	log->SetCellValue(n, 0, time);
-	log->SetCellValue(n, 1, speaker);
-	log->SetCellValue(n, 2, str);
+	
+	// Format the chat message with timestamp and speaker
+	message << time << " [" << speaker << "]: " << str << "\n";
+	
+	// Add text to the log
+	log->AppendText(message);
+	
+	// Auto-scroll to the bottom
+	log->SetInsertionPointEnd();
 }
 
 void LiveLogTab::OnChat(wxCommandEvent& evt) {
 }
 
 void LiveLogTab::OnResizeChat(wxSizeEvent& evt) {
-	log->SetColSize(2, log->GetSize().GetWidth() - 160);
+	// No need to adjust anything for wxTextCtrl
+	evt.Skip();
 }
 
 void LiveLogTab::OnResizeClientList(wxSizeEvent& evt) {
@@ -193,6 +189,19 @@ void LiveLogTab::OnSelectChatbox(wxFocusEvent& evt) {
 
 void LiveLogTab::OnDeselectChatbox(wxFocusEvent& evt) {
 	g_gui.EnableHotkeys();
+}
+
+void LiveLogTab::OnLogRightClick(wxMouseEvent& evt) {
+    wxMenu menu;
+    menu.Append(LIVE_LOG_COPY_SELECTED, "Copy Selected Text");
+    PopupMenu(&menu);
+}
+
+void LiveLogTab::OnCopySelectedLogText(wxCommandEvent& evt) {
+    if(wxTheClipboard->Open()) {
+        wxTheClipboard->SetData(new wxTextDataObject(log->GetStringSelection()));
+        wxTheClipboard->Close();
+    }
 }
 
 void LiveLogTab::UpdateClientList(const std::unordered_map<uint32_t, LivePeer*>& updatedClients) {

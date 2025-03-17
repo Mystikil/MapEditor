@@ -60,11 +60,13 @@ public:
 	void OnChat(wxCommandEvent& evt);
 	void OnResizeChat(wxSizeEvent& evt);
 	void OnResizeClientList(wxSizeEvent& evt);
+	void OnCopySelectedLogText(wxCommandEvent& evt);
+	void OnLogRightClick(wxMouseEvent& evt);
 
 protected:
 	MapTabbook* aui;
 	LiveSocket* socket;
-	wxGrid* log;
+	wxTextCtrl* log;
 	wxTextCtrl* input;
 	wxGrid* user_list;
 
