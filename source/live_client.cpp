@@ -28,7 +28,9 @@ LiveClient::LiveClient() :
 	LiveSocket(),
 	readMessage(), queryNodeList(), currentOperation(),
 	resolver(nullptr), socket(nullptr), editor(nullptr), stopped(false) {
-	//
+	// Initialize buffer with minimum size to prevent "size 0" errors
+	readMessage.buffer.resize(1024);
+	readMessage.position = 0;
 }
 
 LiveClient::~LiveClient() {
@@ -193,55 +195,135 @@ std::string LiveClient::getHostName() const {
 }
 
 void LiveClient::receiveHeader() {
+	// Make sure buffer is properly initialized
+	if (readMessage.buffer.size() < 4) {
+		readMessage.buffer.resize(1024);
+	}
+	
 	readMessage.position = 0;
-	boost::asio::async_read(*socket, boost::asio::buffer(readMessage.buffer, 4), [this](const boost::system::error_code& error, size_t bytesReceived) -> void {
-		if (error) {
-			if (!handleError(error)) {
-				logMessage(wxString() + getHostName() + ": " + error.message());
-			}
-		} else if (bytesReceived < 4) {
-			wxString errorMsg = wxString::Format("%s: Could not receive header [size: %zu], disconnecting client.", 
-			                                    getHostName(), bytesReceived);
-			logMessage(errorMsg);
-			
-			// Additional debug information about the connection
-			logMessage(wxString::Format("Connection details: Host=%s, Buffer size=%zu", 
-			                           getHostName(), readMessage.buffer.size()));
-		} else {
-			receive(readMessage.read<uint32_t>());
-		}
-	});
+	
+	// Check if socket is valid before attempting to read
+	if (!socket || !socket->is_open()) {
+		logMessage("[Client]: Cannot receive header: Socket is not open");
+		return;
+	}
+	
+	try {
+		logMessage("[Client]: Waiting for incoming packet header...");
+		
+		boost::asio::async_read(*socket, boost::asio::buffer(readMessage.buffer, 4), 
+			[this](const boost::system::error_code& error, size_t bytesReceived) -> void {
+				if (error) {
+					if (!handleError(error)) {
+						wxString errorMsg = wxString::Format("[Client]: Network error: %s (code: %d)", 
+							error.message(), error.value());
+						logMessage(errorMsg);
+					}
+				} else if (bytesReceived < 4) {
+					wxString errorMsg = wxString::Format("[Client]: Could not receive header [size: %zu], recovery needed", 
+													bytesReceived);
+					logMessage(errorMsg);
+					
+					// Additional debug information about the connection
+					logMessage(wxString::Format("[Client]: Connection details: Host=%s, Buffer size=%zu", 
+											   getHostName(), readMessage.buffer.size()));
+					
+					// If we received some data but not enough, try again
+					if (bytesReceived > 0) {
+						logMessage("[Client]: Partial header received, attempting recovery...");
+						wxTheApp->CallAfter([this]() {
+							receiveHeader();
+						});
+					} else {
+						logMessage("[Client]: No data received, attempting direct reconnection...");
+						wxTheApp->CallAfter([this]() {
+							// Try to reconnect if possible
+							try {
+								receiveHeader();
+							} catch (std::exception& e) {
+								logMessage(wxString::Format("[Client]: Recovery failed: %s", e.what()));
+								close();
+							}
+						});
+					}
+				} else {
+					// Successfully received header, now receive the packet
+					uint32_t packetSize = readMessage.read<uint32_t>();
+					logMessage(wxString::Format("[Client]: Received header, packet size: %u bytes", packetSize));
+					
+					// Check for zero packet size
+					if (packetSize == 0) {
+						logMessage("[Client]: Received zero-size packet, skipping and waiting for next header");
+						wxTheApp->CallAfter([this]() {
+							receiveHeader();
+						});
+					} else {
+						receive(packetSize);
+					}
+				}
+		});
+	} catch (std::exception& e) {
+		logMessage(wxString::Format("[Client]: Exception in receiveHeader: %s", e.what()));
+		close();
+	}
 }
 
 void LiveClient::receive(uint32_t packetSize) {
+	// Safety check for packet size
+	if (packetSize > 1024 * 1024) { // 1MB sanity check
+		logMessage(wxString::Format("[Client]: Suspiciously large packet size received: %u bytes, aborting", packetSize));
+		close();
+		return;
+	}
+
+	// Resize buffer to accommodate the incoming packet
 	readMessage.buffer.resize(readMessage.position + packetSize);
-	boost::asio::async_read(*socket, boost::asio::buffer(&readMessage.buffer[readMessage.position], packetSize), [this](const boost::system::error_code& error, size_t bytesReceived) -> void {
+	
+	logMessage(wxString::Format("[Client]: Reading packet body (%u bytes)", packetSize));
+	
+	boost::asio::async_read(*socket, boost::asio::buffer(&readMessage.buffer[readMessage.position], packetSize), 
+	[this, packetSize](const boost::system::error_code& error, size_t bytesReceived) -> void {
 		if (error) {
 			if (!handleError(error)) {
-				wxString errorMsg = wxString::Format("%s: Network error: %s", getHostName(), error.message());
+				wxString errorMsg = wxString::Format("[Client]: Network error reading packet: %s", error.message());
 				logMessage(errorMsg);
 			}
-		} else if (bytesReceived < readMessage.buffer.size() - 4) {
-			wxString errorMsg = wxString::Format("%s: Incomplete packet received [got: %zu, expected: %zu], disconnecting client.",
-				getHostName(), bytesReceived, readMessage.buffer.size() - 4);
+		} else if (bytesReceived < packetSize) {
+			wxString errorMsg = wxString::Format("[Client]: Incomplete packet received [got: %zu, expected: %u], attempting recovery",
+				bytesReceived, packetSize);
 			logMessage(errorMsg);
 			
 			// Log packet details for debugging
-			logMessage(wxString::Format("Packet details: Buffer size=%zu, Position=%zu", 
+			logMessage(wxString::Format("[Client]: Packet details: Buffer size=%zu, Position=%zu", 
 				readMessage.buffer.size(), readMessage.position));
 			
-			// Try to recover if possible, otherwise close the connection
-			wxTheApp->CallAfter([this]() {
-				try {
-					// Attempt to receive the header again
-					receiveHeader();
-				} catch (std::exception& e) {
-					logMessage(wxString::Format("Recovery failed: %s", e.what()));
-					close();
-					g_gui.CloseLiveEditors(this);
-				}
+			// Try to recover by reading the remaining bytes
+			uint32_t remainingBytes = packetSize - bytesReceived;
+			wxTheApp->CallAfter([this, remainingBytes, bytesReceived]() {
+				logMessage(wxString::Format("[Client]: Attempting to receive remaining %u bytes...", remainingBytes));
+				
+				boost::asio::async_read(*socket, 
+					boost::asio::buffer(&readMessage.buffer[readMessage.position + bytesReceived], remainingBytes),
+					[this](const boost::system::error_code& innerError, size_t innerBytesReceived) {
+						if (!innerError && innerBytesReceived > 0) {
+							logMessage("[Client]: Successfully recovered partial packet");
+							wxTheApp->CallAfter([this]() {
+								parsePacket(std::move(readMessage));
+								receiveHeader();
+							});
+						} else {
+							logMessage("[Client]: Recovery failed, restarting from header");
+							wxTheApp->CallAfter([this]() {
+								receiveHeader();
+							});
+						}
+					}
+				);
 			});
 		} else {
+			// Successfully received the complete packet
+			logMessage(wxString::Format("[Client]: Successfully received complete packet (%zu bytes)", bytesReceived));
+			
 			wxTheApp->CallAfter([this]() {
 				parsePacket(std::move(readMessage));
 				receiveHeader();
@@ -251,12 +333,38 @@ void LiveClient::receive(uint32_t packetSize) {
 }
 
 void LiveClient::send(NetworkMessage& message) {
+	// Validate message size to avoid sending empty messages
+	if (message.size == 0) {
+		logMessage("[Client]: Attempted to send empty message, ignoring");
+		return;
+	}
+	
+	// Write size to the first 4 bytes (header)
 	memcpy(&message.buffer[0], &message.size, 4);
-	boost::asio::async_write(*socket, boost::asio::buffer(message.buffer, message.size + 4), [this](const boost::system::error_code& error, size_t bytesTransferred) -> void {
-		if (error) {
-			logMessage(wxString() + getHostName() + ": " + error.message());
-		}
-	});
+	
+	// Log the message we're sending
+	logMessage(wxString::Format("[Client]: Sending packet to server (size: %zu bytes)", 
+		message.size + 4));
+	
+	try {
+		boost::asio::async_write(*socket, 
+			boost::asio::buffer(message.buffer, message.size + 4), 
+			[this, msgSize = message.size](const boost::system::error_code& error, size_t bytesTransferred) -> void {
+				if (error) {
+					logMessage(wxString::Format("[Client]: Error sending packet to server: %s", 
+						error.message()));
+				} else if (bytesTransferred != msgSize + 4) {
+					logMessage(wxString::Format("[Client]: Incomplete packet sent to server [sent: %zu, expected: %zu]", 
+						bytesTransferred, msgSize + 4));
+				} else {
+					logMessage(wxString::Format("[Client]: Successfully sent packet to server (%zu bytes)", 
+						bytesTransferred));
+				}
+			}
+		);
+	} catch (std::exception& e) {
+		logMessage(wxString::Format("[Client]: Exception sending packet to server: %s", e.what()));
+	}
 }
 
 void LiveClient::updateCursor(const Position& position) {
@@ -298,6 +406,8 @@ MapTab* LiveClient::createEditorWindow() {
 }
 
 void LiveClient::sendHello() {
+	logMessage("[Client]: Preparing hello packet...");
+	
 	NetworkMessage message;
 	message.write<uint8_t>(PACKET_HELLO_FROM_CLIENT);
 	message.write<uint32_t>(__RME_VERSION_ID__);
@@ -305,8 +415,19 @@ void LiveClient::sendHello() {
 	message.write<uint32_t>(g_gui.GetCurrentVersionID());
 	message.write<std::string>(nstr(name));
 	message.write<std::string>(nstr(password));
-
-	send(message);
+	
+	// Calculate overall packet size for logging
+	size_t packetSize = message.size + 4; // Including header size
+	
+	logMessage(wxString::Format("[Client]: Sending hello packet (size: %zu bytes, name: %s)", 
+		packetSize, name));
+		
+	try {
+		send(message);
+		logMessage("[Client]: Hello packet sent successfully");
+	} catch (std::exception& e) {
+		logMessage(wxString::Format("[Client]: Error sending hello packet: %s", e.what()));
+	}
 }
 
 void LiveClient::sendNodeRequests() {
@@ -356,6 +477,13 @@ void LiveClient::sendChanges(DirtyList& dirtyList) {
 }
 
 void LiveClient::sendChat(const wxString& chatMessage) {
+	// Don't send empty messages
+	if (chatMessage.IsEmpty()) {
+		return;
+	}
+
+	logMessage(wxString::Format("Sending chat message: %s", chatMessage));
+
 	NetworkMessage message;
 	message.write<uint8_t>(PACKET_CLIENT_TALK);
 	message.write<std::string>(nstr(chatMessage));
@@ -378,42 +506,66 @@ void LiveClient::queryNode(int32_t ndx, int32_t ndy, bool underground) {
 
 void LiveClient::parsePacket(NetworkMessage message) {
 	uint8_t packetType;
-	while (message.position < message.buffer.size()) {
-		packetType = message.read<uint8_t>();
-		switch (packetType) {
-			case PACKET_HELLO_FROM_SERVER:
-				parseHello(message);
-				break;
-			case PACKET_KICK:
-				parseKick(message);
-				break;
-			case PACKET_ACCEPTED_CLIENT:
-				parseClientAccepted(message);
-				break;
-			case PACKET_CHANGE_CLIENT_VERSION:
-				parseChangeClientVersion(message);
-				break;
-			case PACKET_SERVER_TALK:
-				parseServerTalk(message);
-				break;
-			case PACKET_NODE:
-				parseNode(message);
-				break;
-			case PACKET_CURSOR_UPDATE:
-				parseCursorUpdate(message);
-				break;
-			case PACKET_START_OPERATION:
-				parseStartOperation(message);
-				break;
-			case PACKET_UPDATE_OPERATION:
-				parseUpdateOperation(message);
-				break;
-			default: {
-				log->Message("Unknown packet receieved!");
-				close();
+	
+	try {
+		while (message.position < message.buffer.size()) {
+			// Log packet position for debugging
+			size_t packetStart = message.position;
+			
+			// Check if we have at least 1 byte to read the packet type
+			if (message.position + 1 > message.buffer.size()) {
+				logMessage("[Client]: Warning - incomplete packet at end of buffer, ignoring");
 				break;
 			}
+			
+			packetType = message.read<uint8_t>();
+			logMessage(wxString::Format("[Client]: Parsing packet type 0x%02X at position %zu", 
+				packetType, packetStart));
+				
+			try {
+				switch (packetType) {
+					case PACKET_HELLO_FROM_SERVER:
+						parseHello(message);
+						break;
+					case PACKET_KICK:
+						parseKick(message);
+						break;
+					case PACKET_ACCEPTED_CLIENT:
+						parseClientAccepted(message);
+						break;
+					case PACKET_CHANGE_CLIENT_VERSION:
+						parseChangeClientVersion(message);
+						break;
+					case PACKET_SERVER_TALK:
+						parseServerTalk(message);
+						break;
+					case PACKET_NODE:
+						parseNode(message);
+						break;
+					case PACKET_CURSOR_UPDATE:
+						parseCursorUpdate(message);
+						break;
+					case PACKET_START_OPERATION:
+						parseStartOperation(message);
+						break;
+					case PACKET_UPDATE_OPERATION:
+						parseUpdateOperation(message);
+						break;
+					default: {
+						logMessage(wxString::Format("[Client]: Unknown packet type 0x%02X received, disconnecting", packetType));
+						close();
+						return;
+					}
+				}
+			} catch (std::exception& e) {
+				logMessage(wxString::Format("[Client]: Error parsing packet type 0x%02X: %s", 
+					packetType, e.what()));
+				// Continue to next packet if possible
+			}
 		}
+	} catch (std::exception& e) {
+		logMessage(wxString::Format("[Client]: Fatal error parsing packet: %s", e.what()));
+		close();
 	}
 }
 

@@ -39,13 +39,14 @@ public:
 
 IMPLEMENT_CLASS(myGrid, wxGrid)
 
-// Menu IDs for the context menu
+// Menu IDs and control IDs
 enum {
-    LIVE_LOG_COPY_SELECTED = 10001
+    LIVE_LOG_COPY_SELECTED = 10001,
+    LIVE_CHAT_INPUT = 10002
 };
 
 BEGIN_EVENT_TABLE(LiveLogTab, wxPanel)
-EVT_TEXT(LIVE_CHAT_TEXTBOX, LiveLogTab::OnChat)
+EVT_TEXT_ENTER(LIVE_CHAT_INPUT, LiveLogTab::OnChat)
 EVT_RIGHT_DOWN(LiveLogTab::OnLogRightClick)
 EVT_MENU(LIVE_LOG_COPY_SELECTED, LiveLogTab::OnCopySelectedLogText)
 END_EVENT_TABLE()
@@ -76,11 +77,12 @@ LiveLogTab::LiveLogTab(MapTabbook* aui, LiveSocket* server) :
 
 	left_sizer->Add(log, 1, wxEXPAND);
 
-	input = newd wxTextCtrl(left_pane, LIVE_CHAT_TEXTBOX, wxEmptyString, wxDefaultPosition, wxDefaultSize);
+	input = newd wxTextCtrl(left_pane, LIVE_CHAT_INPUT, wxEmptyString, wxDefaultPosition, wxDefaultSize, wxTE_PROCESS_ENTER);
 	left_sizer->Add(input, 0, wxEXPAND);
 
 	input->Connect(wxEVT_SET_FOCUS, wxFocusEventHandler(LiveLogTab::OnSelectChatbox), nullptr, this);
 	input->Connect(wxEVT_KILL_FOCUS, wxFocusEventHandler(LiveLogTab::OnDeselectChatbox), nullptr, this);
+	input->Connect(wxEVT_KEY_DOWN, wxKeyEventHandler(LiveLogTab::OnKeyDown), nullptr, this);
 
 	left_pane->SetSizerAndFit(left_sizer);
 
@@ -173,6 +175,43 @@ void LiveLogTab::Chat(const wxString& speaker, const wxString& str) {
 }
 
 void LiveLogTab::OnChat(wxCommandEvent& evt) {
+    wxString message = input->GetValue();
+    if (message.IsEmpty()) {
+        return;
+    }
+    
+    if (socket) {
+        // Send the chat message
+        if (socket->getName() == "HOST") {
+            // If this is the host, the message appears with HOST prefix
+            socket->sendChat(message);
+            // Display the message locally too
+            Chat("HOST", message);
+        } else {
+            socket->sendChat(message);
+        }
+        
+        // Clear the input field
+        input->Clear();
+    }
+}
+
+void LiveLogTab::OnKeyDown(wxKeyEvent& evt) {
+    if (evt.GetKeyCode() == WXK_RETURN && !evt.ShiftDown()) {
+        // Send the message when Enter is pressed (without Shift)
+        wxString message = input->GetValue();
+        if (!message.IsEmpty() && socket) {
+            if (socket->getName() == "HOST") {
+                socket->sendChat(message);
+                Chat("HOST", message);
+            } else {
+                socket->sendChat(message);
+            }
+            input->Clear();
+        }
+    } else {
+        evt.Skip();
+    }
 }
 
 void LiveLogTab::OnResizeChat(wxSizeEvent& evt) {

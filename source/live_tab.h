@@ -58,6 +58,7 @@ public:
 	void OnDeselectChatbox(wxFocusEvent& evt);
 
 	void OnChat(wxCommandEvent& evt);
+	void OnKeyDown(wxKeyEvent& evt);
 	void OnResizeChat(wxSizeEvent& evt);
 	void OnResizeClientList(wxSizeEvent& evt);
 	void OnCopySelectedLogText(wxCommandEvent& evt);

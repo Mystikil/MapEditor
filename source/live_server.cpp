@@ -234,16 +234,27 @@ void LiveServer::broadcastChat(const wxString& speaker, const wxString& chatMess
 		return;
 	}
 
+	// If the speaker is HOST, use the server name
+	wxString displayName = (speaker == "HOST") ? name : speaker;
+
 	NetworkMessage message;
 	message.write<uint8_t>(PACKET_SERVER_TALK);
-	message.write<std::string>(nstr(speaker));
+	message.write<std::string>(nstr(displayName));
 	message.write<std::string>(nstr(chatMessage));
 
 	for (auto& clientEntry : clients) {
 		clientEntry.second->send(message);
 	}
 
-	log->Chat(name, chatMessage);
+	// Also log the chat message in the server log
+	if (log) {
+		log->Chat(displayName, chatMessage);
+	}
+}
+
+void LiveServer::sendChat(const wxString& chatMessage) {
+	// For server, sending a chat message means broadcasting it from HOST
+	broadcastChat("HOST", chatMessage);
 }
 
 void LiveServer::startOperation(const wxString& operationMessage) {

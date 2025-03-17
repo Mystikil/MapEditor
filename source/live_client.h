@@ -42,21 +42,23 @@ public:
 	std::string getHostName() const;
 
 	//
-	void receiveHeader();
-	void receive(uint32_t packetSize);
-	void send(NetworkMessage& message);
+	void receiveHeader() override;
+	void receive(uint32_t packetSize) override;
+	void send(NetworkMessage& message) override;
 
 	//
-	void updateCursor(const Position& position);
+	void updateCursor(const Position& position) override;
 
 	LiveLogTab* createLogWindow(wxWindow* parent);
+
+	
 	MapTab* createEditorWindow();
 
 	// send packets
 	void sendHello();
 	void sendNodeRequests();
 	void sendChanges(DirtyList& dirtyList);
-	void sendChat(const wxString& chatMessage);
+	void sendChat(const wxString& chatMessage) override;
 	void sendReady();
 
 	// Flags a node as queried and stores it, need to call SendNodeRequest to send it to server

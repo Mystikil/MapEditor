@@ -35,6 +35,10 @@ struct NetworkMessage {
 	//
 	template <typename T>
 	T read() {
+		// Check if we have enough data left to read
+		if (position + sizeof(T) > buffer.size()) {
+			throw std::runtime_error("Buffer underflow - attempted to read past buffer end");
+		}
 		T& value = *reinterpret_cast<T*>(&buffer[position]);
 		position += sizeof(T);
 		return value;

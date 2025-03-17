@@ -39,12 +39,13 @@ public:
 	void removeClient(uint32_t id);
 
 	//
-	void receiveHeader() { }
-	void receive(uint32_t packetSize) { }
-	void send(NetworkMessage& message) { }
+	void receiveHeader() override { }
+	void receive(uint32_t packetSize) override { }
+	void send(NetworkMessage& message) override { }
+	void sendChat(const wxString& chatMessage) override;
 
 	//
-	void updateCursor(const Position& position);
+	void updateCursor(const Position& position) override;
 	void updateClientList() const;
 
 	//

@@ -2993,6 +2993,10 @@ void MainMenuBar::onServerHost(wxCommandEvent& event) {
         
         // Create server
         LiveServer* server = new LiveServer(*g_gui.GetCurrentEditor());
+        
+        // Set the server name to HOST for easy identification in chat
+        server->setName("HOST");
+        
         if (!server->setPort(port)) {
             wxMessageBox(wxString(server->getLastError()), "Error", wxOK | wxICON_ERROR);
             delete server;

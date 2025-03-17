@@ -112,6 +112,12 @@ void NetworkMessage::expand(const size_t length) {
 template <>
 std::string NetworkMessage::read<std::string>() {
 	const uint16_t length = read<uint16_t>();
+	
+	// Check if we have enough data for the string
+	if (position + length > buffer.size()) {
+		throw std::runtime_error("Buffer underflow - string length exceeds remaining buffer size");
+	}
+	
 	char* strBuffer = reinterpret_cast<char*>(&buffer[position]);
 	position += length;
 	return std::string(strBuffer, length);
