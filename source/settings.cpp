@@ -230,7 +230,7 @@ void Settings::IO(IOMode mode) {
 	Int(SHOW_TOWNS, 0);
 	Int(ALWAYS_SHOW_ZONES, 1);
 	Int(EXT_HOUSE_SHADER, 1);
-	Int(ZOOM_LEVELS, 16);
+	
 
 	section("Version");
 	Int(VERSION_ID, 0);
@@ -354,6 +354,13 @@ void Settings::IO(IOMode mode) {
 	section("experimental");
 	Int(EXPERIMENTAL_FOG, 0);
 
+	// Network settings
+	section("Network");
+	String(LIVE_HOST, "localhost");
+	Int(LIVE_PORT, 12356);
+	String(LIVE_PASSWORD, "");
+	String(LIVE_USERNAME, wxGetUserId().ToStdString());
+
 	section("");
 	Int(GOTO_WEBSITE_ON_BOOT, 0);
 	Int(USE_UPDATER, 1);
@@ -365,6 +372,7 @@ void Settings::IO(IOMode mode) {
 
 	// checkbox in terrain palette
 	Int(DRAW_LOCKED_DOOR, 0);
+	//Int(HIGHLIGHT_LOCKED_DOORS, 0);
 
 #undef section
 #undef Int

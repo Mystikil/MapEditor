@@ -208,6 +208,8 @@ MainMenuBar::MainMenuBar(MainFrame* frame) :
 	MAKE_ACTION(LIVE_START, wxITEM_NORMAL, OnStartLive);
 	MAKE_ACTION(LIVE_JOIN, wxITEM_NORMAL, OnJoinLive);
 	MAKE_ACTION(LIVE_CLOSE, wxITEM_NORMAL, OnCloseLive);
+	MAKE_ACTION(ID_MENU_SERVER_HOST, wxITEM_NORMAL, onServerHost);
+	MAKE_ACTION(ID_MENU_SERVER_CONNECT, wxITEM_NORMAL, onServerConnect);
 
 	MAKE_ACTION(SELECT_TERRAIN, wxITEM_NORMAL, OnSelectTerrainPalette);
 	MAKE_ACTION(SELECT_DOODAD, wxITEM_NORMAL, OnSelectDoodadPalette);
@@ -444,6 +446,8 @@ void MainMenuBar::Update() {
 	EnableItem(LIVE_START, is_local);
 	EnableItem(LIVE_JOIN, loaded);
 	EnableItem(LIVE_CLOSE, is_live);
+	EnableItem(ID_MENU_SERVER_HOST, is_local);
+	EnableItem(ID_MENU_SERVER_CONNECT, loaded);
 
 	EnableItem(DEBUG_VIEW_DAT, loaded);
 
@@ -2945,4 +2949,157 @@ void MainMenuBar::OnMapRemoveDuplicates(wxCommandEvent& WXUNUSED(event)) {
 
 void MainMenuBar::OnShowHotkeys(wxCommandEvent& WXUNUSED(event)) {
     g_hotkey_manager.ShowHotkeyDialog(frame);
+}
+
+void MainMenuBar::onServerHost(wxCommandEvent& event) {
+    wxDialog* hostDialog = new wxDialog(frame, wxID_ANY, "Host Server", wxDefaultPosition, wxSize(300, 200));
+    
+    wxBoxSizer* sizer = new wxBoxSizer(wxVERTICAL);
+    wxFlexGridSizer* gridSizer = new wxFlexGridSizer(2, 10, 10);
+    
+    // Port
+    gridSizer->Add(new wxStaticText(hostDialog, wxID_ANY, "Port:"));
+    wxSpinCtrl* portCtrl = new wxSpinCtrl(hostDialog, wxID_ANY);
+    portCtrl->SetRange(1, 65535);
+    portCtrl->SetValue(g_settings.getInteger(Config::LIVE_PORT));
+    gridSizer->Add(portCtrl);
+    
+    // Password
+    gridSizer->Add(new wxStaticText(hostDialog, wxID_ANY, "Password:"));
+    wxTextCtrl* passwordCtrl = new wxTextCtrl(hostDialog, wxID_ANY);
+    passwordCtrl->SetValue(wxstr(g_settings.getString(Config::LIVE_PASSWORD)));
+    gridSizer->Add(passwordCtrl);
+    
+    sizer->Add(gridSizer, 0, wxALL, 10);
+    
+    // Host button
+    wxBoxSizer* buttonSizer = new wxBoxSizer(wxHORIZONTAL);
+    wxButton* hostButton = new wxButton(hostDialog, wxID_OK, "Host");
+    wxButton* cancelButton = new wxButton(hostDialog, wxID_CANCEL, "Cancel");
+    buttonSizer->Add(hostButton);
+    buttonSizer->Add(cancelButton);
+    
+    sizer->Add(buttonSizer, 0, wxALIGN_CENTER | wxALL, 10);
+    hostDialog->SetSizer(sizer);
+    
+    if (hostDialog->ShowModal() == wxID_OK) {
+        // Get port and password from controls
+        int port = portCtrl->GetValue();
+        wxString password = passwordCtrl->GetValue();
+        
+        // Save settings
+        g_settings.setInteger(Config::LIVE_PORT, port);
+        g_settings.setString(Config::LIVE_PASSWORD, nstr(password));
+        
+        // Create server
+        LiveServer* server = new LiveServer(*g_gui.GetCurrentEditor());
+        if (!server->setPort(port)) {
+            wxMessageBox(wxString(server->getLastError()), "Error", wxOK | wxICON_ERROR);
+            delete server;
+            return;
+        }
+        
+        if (!server->setPassword(password)) {
+            wxMessageBox(wxString(server->getLastError()), "Error", wxOK | wxICON_ERROR);
+            delete server;
+            return;
+        }
+        
+        // Start server
+        if (!server->bind()) {
+            wxMessageBox(wxString(server->getLastError()), "Error", wxOK | wxICON_ERROR);
+            delete server;
+            return;
+        }
+        
+        // Create log window
+        LiveLogTab* log = server->createLogWindow(g_gui.tabbook);
+        g_gui.RefreshPalettes();
+    }
+    
+    hostDialog->Destroy();
+}
+
+void MainMenuBar::onServerConnect(wxCommandEvent& event) {
+    wxDialog* connectDialog = new wxDialog(frame, wxID_ANY, "Connect to Server", wxDefaultPosition, wxSize(300, 240));
+    
+    wxBoxSizer* sizer = new wxBoxSizer(wxVERTICAL);
+    wxFlexGridSizer* gridSizer = new wxFlexGridSizer(2, 10, 10);
+    
+    // Host
+    gridSizer->Add(new wxStaticText(connectDialog, wxID_ANY, "Host:"));
+    wxTextCtrl* hostCtrl = new wxTextCtrl(connectDialog, wxID_ANY);
+    hostCtrl->SetValue(wxstr(g_settings.getString(Config::LIVE_HOST)));
+    gridSizer->Add(hostCtrl);
+    
+    // Port
+    gridSizer->Add(new wxStaticText(connectDialog, wxID_ANY, "Port:"));
+    wxSpinCtrl* portCtrl = new wxSpinCtrl(connectDialog, wxID_ANY);
+    portCtrl->SetRange(1, 65535);
+    portCtrl->SetValue(g_settings.getInteger(Config::LIVE_PORT));
+    gridSizer->Add(portCtrl);
+    
+    // Username
+    gridSizer->Add(new wxStaticText(connectDialog, wxID_ANY, "Username:"));
+    wxTextCtrl* usernameCtrl = new wxTextCtrl(connectDialog, wxID_ANY);
+    usernameCtrl->SetValue(wxstr(g_settings.getString(Config::LIVE_USERNAME)));
+    gridSizer->Add(usernameCtrl);
+    
+    // Password
+    gridSizer->Add(new wxStaticText(connectDialog, wxID_ANY, "Password:"));
+    wxTextCtrl* passwordCtrl = new wxTextCtrl(connectDialog, wxID_ANY);
+    passwordCtrl->SetValue(wxstr(g_settings.getString(Config::LIVE_PASSWORD)));
+    gridSizer->Add(passwordCtrl);
+    
+    sizer->Add(gridSizer, 0, wxALL, 10);
+    
+    // Connect button
+    wxBoxSizer* buttonSizer = new wxBoxSizer(wxHORIZONTAL);
+    wxButton* connectButton = new wxButton(connectDialog, wxID_OK, "Connect");
+    wxButton* cancelButton = new wxButton(connectDialog, wxID_CANCEL, "Cancel");
+    buttonSizer->Add(connectButton);
+    buttonSizer->Add(cancelButton);
+    
+    sizer->Add(buttonSizer, 0, wxALIGN_CENTER | wxALL, 10);
+    connectDialog->SetSizer(sizer);
+    
+    if (connectDialog->ShowModal() == wxID_OK) {
+        // Get connection parameters from controls
+        wxString host = hostCtrl->GetValue();
+        int port = portCtrl->GetValue();
+        wxString username = usernameCtrl->GetValue();
+        wxString password = passwordCtrl->GetValue();
+        
+        // Save settings
+        g_settings.setString(Config::LIVE_HOST, nstr(host));
+        g_settings.setInteger(Config::LIVE_PORT, port);
+        g_settings.setString(Config::LIVE_USERNAME, nstr(username));
+        g_settings.setString(Config::LIVE_PASSWORD, nstr(password));
+        
+        // Create client
+        LiveClient* client = new LiveClient();
+        if (!client->setName(username)) {
+            wxMessageBox(wxString(client->getLastError()), "Error", wxOK | wxICON_ERROR);
+            delete client;
+            return;
+        }
+        
+        if (!client->setPassword(password)) {
+            wxMessageBox(wxString(client->getLastError()), "Error", wxOK | wxICON_ERROR);
+            delete client;
+            return;
+        }
+        
+        // Connect to server
+        if (!client->connect(nstr(host), port)) {
+            wxMessageBox(wxString(client->getLastError()), "Error", wxOK | wxICON_ERROR);
+            delete client;
+            return;
+        }
+        
+        // Create log window
+        client->createLogWindow(g_gui.tabbook);
+    }
+    
+    connectDialog->Destroy();
 }

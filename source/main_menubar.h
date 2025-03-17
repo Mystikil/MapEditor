@@ -120,6 +120,7 @@ namespace MenuBar {
 		SHOW_TOWNS,
 		ALWAYS_SHOW_ZONES,
 		EXT_HOUSE_SHADER,
+
 		WIN_MINIMAP,
 		NEW_PALETTE,
 		TAKE_SCREENSHOT,
@@ -154,6 +155,8 @@ namespace MenuBar {
 		EXTENSIONS,
 		GOTO_WEBSITE,
 		ABOUT,
+		ID_MENU_SERVER_HOST,
+		ID_MENU_SERVER_CONNECT,
 
 		EXPERIMENTAL_FOG,
 		MAP_REMOVE_DUPLICATES,
@@ -268,6 +271,8 @@ public:
 	void OnStartLive(wxCommandEvent& event);
 	void OnJoinLive(wxCommandEvent& event);
 	void OnCloseLive(wxCommandEvent& event);
+	void onServerHost(wxCommandEvent& event);
+	void onServerConnect(wxCommandEvent& event);
 
 	// Window Menu
 	void OnMinimapWindow(wxCommandEvent& event);

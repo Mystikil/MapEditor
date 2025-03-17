@@ -186,7 +186,11 @@ namespace Config {
 
 		AUTO_SELECT_RAW_ON_RIGHTCLICK,
 
-		
+		// Network/Live settings
+		LIVE_HOST,
+		LIVE_PORT,
+		LIVE_PASSWORD,
+		LIVE_USERNAME,
 
 		LAST,
 	};
