@@ -70,6 +70,9 @@ public:
 	void startOperation(const wxString& operationMessage);
 	void updateOperation(int32_t percent);
 
+	// Override socket type check
+	bool IsServer() const override { return true; }
+
 protected:
 	std::unordered_map<uint32_t, LivePeer*> clients;
 

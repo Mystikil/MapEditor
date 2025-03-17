@@ -19,6 +19,7 @@
 
 #include <wx/splitter.h>
 #include <wx/grid.h>
+#include <wx/colordlg.h>
 
 #include "live_tab.h"
 #include "live_socket.h"
@@ -49,6 +50,8 @@ BEGIN_EVENT_TABLE(LiveLogTab, wxPanel)
 EVT_TEXT_ENTER(LIVE_CHAT_INPUT, LiveLogTab::OnChat)
 EVT_RIGHT_DOWN(LiveLogTab::OnLogRightClick)
 EVT_MENU(LIVE_LOG_COPY_SELECTED, LiveLogTab::OnCopySelectedLogText)
+EVT_BOOKCTRL_PAGE_CHANGED(wxID_ANY, LiveLogTab::OnPageChanged)
+EVT_GRID_CELL_LEFT_CLICK(LiveLogTab::OnGridCellLeftClick)
 END_EVENT_TABLE()
 
 LiveLogTab::LiveLogTab(MapTabbook* aui, LiveSocket* server) :
@@ -67,15 +70,24 @@ LiveLogTab::LiveLogTab(MapTabbook* aui, LiveSocket* server) :
 
 	wxFont time_font(*wxSWISS_FONT);
 
-	// Replace wxGrid with wxTextCtrl for the log
-	log = newd wxTextCtrl(left_pane, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize, 
+	// Create a notebook for tabs
+	notebook = newd wxNotebook(left_pane, wxID_ANY);
+	
+	// Debug log tab
+	debug_log = newd wxTextCtrl(notebook, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize, 
                       wxTE_MULTILINE | wxTE_READONLY | wxTE_RICH | wxTE_AUTO_URL);
-	log->SetFont(time_font);
-
-	// Connect right-click event to show context menu
-	log->Connect(wxEVT_RIGHT_DOWN, wxMouseEventHandler(LiveLogTab::OnLogRightClick), nullptr, this);
-
-	left_sizer->Add(log, 1, wxEXPAND);
+	debug_log->SetFont(time_font);
+	debug_log->Connect(wxEVT_RIGHT_DOWN, wxMouseEventHandler(LiveLogTab::OnLogRightClick), nullptr, this);
+	notebook->AddPage(debug_log, "Debug");
+	
+	// Chat log tab
+	chat_log = newd wxTextCtrl(notebook, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize, 
+                      wxTE_MULTILINE | wxTE_READONLY | wxTE_RICH | wxTE_AUTO_URL);
+	chat_log->SetFont(time_font);
+	chat_log->Connect(wxEVT_RIGHT_DOWN, wxMouseEventHandler(LiveLogTab::OnLogRightClick), nullptr, this);
+	notebook->AddPage(chat_log, "Chat");
+	
+	left_sizer->Add(notebook, 1, wxEXPAND);
 
 	input = newd wxTextCtrl(left_pane, LIVE_CHAT_INPUT, wxEmptyString, wxDefaultPosition, wxDefaultSize, wxTE_PROCESS_ENTER);
 	left_sizer->Add(input, 0, wxEXPAND);
@@ -140,21 +152,19 @@ wxString format00(wxDateTime::wxDateTime_t t) {
 
 void LiveLogTab::Message(const wxString& str) {
 	wxDateTime t = wxDateTime::Now();
-	wxString time, speaker, message;
+	wxString time, message;
 	time << format00(t.GetHour()) << ":"
 		 << format00(t.GetMinute()) << ":"
 		 << format00(t.GetSecond());
-
-	speaker << "Server";
 	
-	// Format the message with timestamp and speaker
-	message << time << " [" << speaker << "]: " << str << "\n";
+	// Format the message with timestamp
+	message << time << " - " << str << "\n";
 	
-	// Add text to the log
-	log->AppendText(message);
+	// Add text to the debug log
+	debug_log->AppendText(message);
 	
 	// Auto-scroll to the bottom
-	log->SetInsertionPointEnd();
+	debug_log->SetInsertionPointEnd();
 }
 
 void LiveLogTab::Chat(const wxString& speaker, const wxString& str) {
@@ -167,11 +177,14 @@ void LiveLogTab::Chat(const wxString& speaker, const wxString& str) {
 	// Format the chat message with timestamp and speaker
 	message << time << " [" << speaker << "]: " << str << "\n";
 	
-	// Add text to the log
-	log->AppendText(message);
+	// Add text to the chat log
+	chat_log->AppendText(message);
 	
 	// Auto-scroll to the bottom
-	log->SetInsertionPointEnd();
+	chat_log->SetInsertionPointEnd();
+	
+	// Switch to the chat tab automatically when receiving messages
+	notebook->SetSelection(1); // 1 is the index of the chat tab
 }
 
 void LiveLogTab::OnChat(wxCommandEvent& evt) {
@@ -238,7 +251,20 @@ void LiveLogTab::OnLogRightClick(wxMouseEvent& evt) {
 
 void LiveLogTab::OnCopySelectedLogText(wxCommandEvent& evt) {
     if(wxTheClipboard->Open()) {
-        wxTheClipboard->SetData(new wxTextDataObject(log->GetStringSelection()));
+        // Determine which log has focus and copy from that one
+        wxTextCtrl* activeLog = nullptr;
+        
+        if (wxWindow::FindFocus() == debug_log) {
+            activeLog = debug_log;
+        } else if (wxWindow::FindFocus() == chat_log) {
+            activeLog = chat_log;
+        } else {
+            // Default to currently visible page
+            int selection = notebook->GetSelection();
+            activeLog = (selection == 0) ? debug_log : chat_log;
+        }
+        
+        wxTheClipboard->SetData(new wxTextDataObject(activeLog->GetStringSelection()));
         wxTheClipboard->Close();
     }
 }
@@ -260,4 +286,97 @@ void LiveLogTab::UpdateClientList(const std::unordered_map<uint32_t, LivePeer*>&
 		user_list->SetCellValue(i, 2, peer->getName());
 		++i;
 	}
+}
+
+void LiveLogTab::OnPageChanged(wxBookCtrlEvent& evt) {
+    // If switching to chat tab, set focus to the input box
+    if (evt.GetSelection() == 1) { // Chat tab index
+        input->SetFocus();
+    }
+    evt.Skip();
+}
+
+void LiveLogTab::OnGridCellLeftClick(wxGridEvent& evt) {
+    int row = evt.GetRow();
+    int col = evt.GetCol();
+    
+    // Column 0 is the color column
+    if (col == 0) {
+        ChangeUserColor(row);
+    }
+    
+    evt.Skip();
+}
+
+void LiveLogTab::ChangeUserColor(int row) {
+    // Make sure we have a valid client selected
+    if (row < 0 || row >= user_list->GetNumberRows()) {
+        return;
+    }
+    
+    // Get the current color from the background
+    wxColor currentColor = user_list->GetCellBackgroundColour(row, 0);
+    
+    // Show color picker dialog
+    wxColourData colorData;
+    colorData.SetColour(currentColor);
+    
+    wxColourDialog dialog(this, &colorData);
+    dialog.SetTitle("Choose Color");
+    
+    if (dialog.ShowModal() == wxID_OK) {
+        wxColour newColor = dialog.GetColourData().GetColour();
+        
+        // Get the client ID from the second column (column 1)
+        wxString clientIdStr = user_list->GetCellValue(row, 1);
+        long clientId = 0;
+        
+        if (clientIdStr.ToLong(&clientId)) {
+            clientId = (clientId - 1) << 1; // Convert display ID back to actual ID
+            
+            // Find the peer with this client ID
+            bool found = false;
+            for (auto& pair : clients) {
+                LivePeer* peer = pair.second;
+                if (peer && peer->getClientId() == clientId) {
+                    // Update the color
+                    peer->setUsedColor(newColor);
+                    
+                    // Update user list
+                    user_list->SetCellBackgroundColour(row, 0, newColor);
+                    user_list->Refresh();
+                    
+                    // If this is the host updating their own color
+                    if (socket && socket->IsServer() && clientId == 0) {
+                        // Update host's cursor color
+                        LiveCursor cursor;
+                        cursor.id = 0;
+                        cursor.pos = Position(0, 0, 0);  // Position doesn't matter for color update
+                        cursor.color = newColor;
+                        
+                        if (LiveServer* server = dynamic_cast<LiveServer*>(socket)) {
+                            server->broadcastCursor(cursor);
+                        }
+                    }
+                    
+                    found = true;
+                    break;
+                }
+            }
+            
+            if (!found && socket && socket->IsClient() && row == 0) {
+                // Client updating their own color
+                NetworkMessage message;
+                message.write<uint8_t>(PACKET_CLIENT_UPDATE_CURSOR);
+                
+                LiveCursor cursor;
+                cursor.id = 77; // Will be fixed by server
+                cursor.pos = Position(0, 0, 0); // Position doesn't matter for color update
+                cursor.color = newColor;
+                
+                socket->writeCursor(message, cursor);
+                socket->send(message);
+            }
+        }
+    }
 }

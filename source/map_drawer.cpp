@@ -684,12 +684,16 @@ void MapDrawer::DrawLiveCursors() {
 			continue;
 		}
 
+		// Get the cursor position and color
+		wxColor cursorColor = cursor.color;
+		
+		// Fade the color if cursor is on a lower floor
 		if (cursor.pos.z < floor) {
-			cursor.color = wxColor(
-				cursor.color.Red(),
-				cursor.color.Green(),
-				cursor.color.Blue(),
-				std::max<uint8_t>(cursor.color.Alpha() / 2, 64)
+			cursorColor = wxColor(
+				cursorColor.Red(),
+				cursorColor.Green(),
+				cursorColor.Blue(),
+				std::max<uint8_t>(cursorColor.Alpha() / 2, 64)
 			);
 		}
 
@@ -700,16 +704,56 @@ void MapDrawer::DrawLiveCursors() {
 			offset = TileSize * (floor - cursor.pos.z);
 		}
 
-		float draw_x = ((cursor.pos.x * TileSize) - view_scroll_x) - offset;
-		float draw_y = ((cursor.pos.y * TileSize) - view_scroll_y) - offset;
-
-		glColor(cursor.color);
+		// Draw a brush highlight around the cursor
+		const int brushSize = 1; // Size of brush (1 = 3x3 tiles, 2 = 5x5 tiles, etc.)
+		
+		for (int y = -brushSize; y <= brushSize; y++) {
+			for (int x = -brushSize; x <= brushSize; x++) {
+				// Calculate the display position for each tile in the brush
+				float draw_x = (((cursor.pos.x + x) * TileSize) - view_scroll_x) - offset;
+				float draw_y = (((cursor.pos.y + y) * TileSize) - view_scroll_y) - offset;
+				
+				// Choose how to display the brush: as square or circle
+				// Use a circular brush (similar to the regular drawing brush)
+				if (brushSize > 0) {
+					// For circular brush, calculate distance from center
+					float distance = sqrt((float)(x * x) + (float)(y * y));
+					if (distance > brushSize + 0.005f) {
+						continue; // Skip tiles outside the circle
+					}
+				}
+				
+				// Draw the tile with the user's color
+				glColor4ub(
+					cursorColor.Red(),
+					cursorColor.Green(),
+					cursorColor.Blue(),
+					std::min<uint8_t>(cursorColor.Alpha(), 120) // Lower alpha for brush highlight
+				);
+				
+				glBegin(GL_QUADS);
+				glVertex2f(draw_x, draw_y + TileSize);
+				glVertex2f(draw_x + TileSize, draw_y + TileSize);
+				glVertex2f(draw_x + TileSize, draw_y);
+				glVertex2f(draw_x, draw_y);
+				glEnd();
+			}
+		}
+		
+		// Draw a brighter center tile to mark the actual cursor position
+		float center_x = ((cursor.pos.x * TileSize) - view_scroll_x) - offset;
+		float center_y = ((cursor.pos.y * TileSize) - view_scroll_y) - offset;
+		
+		glColor(cursorColor); // Original color for the center
 		glBegin(GL_QUADS);
-		glVertex2f(draw_x, draw_y);
-		glVertex2f(draw_x + TileSize, draw_y);
-		glVertex2f(draw_x + TileSize, draw_y + TileSize);
-		glVertex2f(draw_x, draw_y + TileSize);
+		glVertex2f(center_x, center_y + TileSize);
+		glVertex2f(center_x + TileSize, center_y + TileSize);
+		glVertex2f(center_x + TileSize, center_y);
+		glVertex2f(center_x, center_y);
 		glEnd();
+		
+		// Draw a small username indicator above the brush
+		// This would require additional code to render text in OpenGL, which is beyond the scope of this edit
 	}
 }
 

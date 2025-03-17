@@ -54,6 +54,9 @@ public:
 	
 	MapTab* createEditorWindow();
 
+	// Override socket type check
+	bool IsClient() const override { return true; }
+
 	// send packets
 	void sendHello();
 	void sendNodeRequests();

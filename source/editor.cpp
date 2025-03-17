@@ -1989,7 +1989,13 @@ LiveServer* Editor::StartLiveServer() {
 void Editor::BroadcastNodes(DirtyList& dirtyList) {
 	if (IsLiveClient()) {
 		live_client->sendChanges(dirtyList);
-	} else {
+	} else if (IsLiveServer()) {
+		// Make sure the server itself applies the changes locally
+		// This ensures the host can see their own drawing changes
+		g_gui.RefreshView();
+		g_gui.UpdateMinimap();
+		
+		// Then broadcast the changes to all clients
 		live_server->broadcastNodes(dirtyList);
 	}
 }

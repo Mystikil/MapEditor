@@ -54,6 +54,10 @@ public:
 	std::string getHostName() const;
 	std::vector<LiveCursor> getCursorList() const;
 
+	// Check socket type
+	virtual bool IsServer() const { return false; }
+	virtual bool IsClient() const { return false; }
+
 	//
 	void logMessage(const wxString& message);
 

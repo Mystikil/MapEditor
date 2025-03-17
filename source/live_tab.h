@@ -25,6 +25,7 @@
 #include "live_server.h"
 
 class wxGrid;
+class wxNotebook;
 
 class MapTabbook;
 class LiveSocket;
@@ -63,11 +64,16 @@ public:
 	void OnResizeClientList(wxSizeEvent& evt);
 	void OnCopySelectedLogText(wxCommandEvent& evt);
 	void OnLogRightClick(wxMouseEvent& evt);
+	void OnPageChanged(wxBookCtrlEvent& evt);
+	void OnGridCellLeftClick(wxGridEvent& evt);
+	void ChangeUserColor(int row);
 
 protected:
 	MapTabbook* aui;
 	LiveSocket* socket;
-	wxTextCtrl* log;
+	wxNotebook* notebook;
+	wxTextCtrl* debug_log;  // For debug messages
+	wxTextCtrl* chat_log;   // For player chat
 	wxTextCtrl* input;
 	wxGrid* user_list;
 

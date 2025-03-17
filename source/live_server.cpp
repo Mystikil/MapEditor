@@ -128,7 +128,7 @@ void LiveServer::removeClient(uint32_t id) {
 
 void LiveServer::updateCursor(const Position& position) {
 	LiveCursor cursor;
-	cursor.id = 0;
+	cursor.id = 0; // Host's cursor ID is always 0
 	cursor.pos = position;
 	cursor.color = wxColor(
 		g_settings.getInteger(Config::CURSOR_RED),
@@ -136,7 +136,15 @@ void LiveServer::updateCursor(const Position& position) {
 		g_settings.getInteger(Config::CURSOR_BLUE),
 		g_settings.getInteger(Config::CURSOR_ALPHA)
 	);
+	
+	// Store the cursor in local map (important for host to see other cursors)
+	cursors[cursor.id] = cursor;
+	
+	// Broadcast to clients
 	broadcastCursor(cursor);
+	
+	// Update the view to show cursor changes
+	g_gui.RefreshView();
 }
 
 void LiveServer::updateClientList() const {
@@ -258,9 +266,8 @@ void LiveServer::broadcastCursor(const LiveCursor& cursor) {
 		return;
 	}
 
-	if (cursor.id != 0) {
-		cursors[cursor.id] = cursor;
-	}
+	// Always update cursor in local map regardless of ID
+	cursors[cursor.id] = cursor;
 
 	NetworkMessage message;
 	message.write<uint8_t>(PACKET_CURSOR_UPDATE);
@@ -268,10 +275,14 @@ void LiveServer::broadcastCursor(const LiveCursor& cursor) {
 
 	for (auto& clientEntry : clients) {
 		LivePeer* peer = clientEntry.second;
+		// Send to all clients except the one that sent the update
 		if (peer->getClientId() != cursor.id) {
 			peer->send(message);
 		}
 	}
+	
+	// Always refresh the view to ensure cursor updates are visible
+	g_gui.RefreshView();
 }
 
 void LiveServer::broadcastChat(const wxString& speaker, const wxString& chatMessage) {

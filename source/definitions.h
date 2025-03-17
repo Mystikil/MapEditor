@@ -18,14 +18,14 @@
 #ifndef RME_DEFINITIONS_H_
 #define RME_DEFINITIONS_H_
 
-#define __W_RME_APPLICATION_NAME__ wxString("OTAcademy Map Editor")
-#define __RME_APPLICATION_NAME__ std::string("OTAcademy Map Editor")
+#define __W_RME_APPLICATION_NAME__ wxString("OTARMEIE - Idler Map Editor")
+#define __RME_APPLICATION_NAME__ std::string("OTARMEIE - Idler Map Editor")
 
 // Version info
 // xxyyzzt (major, minor, subversion)
-#define __RME_VERSION_MAJOR__ 4
-#define __RME_VERSION_MINOR__ 1
-#define __RME_SUBVERSION__ 3
+#define __RME_VERSION_MAJOR__ 5
+#define __RME_VERSION_MINOR__ 0
+#define __RME_SUBVERSION__ 0
 
 #define __LIVE_NET_VERSION__ 5
 
