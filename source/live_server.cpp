@@ -105,6 +105,7 @@ void LiveServer::acceptClient() {
 			peer->receiveHeader();
 
 			clients.insert(std::make_pair(id++, peer));
+			updateClientList();
 		}
 		acceptClient();
 	});
@@ -130,18 +131,13 @@ void LiveServer::updateCursor(const Position& position) {
 	LiveCursor cursor;
 	cursor.id = 0; // Host's cursor ID is always 0
 	cursor.pos = position;
-	cursor.color = wxColor(
-		g_settings.getInteger(Config::CURSOR_RED),
-		g_settings.getInteger(Config::CURSOR_GREEN),
-		g_settings.getInteger(Config::CURSOR_BLUE),
-		g_settings.getInteger(Config::CURSOR_ALPHA)
-	);
+	cursor.color = usedColor;
 	
 	// Store the cursor in local map (important for host to see other cursors)
-	cursors[cursor.id] = cursor;
+	this->cursors[cursor.id] = cursor;
 	
 	// Broadcast to clients
-	broadcastCursor(cursor);
+	this->broadcastCursor(cursor);
 	
 	// Update the view to show cursor changes
 	g_gui.RefreshView();
@@ -196,9 +192,10 @@ void LiveServer::broadcastNodes(DirtyList& dirtyList) {
 		uint32_t owner = dirtyList.owner;
 		
 		// Apply changes to host's map immediately
-		// This ensures the host can see changes made by clients
-		if (owner != 0) {
-			logMessage(wxString::Format("[Server]: Applying changes from client ID %u to host map", owner));
+		// This ensures the host can see their own changes
+		if (owner == 0) {
+			logMessage("[Server]: Applying host changes to local map");
+			editor->actionQueue->addAction(static_cast<NetworkedAction*>(editor->actionQueue->createAction(ACTION_REMOTE)));
 		}
 		
 		for (const auto& ind : posList) {
@@ -232,6 +229,9 @@ void LiveServer::broadcastNodes(DirtyList& dirtyList) {
 					try {
 						peer->sendNode(clientId, node, ndx, ndy, floors & 0xFF00);
 						sentUpdate = true;
+						logMessage(wxString::Format("[Server]: Node [%d,%d,%s] marked as visible for client %u", 
+							ndx, ndy, "underground", clientId));
+						logMessage(wxString::Format("[Server]: Sending node update to client %u", clientId));
 					} catch (std::exception& e) {
 						logMessage(wxString::Format("[Server]: Error sending underground node to client %s: %s", 
 							peer->getName(), e.what()));
@@ -242,6 +242,9 @@ void LiveServer::broadcastNodes(DirtyList& dirtyList) {
 					try {
 						peer->sendNode(clientId, node, ndx, ndy, floors & 0x00FF);
 						sentUpdate = true;
+						logMessage(wxString::Format("[Server]: Node [%d,%d,%s] marked as visible for client %u", 
+							ndx, ndy, "surface", clientId));
+						logMessage(wxString::Format("[Server]: Sending node update to client %u", clientId));
 					} catch (std::exception& e) {
 						logMessage(wxString::Format("[Server]: Error sending surface node to client %s: %s", 
 							peer->getName(), e.what()));
@@ -284,10 +287,8 @@ void LiveServer::broadcastCursor(const LiveCursor& cursor) {
 
 	for (auto& clientEntry : clients) {
 		LivePeer* peer = clientEntry.second;
-		// Send to all clients except the one that sent the update
-		if (peer->getClientId() != cursor.id) {
-			peer->send(message);
-		}
+		// Send to all clients, including the one that sent the update
+		peer->send(message);
 	}
 	
 	// Always refresh the view to ensure cursor updates are visible
@@ -360,4 +361,8 @@ LiveLogTab* LiveServer::createLogWindow(wxWindow* parent) {
 
 	updateClientList();
 	return log;
+}
+
+void LiveServer::setUsedColor(const wxColor& color) {
+	usedColor = color;
 }

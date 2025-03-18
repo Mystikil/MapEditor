@@ -66,7 +66,7 @@ public:
 	void OnLogRightClick(wxMouseEvent& evt);
 	void OnPageChanged(wxBookCtrlEvent& evt);
 	void OnGridCellLeftClick(wxGridEvent& evt);
-	void ChangeUserColor(int row);
+	void ChangeUserColor(int row, const wxColor& color);
 
 protected:
 	MapTabbook* aui;

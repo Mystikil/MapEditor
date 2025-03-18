@@ -657,6 +657,10 @@ void LiveClient::parseNode(NetworkMessage& message) {
 				editor->actionQueue->addAction(action);
 				g_gui.RefreshView();
 				g_gui.UpdateMinimap();
+
+				logMessage(wxString::Format("[Client]: Applying node update [%d,%d,%s]", 
+					ndx, ndy, underground ? "underground" : "surface"));
+				logMessage("[Client]: Node update applied successfully.");
 			} else {
 				// Use proper action destruction
 				

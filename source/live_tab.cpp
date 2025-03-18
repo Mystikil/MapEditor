@@ -24,6 +24,7 @@
 #include "live_tab.h"
 #include "live_socket.h"
 #include "live_peer.h"
+#include "live_server.h"
 
 class myGrid : public wxGrid {
 public:
@@ -140,6 +141,8 @@ void LiveLogTab::Disconnect() {
 	socket = nullptr;
 	Refresh();
 }
+
+
 
 wxString format00(wxDateTime::wxDateTime_t t) {
 	wxString str;
@@ -302,32 +305,43 @@ void LiveLogTab::OnGridCellLeftClick(wxGridEvent& evt) {
     
     // Column 0 is the color column
     if (col == 0) {
-        ChangeUserColor(row);
+        // Get the current color from the background
+        wxColor currentColor = user_list->GetCellBackgroundColour(row, 0);
+        
+        // Show color picker dialog
+        wxColourData colorData;
+        colorData.SetColour(currentColor);
+        
+        wxColourDialog dialog(this, &colorData);
+        dialog.SetTitle("Choose Color");
+        
+        if (dialog.ShowModal() == wxID_OK) {
+            wxColour newColor = dialog.GetColourData().GetColour();
+            ChangeUserColor(row, newColor);
+        }
     }
     
     evt.Skip();
 }
 
-void LiveLogTab::ChangeUserColor(int row) {
+void LiveLogTab::ChangeUserColor(int row, const wxColor& color) {
     // Make sure we have a valid client selected
     if (row < 0 || row >= user_list->GetNumberRows()) {
         return;
     }
     
-    // Get the current color from the background
-    wxColor currentColor = user_list->GetCellBackgroundColour(row, 0);
+    // Update the color
+    user_list->SetCellBackgroundColour(row, 0, color);
+    user_list->Refresh();
     
-    // Show color picker dialog
-    wxColourData colorData;
-    colorData.SetColour(currentColor);
-    
-    wxColourDialog dialog(this, &colorData);
-    dialog.SetTitle("Choose Color");
-    
-    if (dialog.ShowModal() == wxID_OK) {
-        wxColour newColor = dialog.GetColourData().GetColour();
-        
-        // Get the client ID from the second column (column 1)
+    if (row == 0) {
+        // Update the host's color on the server
+        auto server = dynamic_cast<LiveServer*>(socket);
+        if (server) {
+            server->setUsedColor(color);
+        }
+    } else {
+        // Find the peer with this row index
         wxString clientIdStr = user_list->GetCellValue(row, 1);
         long clientId = 0;
         
@@ -335,47 +349,13 @@ void LiveLogTab::ChangeUserColor(int row) {
             clientId = (clientId - 1) << 1; // Convert display ID back to actual ID
             
             // Find the peer with this client ID
-            bool found = false;
-            for (auto& pair : clients) {
+            for (const auto& pair : clients) {
                 LivePeer* peer = pair.second;
                 if (peer && peer->getClientId() == clientId) {
                     // Update the color
-                    peer->setUsedColor(newColor);
-                    
-                    // Update user list
-                    user_list->SetCellBackgroundColour(row, 0, newColor);
-                    user_list->Refresh();
-                    
-                    // If this is the host updating their own color
-                    if (socket && socket->IsServer() && clientId == 0) {
-                        // Update host's cursor color
-                        LiveCursor cursor;
-                        cursor.id = 0;
-                        cursor.pos = Position(0, 0, 0);  // Position doesn't matter for color update
-                        cursor.color = newColor;
-                        
-                        if (LiveServer* server = dynamic_cast<LiveServer*>(socket)) {
-                            server->broadcastCursor(cursor);
-                        }
-                    }
-                    
-                    found = true;
+                    peer->setUsedColor(color);
                     break;
                 }
-            }
-            
-            if (!found && socket && socket->IsClient() && row == 0) {
-                // Client updating their own color
-                NetworkMessage message;
-                message.write<uint8_t>(PACKET_CLIENT_UPDATE_CURSOR);
-                
-                LiveCursor cursor;
-                cursor.id = 77; // Will be fixed by server
-                cursor.pos = Position(0, 0, 0); // Position doesn't matter for color update
-                cursor.color = newColor;
-                
-                socket->writeCursor(message, cursor);
-                socket->send(message);
             }
         }
     }

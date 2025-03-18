@@ -73,6 +73,8 @@ public:
 	// Override socket type check
 	bool IsServer() const override { return true; }
 
+	void setUsedColor(const wxColor& color);
+
 protected:
 	std::unordered_map<uint32_t, LivePeer*> clients;
 
@@ -85,6 +87,8 @@ protected:
 	uint16_t port;
 
 	bool stopped;
+
+	wxColor usedColor;
 };
 
 #endif
