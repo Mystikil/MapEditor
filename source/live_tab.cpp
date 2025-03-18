@@ -25,6 +25,7 @@
 #include "live_socket.h"
 #include "live_peer.h"
 #include "live_server.h"
+#include "live_client.h"
 
 class myGrid : public wxGrid {
 public:
@@ -279,16 +280,80 @@ void LiveLogTab::UpdateClientList(const std::unordered_map<uint32_t, LivePeer*>&
 	}
 
 	clients = updatedClients;
-	user_list->AppendRows(clients.size());
+	
+	// For server, use the provided client list
+	if (socket && socket->IsServer()) {
+		// Make sure we have data to display
+		if (clients.empty()) {
+			// At least show the host
+			user_list->AppendRows(1);
+			user_list->SetCellBackgroundColour(0, 0, dynamic_cast<LiveServer*>(socket)->getUsedColor());
+			user_list->SetCellValue(0, 1, "Host");
+			user_list->SetCellValue(0, 2, "HOST");
+		} else {
+			user_list->AppendRows(clients.size());
 
-	int32_t i = 0;
-	for (auto& clientEntry : clients) {
-		LivePeer* peer = clientEntry.second;
-		user_list->SetCellBackgroundColour(i, 0, peer->getUsedColor());
-		user_list->SetCellValue(i, 1, i2ws((peer->getClientId() >> 1) + 1));
-		user_list->SetCellValue(i, 2, peer->getName());
-		++i;
+			int32_t i = 0;
+			for (auto& clientEntry : clients) {
+				LivePeer* peer = clientEntry.second;
+				if (peer) {
+					user_list->SetCellBackgroundColour(i, 0, peer->getUsedColor());
+					user_list->SetCellValue(i, 1, i2ws((peer->getClientId() >> 1) + 1));
+					user_list->SetCellValue(i, 2, peer->getName());
+					++i;
+				}
+			}
+		}
+	} 
+	// For client, use cursor information
+	else if (socket && socket->IsClient()) {
+		// Get cursor list from the socket
+		std::vector<LiveCursor> cursors = socket->getCursorList();
+		
+		if (cursors.empty()) {
+			// If no cursors, at least show the host
+			user_list->AppendRows(1);
+			user_list->SetCellBackgroundColour(0, 0, wxColor(255, 0, 0)); // Default red for host
+			user_list->SetCellValue(0, 1, "Host");
+			user_list->SetCellValue(0, 2, "HOST");
+		} else {
+			// Add a row for each cursor
+			user_list->AppendRows(cursors.size());
+			
+			int32_t i = 0;
+			for (const auto& cursor : cursors) {
+				user_list->SetCellBackgroundColour(i, 0, cursor.color);
+				
+				// In display, clientId 0 is the host, others are +1 and shifted
+				wxString displayId;
+				if (cursor.id == 0) {
+					displayId = "Host";
+				} else {
+					displayId = i2ws((cursor.id >> 1) + 1);
+				}
+				
+				user_list->SetCellValue(i, 1, displayId);
+				
+				// Name is not available in cursor, so we use the socket name for host
+				// and "Client X" for others
+				wxString name;
+				if (cursor.id == 0) {
+					name = "HOST";
+				} else {
+					name = wxString::Format("Client %s", displayId);
+				}
+				
+				user_list->SetCellValue(i, 2, name);
+				++i;
+			}
+		}
+		
+		// Debug message to verify cursor list content
+		Message(wxString::Format("Updated client list with %zu cursors", cursors.size()));
 	}
+	
+	// Refresh the grid
+	user_list->Refresh();
 }
 
 void LiveLogTab::OnPageChanged(wxBookCtrlEvent& evt) {
@@ -330,33 +395,45 @@ void LiveLogTab::ChangeUserColor(int row, const wxColor& color) {
         return;
     }
     
-    // Update the color
+    // Update the color in the UI grid
     user_list->SetCellBackgroundColour(row, 0, color);
     user_list->Refresh();
     
-    if (row == 0) {
-        // Update the host's color on the server
-        auto server = dynamic_cast<LiveServer*>(socket);
-        if (server) {
+    // Get the client ID from the row
+    wxString clientIdStr = user_list->GetCellValue(row, 1);
+    long displayId = 0;
+    uint32_t clientId = 0;
+    
+    if (clientIdStr.ToLong(&displayId)) {
+        // Convert display ID to actual client ID
+        clientId = (displayId - 1) << 1;
+    }
+    
+    // If we're the host, directly update and broadcast
+    auto server = dynamic_cast<LiveServer*>(socket);
+    if (server) {
+        if (row == 0) {
+            // Update the host's color
             server->setUsedColor(color);
-        }
-    } else {
-        // Find the peer with this row index
-        wxString clientIdStr = user_list->GetCellValue(row, 1);
-        long clientId = 0;
-        
-        if (clientIdStr.ToLong(&clientId)) {
-            clientId = (clientId - 1) << 1; // Convert display ID back to actual ID
+        } else {
+            // Update a client's color by broadcasting
+            server->broadcastColorChange(clientId, color);
             
-            // Find the peer with this client ID
+            // Also update the local representation
             for (const auto& pair : clients) {
                 LivePeer* peer = pair.second;
                 if (peer && peer->getClientId() == clientId) {
-                    // Update the color
                     peer->setUsedColor(color);
                     break;
                 }
             }
         }
+    } else if (socket && socket->IsClient()) {
+        // We're a client - send a color update request to the server
+        LiveClient* client = static_cast<LiveClient*>(socket);
+        
+        // Row 0 is always the host with client ID 0
+        uint32_t targetClientId = (row == 0) ? 0 : clientId;
+        client->sendColorUpdate(targetClientId, color);
     }
 }

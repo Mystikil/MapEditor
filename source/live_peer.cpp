@@ -271,6 +271,9 @@ void LivePeer::parseEditorPacket(NetworkMessage message) {
 			case PACKET_CLIENT_TALK:
 				parseChatMessage(message);
 				break;
+			case PACKET_CLIENT_COLOR_UPDATE:
+				parseClientColorUpdate(message);
+				break;
 			default: {
 				log->Message("Invalid editor packet receieved, connection severed.");
 				close();
@@ -438,6 +441,14 @@ void LivePeer::parseReady(NetworkMessage& message) {
 		return;
 	}
 
+	// Assign a default color to the new client
+	color = wxColor(
+		128 + rand() % 127,  // R: 128-255
+		128 + rand() % 127,  // G: 128-255
+		128 + rand() % 127,  // B: 128-255
+		255                  // A: fully opaque
+	);
+
 	server->updateClientList();
 
 	// Let's reply
@@ -450,6 +461,44 @@ void LivePeer::parseReady(NetworkMessage& message) {
 	outMessage.write<uint16_t>(map.getHeight());
 
 	send(outMessage);
+	
+	// Now send the host's cursor to the new client
+	LiveCursor hostCursor;
+	hostCursor.id = 0;
+	hostCursor.color = server->getUsedColor();
+	hostCursor.pos = Position(); // Default position
+	
+	NetworkMessage cursorMessage;
+	cursorMessage.write<uint8_t>(PACKET_CURSOR_UPDATE);
+	server->writeCursorToMessage(cursorMessage, hostCursor);
+	send(cursorMessage);
+	
+	// Also send the colors of all existing clients to the new client
+	for (const auto& clientPair : server->getClients()) {
+		LivePeer* peer = clientPair.second;
+		if (peer && peer->getClientId() != 0 && peer->getClientId() != clientId) {
+			// Send this client's color
+			NetworkMessage colorMessage;
+			colorMessage.write<uint8_t>(PACKET_COLOR_UPDATE);
+			colorMessage.write<uint32_t>(peer->getClientId());
+			colorMessage.write<uint8_t>(peer->getUsedColor().Red());
+			colorMessage.write<uint8_t>(peer->getUsedColor().Green());
+			colorMessage.write<uint8_t>(peer->getUsedColor().Blue());
+			colorMessage.write<uint8_t>(peer->getUsedColor().Alpha());
+			send(colorMessage);
+			
+			// Also send this client's cursor position
+			LiveCursor peerCursor;
+			peerCursor.id = peer->getClientId();
+			peerCursor.color = peer->getUsedColor();
+			peerCursor.pos = Position(); // Default position
+			
+			NetworkMessage peerCursorMessage;
+			peerCursorMessage.write<uint8_t>(PACKET_CURSOR_UPDATE);
+			server->writeCursorToMessage(peerCursorMessage, peerCursor);
+			send(peerCursorMessage);
+		}
+	}
 }
 
 void LivePeer::parseNodeRequest(NetworkMessage& message) {
@@ -561,6 +610,38 @@ void LivePeer::parseChatMessage(NetworkMessage& message) {
 	
 	// Broadcast the chat message to all clients including the sender
 	server->broadcastChat(name, wxstr(chatMessage));
+}
+
+void LivePeer::parseClientColorUpdate(NetworkMessage& message) {
+	// Read the target client ID
+	uint32_t targetClientId = message.read<uint32_t>();
+	
+	// Read the color components
+	uint8_t r = message.read<uint8_t>();
+	uint8_t g = message.read<uint8_t>();
+	uint8_t b = message.read<uint8_t>();
+	uint8_t a = message.read<uint8_t>();
+	wxColor newColor(r, g, b, a);
+	
+	// Log the request
+	logMessage(wxString::Format("[Server]: Client %s requested color change for client %u to RGB(%d,%d,%d)", 
+		name, targetClientId, r, g, b));
+	
+	// If the client is changing their own color
+	if (targetClientId == clientId) {
+		// Update the client's color
+		setUsedColor(newColor);
+		
+		// Log the change
+		logMessage(wxString::Format("[Server]: Updated color for client %s (ID: %u)", 
+			name, clientId));
+	}
+	
+	// Broadcast the color change to all clients
+	server->broadcastColorChange(targetClientId, newColor);
+	
+	// Update the client list to reflect the change in the UI
+	server->updateClientList();
 }
 
 void LivePeer::sendChat(const wxString& chatMessage) {

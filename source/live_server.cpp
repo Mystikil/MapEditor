@@ -105,6 +105,16 @@ void LiveServer::acceptClient() {
 			peer->receiveHeader();
 
 			clients.insert(std::make_pair(id++, peer));
+			
+			// Make sure the host's cursor exists
+			if (cursors.find(0) == cursors.end()) {
+				LiveCursor hostCursor;
+				hostCursor.id = 0;
+				hostCursor.color = usedColor;
+				hostCursor.pos = Position(); // Default position
+				cursors[0] = hostCursor;
+			}
+			
 			updateClientList();
 		}
 		acceptClient();
@@ -363,6 +373,36 @@ LiveLogTab* LiveServer::createLogWindow(wxWindow* parent) {
 	return log;
 }
 
+void LiveServer::broadcastColorChange(uint32_t clientId, const wxColor& color) {
+	if (clients.empty()) {
+		return;
+	}
+
+	// Prepare the color update packet
+	NetworkMessage message;
+	message.write<uint8_t>(PACKET_COLOR_UPDATE);
+	message.write<uint32_t>(clientId);
+	message.write<uint8_t>(color.Red());
+	message.write<uint8_t>(color.Green());
+	message.write<uint8_t>(color.Blue());
+	message.write<uint8_t>(color.Alpha());
+
+	// Log the color change for debugging
+	logMessage(wxString::Format("[Server]: Broadcasting color change for client %u: RGB(%d,%d,%d)", 
+		clientId, color.Red(), color.Green(), color.Blue()));
+
+	// Send to all clients
+	for (auto& clientEntry : clients) {
+		clientEntry.second->send(message);
+	}
+
+	// Update client list in all open log tabs
+	updateClientList();
+}
+
 void LiveServer::setUsedColor(const wxColor& color) {
 	usedColor = color;
+	
+	// Broadcast the host's color change (host always has clientId 0)
+	broadcastColorChange(0, color);
 }

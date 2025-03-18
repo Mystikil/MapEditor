@@ -57,12 +57,14 @@ public:
 	// Override socket type check
 	bool IsClient() const override { return true; }
 
+
 	// send packets
 	void sendHello();
 	void sendNodeRequests();
 	void sendChanges(DirtyList& dirtyList);
 	void sendChat(const wxString& chatMessage) override;
 	void sendReady();
+	void sendColorUpdate(uint32_t targetClientId, const wxColor& color);
 
 	// Flags a node as queried and stores it, need to call SendNodeRequest to send it to server
 	void queryNode(int32_t ndx, int32_t ndy, bool underground);
@@ -80,6 +82,7 @@ protected:
 	void parseCursorUpdate(NetworkMessage& message);
 	void parseStartOperation(NetworkMessage& message);
 	void parseUpdateOperation(NetworkMessage& message);
+	void parseColorUpdate(NetworkMessage& message);
 
 	//
 	NetworkMessage readMessage;

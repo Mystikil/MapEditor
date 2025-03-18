@@ -72,6 +72,7 @@ protected:
 	void parseRemoveHouse(NetworkMessage& message);
 	void parseCursorUpdate(NetworkMessage& message);
 	void parseChatMessage(NetworkMessage& message);
+	void parseClientColorUpdate(NetworkMessage& message);
 
 	//
 	NetworkMessage readMessage;

@@ -565,6 +565,9 @@ void LiveClient::parsePacket(NetworkMessage message) {
 					case PACKET_UPDATE_OPERATION:
 						parseUpdateOperation(message);
 						break;
+					case PACKET_COLOR_UPDATE:
+						parseColorUpdate(message);
+						break;
 					default: {
 						logMessage(wxString::Format("[Client]: Unknown packet type 0x%02X received, disconnecting", packetType));
 						close();
@@ -603,6 +606,13 @@ void LiveClient::parseKick(NetworkMessage& message) {
 }
 
 void LiveClient::parseClientAccepted(NetworkMessage& message) {
+	// Initialize the host's cursor when we're accepted
+	LiveCursor hostCursor;
+	hostCursor.id = 0; // Host is always ID 0
+	hostCursor.color = wxColor(255, 0, 0); // Default red color for host
+	hostCursor.pos = Position(); // Default position
+	cursors[0] = hostCursor; // Add host cursor to our list
+	
 	sendReady();
 }
 
@@ -675,6 +685,14 @@ void LiveClient::parseCursorUpdate(NetworkMessage& message) {
 	LiveCursor cursor = readCursor(message);
 	cursors[cursor.id] = cursor;
 
+	// Update client list after receiving cursor updates
+	if (log) {
+		wxTheApp->CallAfter([this]() {
+			std::unordered_map<uint32_t, LivePeer*> dummyPeers;
+			log->UpdateClientList(dummyPeers);
+		});
+	}
+
 	g_gui.RefreshView();
 }
 
@@ -692,4 +710,71 @@ void LiveClient::parseUpdateOperation(NetworkMessage& message) {
 	} else {
 		g_gui.SetStatusText("Server Operation in Progress: " + currentOperation + "... (" + std::to_string(percent) + "%)");
 	}
+}
+
+void LiveClient::parseColorUpdate(NetworkMessage& message) {
+	// Read client ID whose color changed
+	uint32_t clientId = message.read<uint32_t>();
+	
+	// Read the color components
+	uint8_t r = message.read<uint8_t>();
+	uint8_t g = message.read<uint8_t>();
+	uint8_t b = message.read<uint8_t>();
+	uint8_t a = message.read<uint8_t>();
+	wxColor newColor(r, g, b, a);
+	
+	logMessage(wxString::Format("[Client]: Received color update for client %u: RGB(%d,%d,%d)", 
+		clientId, r, g, b));
+	
+	// Update the color in our local cursor list
+	if (clientId == 0) {
+		// Server's color (host)
+		// Update the host's cursor in our list
+		for (auto& cursorPair : cursors) {
+			if (cursorPair.first == 0) {
+				LiveCursor& cursor = cursorPair.second;
+				cursor.color = newColor;
+				break;
+			}
+		}
+	} else {
+		// Another client's color
+		// Find this client ID in our cursor list and update it
+		for (auto& cursorPair : cursors) {
+			if (cursorPair.first == clientId) {
+				LiveCursor& cursor = cursorPair.second;
+				cursor.color = newColor;
+				break;
+			}
+		}
+	}
+	
+	// Refresh view to show updated cursor color
+	g_gui.RefreshView();
+	
+	// Also update the client list UI if the log tab exists
+	if (log) {
+		wxTheApp->CallAfter([this]() {
+			// We don't have direct access to the peer list as a client,
+			// so just tell the log tab to update based on cursor information
+			std::unordered_map<uint32_t, LivePeer*> dummyPeers;
+			log->UpdateClientList(dummyPeers);
+		});
+	}
+}
+
+// Send a request to change user color
+void LiveClient::sendColorUpdate(uint32_t targetClientId, const wxColor& color) {
+	logMessage(wxString::Format("[Client]: Sending color update request for client %u: RGB(%d,%d,%d)", 
+		targetClientId, color.Red(), color.Green(), color.Blue()));
+		
+	NetworkMessage message;
+	message.write<uint8_t>(PACKET_CLIENT_COLOR_UPDATE);
+	message.write<uint32_t>(targetClientId);
+	message.write<uint8_t>(color.Red());
+	message.write<uint8_t>(color.Green());
+	message.write<uint8_t>(color.Blue());
+	message.write<uint8_t>(color.Alpha());
+	
+	send(message);
 }

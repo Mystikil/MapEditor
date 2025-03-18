@@ -66,6 +66,7 @@ public:
 	void broadcastNodes(DirtyList& dirtyList);
 	void broadcastChat(const wxString& speaker, const wxString& chatMessage);
 	void broadcastCursor(const LiveCursor& cursor);
+	void broadcastColorChange(uint32_t clientId, const wxColor& color);
 
 	void startOperation(const wxString& operationMessage);
 	void updateOperation(int32_t percent);
@@ -74,6 +75,14 @@ public:
 	bool IsServer() const override { return true; }
 
 	void setUsedColor(const wxColor& color);
+	wxColor getUsedColor() const { return usedColor; }
+	
+	const std::unordered_map<uint32_t, LivePeer*>& getClients() const { return clients; }
+
+	// Helper method for writing cursor data to messages
+	void writeCursorToMessage(NetworkMessage& message, const LiveCursor& cursor) {
+		writeCursor(message, cursor);
+	}
 
 protected:
 	std::unordered_map<uint32_t, LivePeer*> clients;
