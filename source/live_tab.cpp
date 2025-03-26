@@ -89,6 +89,61 @@ LiveLogTab::LiveLogTab(MapTabbook* aui, LiveSocket* server) :
 	chat_log->Connect(wxEVT_RIGHT_DOWN, wxMouseEventHandler(LiveLogTab::OnLogRightClick), nullptr, this);
 	notebook->AddPage(chat_log, "Chat");
 	
+	// Sector locks tab
+	sector_panel = newd wxPanel(notebook);
+	wxSizer* sector_sizer = newd wxBoxSizer(wxVERTICAL);
+	
+	// Add a grid to display sectors
+	sector_grid = newd wxGrid(sector_panel, wxID_ANY);
+	sector_grid->CreateGrid(10, 10); // Default size, will be adjusted
+	sector_grid->DisableDragRowSize();
+	sector_grid->DisableDragColSize();
+	sector_grid->SetDefaultCellAlignment(wxALIGN_CENTER, wxALIGN_CENTER);
+	
+	// Set uniform cell size
+	sector_grid->SetDefaultColSize(30);
+	sector_grid->SetDefaultRowSize(30);
+	
+	// Remove row and column labels
+	sector_grid->SetRowLabelSize(0);
+	sector_grid->SetColLabelSize(0);
+	
+	// Disable cell selection
+	sector_grid->EnableEditing(false);
+	
+	sector_sizer->Add(sector_grid, 1, wxEXPAND | wxALL, 5);
+	
+	// Add some controls below the grid
+	wxSizer* sector_controls = newd wxBoxSizer(wxHORIZONTAL);
+	
+	// Add a refresh button
+	wxButton* refresh_button = newd wxButton(sector_panel, wxID_ANY, "Refresh");
+	refresh_button->Bind(wxEVT_BUTTON, &LiveLogTab::OnRefreshSectorGrid, this);
+	sector_controls->Add(refresh_button, 0, wxALL, 5);
+	
+	// Add a legend
+	sector_controls->Add(newd wxStaticText(sector_panel, wxID_ANY, "Legend:"), 0, wxALIGN_CENTER_VERTICAL | wxALL, 5);
+	
+	wxPanel* locked_sample = newd wxPanel(sector_panel, wxID_ANY, wxDefaultPosition, wxSize(20, 20));
+	locked_sample->SetBackgroundColour(wxColor(0, 200, 0)); // Green for locked
+	sector_controls->Add(locked_sample, 0, wxALIGN_CENTER_VERTICAL | wxALL, 5);
+	sector_controls->Add(newd wxStaticText(sector_panel, wxID_ANY, "Locked"), 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 10);
+	
+	wxPanel* conflict_sample = newd wxPanel(sector_panel, wxID_ANY, wxDefaultPosition, wxSize(20, 20));
+	conflict_sample->SetBackgroundColour(wxColor(200, 0, 0)); // Red for conflict
+	sector_controls->Add(conflict_sample, 0, wxALIGN_CENTER_VERTICAL | wxALL, 5);
+	sector_controls->Add(newd wxStaticText(sector_panel, wxID_ANY, "Conflict"), 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 10);
+	
+	wxPanel* unlocked_sample = newd wxPanel(sector_panel, wxID_ANY, wxDefaultPosition, wxSize(20, 20));
+	unlocked_sample->SetBackgroundColour(wxColor(230, 230, 230)); // Light gray for unlocked
+	sector_controls->Add(unlocked_sample, 0, wxALIGN_CENTER_VERTICAL | wxALL, 5);
+	sector_controls->Add(newd wxStaticText(sector_panel, wxID_ANY, "Unlocked"), 0, wxALIGN_CENTER_VERTICAL);
+	
+	sector_sizer->Add(sector_controls, 0, wxEXPAND | wxBOTTOM, 5);
+	
+	sector_panel->SetSizerAndFit(sector_sizer);
+	notebook->AddPage(sector_panel, "Sectors");
+	
 	left_sizer->Add(notebook, 1, wxEXPAND);
 
 	input = newd wxTextCtrl(left_pane, LIVE_CHAT_INPUT, wxEmptyString, wxDefaultPosition, wxDefaultSize, wxTE_PROCESS_ENTER);
@@ -436,4 +491,82 @@ void LiveLogTab::ChangeUserColor(int row, const wxColor& color) {
         uint32_t targetClientId = (row == 0) ? 0 : clientId;
         client->sendColorUpdate(targetClientId, color);
     }
+}
+
+void LiveLogTab::OnRefreshSectorGrid(wxCommandEvent& evt) {
+    // If the socket is a client, request it to update the sector grid
+    if (socket && socket->IsClient()) {
+        LiveClient* client = static_cast<LiveClient*>(socket);
+        UpdateSectorGrid(client->getLockedSectors());
+    }
+}
+
+void LiveLogTab::UpdateSectorGrid(const std::set<SectorCoord>& lockedSectors) {
+    // Make sure the grid has enough cells
+    int minGridSize = 20; // Show a 20x20 grid of sectors
+    
+    if (sector_grid->GetNumberRows() < minGridSize) {
+        sector_grid->AppendRows(minGridSize - sector_grid->GetNumberRows());
+    }
+    
+    if (sector_grid->GetNumberCols() < minGridSize) {
+        sector_grid->AppendCols(minGridSize - sector_grid->GetNumberCols());
+    }
+    
+    // Get the current view position
+    int centerX = 0, centerY = 0;
+    
+    // Find the center based on player position if we have an editor
+    if (socket && socket->IsClient()) {
+        LiveClient* client = static_cast<LiveClient*>(socket);
+        Editor* editor = client->getEditor();
+        if (editor) {
+            // Get the player's position
+            Position playerPos;
+            for (const auto& cursor : client->getCursorList()) {
+                if (cursor.id != 0) { // Not the host
+                    playerPos = cursor.pos;
+                    break;
+                }
+            }
+            
+            // Convert to sector coordinates
+            if (playerPos.x != 0 || playerPos.y != 0) {
+                SectorCoord playerSector = LiveSectorManager::positionToSector(playerPos.x, playerPos.y);
+                centerX = playerSector.x;
+                centerY = playerSector.y;
+            }
+        }
+    }
+    
+    // Clear all cells
+    for (int y = 0; y < sector_grid->GetNumberRows(); y++) {
+        for (int x = 0; x < sector_grid->GetNumberCols(); x++) {
+            sector_grid->SetCellValue(y, x, "");
+            sector_grid->SetCellBackgroundColour(y, x, wxColor(230, 230, 230)); // Light gray
+        }
+    }
+    
+    // Calculate grid offset to center around player
+    int offsetX = centerX - (minGridSize / 2);
+    int offsetY = centerY - (minGridSize / 2);
+    
+    // Show coordinates in each cell and highlight locked sectors
+    for (int y = 0; y < sector_grid->GetNumberRows(); y++) {
+        for (int x = 0; x < sector_grid->GetNumberCols(); x++) {
+            int sectorX = x + offsetX;
+            int sectorY = y + offsetY;
+            
+            // Set cell text to sector coordinates
+            sector_grid->SetCellValue(y, x, wxString::Format("%d,%d", sectorX, sectorY));
+            
+            // Check if this sector is locked by the client
+            if (lockedSectors.find(SectorCoord(sectorX, sectorY)) != lockedSectors.end()) {
+                sector_grid->SetCellBackgroundColour(y, x, wxColor(0, 200, 0)); // Green for locked
+            }
+        }
+    }
+    
+    // Refresh the grid
+    sector_grid->Refresh();
 }

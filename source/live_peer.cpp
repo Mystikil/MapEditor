@@ -246,39 +246,46 @@ void LivePeer::parseLoginPacket(NetworkMessage message) {
 }
 
 void LivePeer::parseEditorPacket(NetworkMessage message) {
-	uint8_t packetType;
-	while (message.position < message.buffer.size()) {
-		packetType = message.read<uint8_t>();
-		switch (packetType) {
-			case PACKET_REQUEST_NODES:
-				parseNodeRequest(message);
-				break;
-			case PACKET_CHANGE_LIST:
-				parseReceiveChanges(message);
-				break;
-			case PACKET_ADD_HOUSE:
-				parseAddHouse(message);
-				break;
-			case PACKET_EDIT_HOUSE:
-				parseEditHouse(message);
-				break;
-			case PACKET_REMOVE_HOUSE:
-				parseRemoveHouse(message);
-				break;
-			case PACKET_CLIENT_UPDATE_CURSOR:
-				parseCursorUpdate(message);
-				break;
-			case PACKET_CLIENT_TALK:
-				parseChatMessage(message);
-				break;
-			case PACKET_CLIENT_COLOR_UPDATE:
-				parseClientColorUpdate(message);
-				break;
-			default: {
-				log->Message("Invalid editor packet receieved, connection severed.");
-				close();
-				break;
-			}
+	uint8_t packet_type = message.read<uint8_t>();
+	
+	switch (packet_type) {
+		case PACKET_REQUEST_NODES:
+			parseNodeRequest(message);
+			break;
+		case PACKET_CHANGE_LIST:
+			parseReceiveChanges(message);
+			break;
+		case PACKET_ADD_HOUSE:
+			parseAddHouse(message);
+			break;
+		case PACKET_EDIT_HOUSE:
+			parseEditHouse(message);
+			break;
+		case PACKET_REMOVE_HOUSE:
+			parseRemoveHouse(message);
+			break;
+		case PACKET_CLIENT_UPDATE_CURSOR:
+			parseCursorUpdate(message);
+			break;
+		case PACKET_CLIENT_TALK:
+			parseChatMessage(message);
+			break;
+		case PACKET_CLIENT_COLOR_UPDATE:
+			parseClientColorUpdate(message);
+			break;
+		case PACKET_SECTOR_LOCK_REQUEST:
+			parseSectorLockRequest(message);
+			break;
+		case PACKET_SECTOR_LOCK_RELEASE:
+			parseSectorLockRelease(message);
+			break;
+		case PACKET_SECTOR_CONFLICT_RESOLVE:
+			parseSectorConflictResolve(message);
+			break;
+		default: {
+			log->Message("Invalid editor packet receieved, connection severed.");
+			close();
+			break;
 		}
 	}
 }
@@ -663,4 +670,137 @@ void LivePeer::updateCursor(const Position& position) {
 	cursor.color = color;
 	
 	server->broadcastCursor(cursor);
+}
+
+void LivePeer::parseSectorLockRequest(NetworkMessage& message) {
+	int32_t sectorX = message.read<int32_t>();
+	int32_t sectorY = message.read<int32_t>();
+	
+	SectorCoord sector(sectorX, sectorY);
+	
+	// Log the request
+	if (log) {
+		log->Message(wxString::Format("Client %s requested lock for sector [%d,%d]", 
+			name, sectorX, sectorY));
+	}
+	
+	// Process the request in the main thread to avoid race conditions
+	wxTheApp->CallAfter([this, sector, sectorX, sectorY]() {
+		if (!server) {
+			return; // Server or peer might have been destroyed
+		}
+		
+		// Forward to the server
+		bool granted = server->requestSectorLock(clientId, sector);
+		
+		// Build response regardless of success
+		NetworkMessage response;
+		response.write<uint8_t>(PACKET_SECTOR_LOCK_RESPONSE);
+		response.write<int32_t>(sectorX);
+		response.write<int32_t>(sectorY);
+		response.write<uint8_t>(granted ? 1 : 0);
+		
+		if (!granted) {
+			// Include the client ID that owns the lock
+			response.write<uint32_t>(server->getSectorLockOwner(sector));
+		}
+		
+		try {
+			// Send the response
+			send(response);
+		} catch (std::exception& e) {
+			if (log) {
+				log->Message(wxString::Format("Error sending sector lock response: %s", e.what()));
+			}
+		}
+	});
+}
+
+void LivePeer::parseSectorLockRelease(NetworkMessage& message) {
+	int32_t sectorX = message.read<int32_t>();
+	int32_t sectorY = message.read<int32_t>();
+	
+	SectorCoord sector(sectorX, sectorY);
+	
+	// Log the release
+	if (log) {
+		log->Message(wxString::Format("Client %s releasing lock for sector [%d,%d]", 
+			name, sectorX, sectorY));
+	}
+	
+	// Process the release in the main thread to avoid race conditions
+	wxTheApp->CallAfter([this, sector]() {
+		if (!server) {
+			return; // Server or peer might have been destroyed
+		}
+		
+		// Forward to the server
+		server->releaseSectorLock(clientId, sector);
+	});
+}
+
+void LivePeer::parseSectorConflictResolve(NetworkMessage& message) {
+	int32_t sectorX = message.read<int32_t>();
+	int32_t sectorY = message.read<int32_t>();
+	uint8_t resolution = message.read<uint8_t>();
+	
+	SectorCoord sector(sectorX, sectorY);
+	
+	// Log the resolution choice
+	if (log) {
+		log->Message(wxString::Format("Client %s chose to %s for sector conflict at [%d,%d]", 
+			name, resolution == 0 ? "abort" : "force take over", sectorX, sectorY));
+	}
+	
+	// Process the resolution in the main thread to avoid race conditions
+	wxTheApp->CallAfter([this, sector, sectorX, sectorY, resolution]() {
+		if (!server) {
+			return; // Server or peer might have been destroyed
+		}
+		
+		// If the client chose to force take over the sector
+		if (resolution == 1) {
+			// Get the current owner
+			uint32_t currentOwner = server->getSectorLockOwner(sector);
+			
+			// Force release the current lock
+			server->forceSectorLockRelease(currentOwner, sector);
+			
+			// Grant the lock to this client
+			if (server->forceSectorLockRequest(clientId, sector)) {
+				try {
+					// Let the client know they now have the lock
+					NetworkMessage response;
+					response.write<uint8_t>(PACKET_SECTOR_LOCK_RESPONSE);
+					response.write<int32_t>(sectorX);
+					response.write<int32_t>(sectorY);
+					response.write<uint8_t>(1); // success
+					
+					this->send(response);
+					
+					// Send a snapshot of the sector
+					server->sendSectorSnapshot(clientId, sector);
+					
+					// Notify the previous owner they lost the lock
+					for (const auto& pair : server->getClients()) {
+						if (pair.second && pair.second->getClientId() == currentOwner) {
+							NetworkMessage lostLock;
+							lostLock.write<uint8_t>(PACKET_SECTOR_LOCK_RELEASE);
+							lostLock.write<int32_t>(sectorX);
+							lostLock.write<int32_t>(sectorY);
+							lostLock.write<uint32_t>(clientId); // who took it
+							
+							pair.second->send(lostLock);
+							break;
+						}
+					}
+				}
+				catch (std::exception& e) {
+					if (log) {
+						log->Message(wxString::Format("Error handling conflict resolution: %s", e.what()));
+					}
+				}
+			}
+		}
+	});
 }

@@ -390,6 +390,7 @@
     <ClInclude Include="..\..\source\borderize_window.h" />
     <ClInclude Include="..\..\source\automagic_settings.h" />
     <ClInclude Include="..\..\source\live_action_packets.h" />
+    <ClInclude Include="..\..\source\live_sector.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\source\json\json_spirit_reader.cpp">
@@ -689,6 +690,7 @@
     <ClCompile Include="..\..\source\hotkey_manager.cpp" />
     <ClCompile Include="..\..\source\borderize_window.cpp" />
     <ClCompile Include="..\..\source\automagic_settings.cpp" />
+    <ClCompile Include="..\..\source\live_sector.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="Editor.rc">

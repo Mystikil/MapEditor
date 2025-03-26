@@ -74,6 +74,11 @@ protected:
 	void parseChatMessage(NetworkMessage& message);
 	void parseClientColorUpdate(NetworkMessage& message);
 
+	// sector edit packets
+	void parseSectorLockRequest(NetworkMessage& message);
+	void parseSectorLockRelease(NetworkMessage& message);
+	void parseSectorConflictResolve(NetworkMessage& message);
+
 	//
 	NetworkMessage readMessage;
 

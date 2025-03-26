@@ -44,6 +44,20 @@ enum LivePacketType {
 	PACKET_START_OPERATION = 0x92,
 	PACKET_UPDATE_OPERATION = 0x93,
 	PACKET_CHAT_MESSAGE = 0x94,
+
+	// New packet types for conflict resolution
+	PACKET_SECTOR_LOCK_REQUEST = 0x95,     // Client requests exclusive edit access to a sector
+	PACKET_SECTOR_LOCK_RESPONSE = 0x96,    // Server grants or denies lock request
+	PACKET_SECTOR_LOCK_RELEASE = 0x97,     // Client releases lock on a sector
+	PACKET_SECTOR_CONFLICT = 0x98,         // Server notifies of a conflict
+	PACKET_SECTOR_CONFLICT_RESOLVE = 0x99, // Client decides how to resolve conflict
+	PACKET_SECTOR_SNAPSHOT = 0x9A,         // Full sector data for recovery or initialization
+	PACKET_SECTOR_VERSION = 0x9B,          // Sector version update
 };
+
+// Define sector size - note that this is different from QTreeNode's 4x4 grid
+// We're using a larger sector size to group multiple QTreeNodes together
+// Since QTreeNode is a 4x4 grid, we'll use a sector size that's a multiple of 4
+#define SECTOR_SIZE 64
 
 #endif

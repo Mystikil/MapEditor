@@ -448,43 +448,73 @@ void LiveClient::sendNodeRequests() {
 }
 
 void LiveClient::sendChanges(DirtyList& dirtyList) {
-	ChangeList& changeList = dirtyList.GetChanges();
-	if (changeList.empty()) {
+	if (dirtyList.Empty() || !socket || !socket->is_open()) {
 		return;
 	}
-
+	
 	try {
-		// Count tiles for logging
-		int tileCount = 0;
-
-		// Reset the writer and serialize changes
 		mapWriter.reset();
 		
-		for (Change* change : changeList) {
-			switch (change->getType()) {
-				case CHANGE_TILE: {
-					const Position& position = static_cast<Tile*>(change->getData())->getPosition();
-					sendTile(mapWriter, editor->map.getTile(position), &position);
-					tileCount++;
-					break;
-				}
-				default:
-					break;
+		// Get the position list from the dirty list
+		auto& positions = dirtyList.GetPosList();
+		auto& changes = dirtyList.GetChanges();
+		
+		// First check if we have permission to edit each position
+		size_t validPositions = 0;
+		size_t skippedPositions = 0;
+		
+		// Check positions first
+		for (const auto& ind : positions) {
+			int32_t ndx = ind.pos >> 18;
+			int32_t ndy = (ind.pos >> 4) & 0x3FFF;
+			
+			// Check if we have permission to edit this area
+			if (!canEditPosition(ndx * 4, ndy * 4)) {
+				// Log a warning
+				logMessage(wxString::Format("[Client]: Cannot edit position [%d,%d] - no sector lock", 
+					ndx * 4, ndy * 4));
+				skippedPositions++;
+			} else {
+				validPositions++;
 			}
 		}
-		mapWriter.endNode();
 		
-		// Create and send the message
+		// If no valid positions found, don't send anything
+		if (validPositions == 0) {
+			logMessage(wxString::Format("[Client]: No valid positions to send - skipped %zu changes", 
+				skippedPositions));
+			return;
+		}
+		
+		// Process all changes
+		for (Change* change : changes) {
+			if (change->getType() == CHANGE_TILE) {
+				Tile* tile = static_cast<Tile*>(change->getData());
+				if (tile) {
+					// Check if we have permission
+					if (canEditPosition(tile->getX(), tile->getY())) {
+						sendTile(mapWriter, tile, nullptr);
+					}
+				}
+			}
+		}
+		
+		// Create the packet
 		NetworkMessage message;
 		message.write<uint8_t>(PACKET_CHANGE_LIST);
 		
-		std::string data(reinterpret_cast<const char*>(mapWriter.getMemory()), mapWriter.getSize());
-		message.write<std::string>(data);
+		std::string stream(
+			reinterpret_cast<char*>(mapWriter.getMemory()),
+			mapWriter.getSize()
+		);
+		message.write<std::string>(stream);
 		
-		logMessage(wxString::Format("[Client]: Sending %d tile changes to server (data size: %zu bytes)",
-			tileCount, data.size()));
-			
+		// Send the message
 		send(message);
+		
+		// Log that we sent changes
+		logMessage(wxString::Format("[Client]: Sent %zu valid tile changes to server (skipped %zu)", 
+			validPositions, skippedPositions));
 	} catch (std::exception& e) {
 		logMessage(wxString::Format("[Client]: Error sending changes: %s", e.what()));
 	}
@@ -568,6 +598,21 @@ void LiveClient::parsePacket(NetworkMessage message) {
 					case PACKET_COLOR_UPDATE:
 						parseColorUpdate(message);
 						break;
+					case PACKET_SECTOR_LOCK_RESPONSE:
+						parseSectorLockResponse(message);
+						break;
+					case PACKET_SECTOR_LOCK_RELEASE:
+						parseSectorLockRelease(message);
+						break;
+					case PACKET_SECTOR_CONFLICT:
+						parseSectorConflict(message);
+						break;
+					case PACKET_SECTOR_SNAPSHOT:
+						processSectorSnapshot(message);
+						break;
+					case PACKET_SECTOR_VERSION:
+						parseSectorVersion(message);
+						break;
 					default: {
 						logMessage(wxString::Format("[Client]: Unknown packet type 0x%02X received, disconnecting", packetType));
 						close();
@@ -641,43 +686,39 @@ void LiveClient::parseServerTalk(NetworkMessage& message) {
 
 void LiveClient::parseNode(NetworkMessage& message) {
 	try {
-		uint32_t nodeid = message.read<uint32_t>();
-		int32_t ndx = nodeid >> 18;
-		int32_t ndy = (nodeid >> 4) & 0x3FFF;
-		bool underground = (nodeid & 1) == 1;
-
-		// Log node reception for debugging
-		logMessage(wxString::Format("[Client]: Received node update [%d,%d,%s]", 
-			ndx, ndy, underground ? "underground" : "surface"));
-
-		// Queue the node processing on the main thread to avoid threading issues
-		wxTheApp->CallAfter([this, message = std::move(message), ndx, ndy, underground]() mutable {
-			if (!editor) {
-				logMessage("[Client]: Warning - received node update but no editor available");
-				return;
-			}
-
-			NetworkedAction* action = static_cast<NetworkedAction*>(editor->actionQueue->createAction(ACTION_REMOTE));
+		Action* action = editor->actionQueue->createAction(ACTION_REMOTE);
+		
+		uint32_t ind = message.read<uint32_t>();
+		int32_t ndx = ind >> 18;
+		int32_t ndy = (ind >> 4) & 0x3FFF;
+		bool underground = ind & 1;
+		
+		// Remove the node from the query list if it was requested
+		uint32_t node_hash = (ndx * 65536) + ndy;
+		queryNodeList.erase(node_hash);
+		
+		// Receive the node data
+		receiveNode(message, *editor, action, ndx, ndy, underground);
+		
+		// Commit the action if it contains changes
+		if (action->size() > 0) {
+			editor->actionQueue->addAction(action);
 			
-			// Process the node data safely
-			receiveNode(message, *editor, action, ndx, ndy, underground);
+			// Log node reception
+			logMessage(wxString::Format("[Client]: Received node update at [%d,%d] (%s)", 
+				ndx * 4, ndy * 4, underground ? "underground" : "surface"));
 			
-			// Only add the action if it contains changes
-			if (action->size() > 0) {
-				editor->actionQueue->addAction(action);
+			// Ensure UI is refreshed on the main thread
+			wxTheApp->CallAfter([]() {
 				g_gui.RefreshView();
 				g_gui.UpdateMinimap();
-
-				logMessage(wxString::Format("[Client]: Applying node update [%d,%d,%s]", 
-					ndx, ndy, underground ? "underground" : "surface"));
-				logMessage("[Client]: Node update applied successfully.");
-			} else {
-				// Use proper action destruction
-				
-			}
-		});
+			});
+		} else {
+			// No changes, clean up
+			delete action;
+		}
 	} catch (std::exception& e) {
-		logMessage(wxString::Format("[Client]: Error parsing node packet: %s", e.what()));
+		logMessage(wxString::Format("[Client]: Error processing node update: %s", e.what()));
 	}
 }
 
@@ -763,18 +804,312 @@ void LiveClient::parseColorUpdate(NetworkMessage& message) {
 	}
 }
 
-// Send a request to change user color
 void LiveClient::sendColorUpdate(uint32_t targetClientId, const wxColor& color) {
-	logMessage(wxString::Format("[Client]: Sending color update request for client %u: RGB(%d,%d,%d)", 
-		targetClientId, color.Red(), color.Green(), color.Blue()));
+	try {
+		NetworkMessage message;
+		message.write<uint8_t>(PACKET_CLIENT_COLOR_UPDATE);
+		message.write<uint32_t>(targetClientId);
+		message.write<uint8_t>(color.Red());
+		message.write<uint8_t>(color.Green());
+		message.write<uint8_t>(color.Blue());
+		message.write<uint8_t>(color.Alpha());
 		
-	NetworkMessage message;
-	message.write<uint8_t>(PACKET_CLIENT_COLOR_UPDATE);
-	message.write<uint32_t>(targetClientId);
-	message.write<uint8_t>(color.Red());
-	message.write<uint8_t>(color.Green());
-	message.write<uint8_t>(color.Blue());
-	message.write<uint8_t>(color.Alpha());
+		logMessage(wxString::Format("[Client]: Sending color update for client %u: RGB(%d,%d,%d)", 
+			targetClientId, color.Red(), color.Green(), color.Blue()));
+		
+		send(message);
+	} catch (std::exception& e) {
+		logMessage(wxString::Format("[Client]: Error sending color update: %s", e.what()));
+	}
+}
+
+bool LiveClient::requestSectorLock(int x, int y) {
+	// Convert to sector coordinates
+	SectorCoord sector = LiveSectorManager::positionToSector(x, y);
 	
-	send(message);
+	// Check if we already have a lock on this sector
+	{
+		// Use a scope to limit the lifetime of the find operation
+		auto it = lockedSectors.find(sector);
+		if (it != lockedSectors.end()) {
+			// We already have this sector locked
+			return true;
+		}
+	}
+	
+	// Safety check - don't request if no socket
+	if (!socket || !socket->is_open()) {
+		if (log) {
+			log->Message(wxString::Format("Cannot request sector lock - not connected"));
+		}
+		return false;
+	}
+	
+	// Request a lock on this sector
+	NetworkMessage message;
+	message.write<uint8_t>(PACKET_SECTOR_LOCK_REQUEST);
+	message.write<int32_t>(sector.x);
+	message.write<int32_t>(sector.y);
+	
+	try {
+		send(message);
+		
+		if (log) {
+			log->Message(wxString::Format("Requesting lock for sector [%d,%d]", sector.x, sector.y));
+		}
+		
+		// We'll receive a response asynchronously 
+		// The sector will be added to lockedSectors if approved
+		
+		// Return false for now - we don't know if we got the lock yet
+		return false;
+	}
+	catch (std::exception& e) {
+		if (log) {
+			log->Message(wxString::Format("Error requesting sector lock: %s", e.what()));
+		}
+		return false;
+	}
+}
+
+void LiveClient::releaseSectorLock(int x, int y) {
+	// Convert to sector coordinates
+	SectorCoord sector = LiveSectorManager::positionToSector(x, y);
+	
+	// Check if we have a lock on this sector
+	bool hasLock = false;
+	{
+		// Use a scope to limit the lifetime of the mutex lock
+		auto it = lockedSectors.find(sector);
+		hasLock = (it != lockedSectors.end());
+		
+		// Remove it from our local tracking
+		if (hasLock) {
+			lockedSectors.erase(it);
+		}
+	}
+	
+	// If we didn't have a lock, no need to tell the server
+	if (!hasLock) {
+		return;
+	}
+	
+	// Safety check - don't send if no socket
+	if (!socket || !socket->is_open()) {
+		if (log) {
+			log->Message(wxString::Format("Cannot release sector lock - not connected"));
+		}
+		return;
+	}
+	
+	// Send release message
+	try {
+		NetworkMessage message;
+		message.write<uint8_t>(PACKET_SECTOR_LOCK_RELEASE);
+		message.write<int32_t>(sector.x);
+		message.write<int32_t>(sector.y);
+		
+		send(message);
+		
+		if (log) {
+			log->Message(wxString::Format("Released lock for sector [%d,%d]", sector.x, sector.y));
+		}
+	}
+	catch (std::exception& e) {
+		if (log) {
+			log->Message(wxString::Format("Error releasing sector lock: %s", e.what()));
+		}
+	}
+}
+
+bool LiveClient::canEditPosition(int x, int y) {
+	// Convert to sector coordinates
+	SectorCoord sector = LiveSectorManager::positionToSector(x, y);
+	
+	// Check if we have a lock on this sector
+	return lockedSectors.find(sector) != lockedSectors.end();
+}
+
+void LiveClient::handleSectorConflict(const SectorCoord& sector, uint32_t ownerId) {
+	// Log the conflict
+	logMessage(wxString::Format("[Client]: Sector conflict at [%d,%d], locked by client %u", 
+		sector.x, sector.y, ownerId));
+	
+	// For simplicity, we'll just log a message and abort the edit
+	// In a more sophisticated system, we could prompt the user for action
+	
+	// Provide a UI prompt or notification about the conflict
+	wxTheApp->CallAfter([this, sector, ownerId]() {
+		wxMessageDialog dialog(
+			nullptr, 
+			wxString::Format("Sector [%d,%d] is currently being edited by Client %u. What would you like to do?", 
+				sector.x, sector.y, ownerId),
+			"Edit Conflict",
+			wxYES_NO | wxICON_QUESTION
+		);
+		
+		dialog.SetYesNoLabels("Wait and try again later", "Force take over");
+		
+		if (dialog.ShowModal() == wxID_NO) {
+			// User chose to take over the sector by force
+			NetworkMessage request;
+			request.write<uint8_t>(PACKET_SECTOR_CONFLICT_RESOLVE);
+			request.write<int32_t>(sector.x);
+			request.write<int32_t>(sector.y);
+			request.write<uint8_t>(1); // 1 = force take over
+			
+			send(request);
+			
+			logMessage(wxString::Format("[Client]: Attempting to force take over sector [%d,%d]", 
+				sector.x, sector.y));
+		} else {
+			// User chose to abort their edit
+			logMessage(wxString::Format("[Client]: Aborted edit in sector [%d,%d]", 
+				sector.x, sector.y));
+		}
+	});
+}
+
+void LiveClient::processSectorSnapshot(NetworkMessage& message) {
+	int32_t sectorX = message.read<int32_t>();
+	int32_t sectorY = message.read<int32_t>();
+	uint32_t version = message.read<uint32_t>();
+	uint32_t nodeCount = message.read<uint32_t>();
+	
+	SectorCoord sector(sectorX, sectorY);
+	
+	// Store the latest sector version
+	updateSectorVersion(sector, version);
+	
+	// Add this sector to our locked sectors
+	lockedSectors.insert(sector);
+	
+	// Update the sector grid visualization
+	if (log) {
+		wxTheApp->CallAfter([this]() {
+			static_cast<LiveLogTab*>(log)->UpdateSectorGrid(getLockedSectors());
+		});
+	}
+	
+	logMessage(wxString::Format("[Client]: Received snapshot of sector [%d,%d] (version %u) with %u nodes", 
+		sectorX, sectorY, version, nodeCount));
+	
+	// Remaining node data will be received through multiple NODE packets
+	// which are processed by the existing parseNode method
+}
+
+void LiveClient::updateSectorVersion(const SectorCoord& sector, uint32_t version) {
+	// Store the version
+	sectorVersions[sector] = version;
+	
+	logMessage(wxString::Format("[Client]: Updated sector [%d,%d] to version %u", 
+		sector.x, sector.y, version));
+}
+
+void LiveClient::parseSectorLockResponse(NetworkMessage& message) {
+	int32_t sectorX = message.read<int32_t>();
+	int32_t sectorY = message.read<int32_t>();
+	uint8_t success = message.read<uint8_t>();
+	
+	SectorCoord sector(sectorX, sectorY);
+	
+	if (success) {
+		// Add to our locked sectors
+		lockedSectors.insert(sector);
+		
+		// Log success
+		logMessage(wxString::Format("Lock granted for sector [%d,%d]", sectorX, sectorY));
+		
+		// Update the sector grid visualization
+		if (log) {
+			wxTheApp->CallAfter([this]() {
+				try {
+					LiveLogTab* liveTab = static_cast<LiveLogTab*>(log);
+					if (liveTab) {
+						liveTab->UpdateSectorGrid(getLockedSectors());
+					}
+				} catch (std::exception& e) {
+					logMessage(wxString::Format("Error updating sector grid: %s", e.what()));
+				}
+			});
+		}
+	} else {
+		// Read who owns the lock
+		uint32_t ownerId = message.read<uint32_t>();
+		
+		// Log the failure
+		logMessage(wxString::Format("Lock denied for sector [%d,%d], owned by client %u", 
+			sectorX, sectorY, ownerId));
+		
+		// Handle the conflict
+		wxTheApp->CallAfter([this, sector, ownerId]() {
+			try {
+				handleSectorConflict(sector, ownerId);
+			} catch (std::exception& e) {
+				logMessage(wxString::Format("Error handling sector conflict: %s", e.what()));
+			}
+		});
+	}
+}
+
+void LiveClient::parseSectorLockRelease(NetworkMessage& message) {
+	int32_t sectorX = message.read<int32_t>();
+	int32_t sectorY = message.read<int32_t>();
+	uint32_t fromClientId = message.read<uint32_t>();
+	
+	SectorCoord sector(sectorX, sectorY);
+	
+	// Check if this is a notification that we've been force-removed from a sector
+	if (lockedSectors.find(sector) != lockedSectors.end()) {
+		lockedSectors.erase(sector);
+		logMessage(wxString::Format("[Client]: Lost lock for sector [%d,%d] to client %u", 
+			sectorX, sectorY, fromClientId));
+			
+		// Update the sector grid visualization
+		if (log) {
+			wxTheApp->CallAfter([this]() {
+				static_cast<LiveLogTab*>(log)->UpdateSectorGrid(getLockedSectors());
+			});
+		}
+		
+		// Notify the user
+		wxTheApp->CallAfter([this, sector, fromClientId]() {
+			wxMessageDialog dialog(
+				nullptr,
+				wxString::Format("Your lock on sector [%d,%d] has been taken over by Client %u.", 
+					sector.x, sector.y, fromClientId),
+				"Lock Removed",
+				wxOK | wxICON_INFORMATION
+			);
+			dialog.ShowModal();
+		});
+	} else {
+		// Notification that a sector is now available
+		logMessage(wxString::Format("[Client]: Sector [%d,%d] released by client %u", 
+			sectorX, sectorY, fromClientId));
+	}
+}
+
+void LiveClient::parseSectorConflict(NetworkMessage& message) {
+	int32_t sectorX = message.read<int32_t>();
+	int32_t sectorY = message.read<int32_t>();
+	uint32_t ownerClientId = message.read<uint32_t>();
+	
+	SectorCoord sector(sectorX, sectorY);
+	
+	// Handle the conflict
+	wxTheApp->CallAfter([this, sector, ownerClientId]() {
+		handleSectorConflict(sector, ownerClientId);
+	});
+}
+
+void LiveClient::parseSectorVersion(NetworkMessage& message) {
+	int32_t sectorX = message.read<int32_t>();
+	int32_t sectorY = message.read<int32_t>();
+	uint32_t version = message.read<uint32_t>();
+	
+	SectorCoord sector(sectorX, sectorY);
+	
+	// Update the version
+	updateSectorVersion(sector, version);
 }
