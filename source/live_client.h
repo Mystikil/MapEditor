@@ -20,10 +20,8 @@
 
 #include "live_socket.h"
 #include "net_connection.h"
-#include "live_sector.h"
 
 #include <set>
-#include <unordered_map>
 
 class DirtyList;
 class MapTab;
@@ -71,18 +69,6 @@ public:
 	// Flags a node as queried and stores it, need to call SendNodeRequest to send it to server
 	void queryNode(int32_t ndx, int32_t ndy, bool underground);
 
-	// Add sector management methods
-	bool requestSectorLock(int x, int y);
-	void releaseSectorLock(int x, int y);
-	bool canEditPosition(int x, int y);
-	void handleSectorConflict(const SectorCoord& sector, uint32_t ownerId);
-	void processSectorSnapshot(NetworkMessage& message);
-	void updateSectorVersion(const SectorCoord& sector, uint32_t version);
-
-	// Getter methods for LiveLogTab access
-	const std::set<SectorCoord>& getLockedSectors() const { return lockedSectors; }
-	Editor* getEditor() const { return editor; }
-
 protected:
 	void parsePacket(NetworkMessage message);
 
@@ -98,12 +84,6 @@ protected:
 	void parseUpdateOperation(NetworkMessage& message);
 	void parseColorUpdate(NetworkMessage& message);
 
-	// New sector packet parsers
-	void parseSectorLockResponse(NetworkMessage& message);
-	void parseSectorLockRelease(NetworkMessage& message);
-	void parseSectorConflict(NetworkMessage& message);
-	void parseSectorVersion(NetworkMessage& message);
-
 	//
 	NetworkMessage readMessage;
 
@@ -116,12 +96,6 @@ protected:
 	Editor* editor;
 
 	bool stopped;
-
-	// Track which sectors we have locked
-	std::set<SectorCoord> lockedSectors;
-	
-	// Track sector versions
-	std::unordered_map<SectorCoord, uint32_t> sectorVersions;
 };
 
 #endif

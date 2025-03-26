@@ -119,13 +119,19 @@ void LiveSocket::sendNode(uint32_t clientId, QTreeNode* node, int32_t ndx, int32
 		return;
 	}
 
-	// Determine if this is an underground node based on the floorMask
-	bool underground = (floorMask & 0xFF00) && !(floorMask & 0x00FF);
+	bool underground;
+	if (floorMask & 0xFF00) {
+		if (floorMask & 0x00FF) {
+			underground = false;
+		} else {
+			underground = true;
+		}
+	} else {
+		underground = false;
+	}
 
-	// ALWAYS mark the node as visible to this client
-	// This ensures the client can see the node later without requiring another request
+	// Mark the node as visible to this client
 	node->setVisible(clientId, underground, true);
-	node->setRequested(underground, false); // No longer needed to be requested
 
 	try {
 		// Prepare the message
@@ -159,8 +165,8 @@ void LiveSocket::sendNode(uint32_t clientId, QTreeNode* node, int32_t ndx, int32
 		}
 
 		// Send the message
-		logMessage(wxString::Format("Sending node [%d,%d,%s] to client %u with floor mask 0x%04X", 
-			ndx, ndy, underground ? "underground" : "surface", clientId, sendMask));
+		logMessage(wxString::Format("Sending node [%d,%d,%s] with floor mask 0x%04X", 
+			ndx, ndy, underground ? "underground" : "surface", sendMask));
 		send(message);
 	} catch (std::exception& e) {
 		logMessage(wxString::Format("Error sending node [%d,%d]: %s", ndx, ndy, e.what()));

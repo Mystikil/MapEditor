@@ -21,7 +21,6 @@
 #include "live_socket.h"
 #include "net_connection.h"
 #include "action.h"
-#include "live_sector.h"
 
 class LivePeer;
 class LiveLogTab;
@@ -85,23 +84,6 @@ public:
 		writeCursor(message, cursor);
 	}
 
-	// Add sector management methods
-	bool requestSectorLock(uint32_t clientId, const SectorCoord& sector);
-	void releaseSectorLock(uint32_t clientId, const SectorCoord& sector);
-	bool verifySectorAccess(uint32_t clientId, int x, int y);
-	void handleSectorConflict(uint32_t requestingClient, const SectorCoord& sector);
-	void sendSectorSnapshot(uint32_t clientId, const SectorCoord& sector);
-	
-	// For sector versioning
-	void incrementSectorVersion(const SectorCoord& sector);
-	uint32_t getSectorVersion(const SectorCoord& sector);
-	
-	// Add accessor methods for the sector manager
-	uint32_t getSectorLockOwner(const SectorCoord& sector) const { return sectorManager.getLockOwner(sector); }
-	bool isSectorLockOwnedBy(uint32_t clientId, const SectorCoord& sector) const { return sectorManager.hasLock(clientId, sector); }
-	bool forceSectorLockRelease(uint32_t clientId, const SectorCoord& sector) { return sectorManager.releaseLock(clientId, sector), true; }
-	bool forceSectorLockRequest(uint32_t clientId, const SectorCoord& sector) { return sectorManager.requestLock(clientId, sector); }
-
 protected:
 	std::unordered_map<uint32_t, LivePeer*> clients;
 
@@ -116,9 +98,6 @@ protected:
 	bool stopped;
 
 	wxColor usedColor;
-
-	// Add sector manager
-	LiveSectorManager sectorManager;
 };
 
 #endif

@@ -54,7 +54,6 @@ public:
 	}
 
 	void UpdateClientList(const std::unordered_map<uint32_t, LivePeer*>& updatedClients);
-	void UpdateSectorGrid(const std::set<SectorCoord>& lockedSectors);
 
 	void OnSelectChatbox(wxFocusEvent& evt);
 	void OnDeselectChatbox(wxFocusEvent& evt);
@@ -67,7 +66,6 @@ public:
 	void OnLogRightClick(wxMouseEvent& evt);
 	void OnPageChanged(wxBookCtrlEvent& evt);
 	void OnGridCellLeftClick(wxGridEvent& evt);
-	void OnRefreshSectorGrid(wxCommandEvent& evt);
 	void ChangeUserColor(int row, const wxColor& color);
 
 protected:
@@ -78,10 +76,6 @@ protected:
 	wxTextCtrl* chat_log;   // For player chat
 	wxTextCtrl* input;
 	wxGrid* user_list;
-	
-	// Sector visualization
-	wxPanel* sector_panel;
-	wxGrid* sector_grid;
 
 	std::unordered_map<uint32_t, LivePeer*> clients;
 

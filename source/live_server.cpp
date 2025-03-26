@@ -23,7 +23,6 @@
 #include "live_action.h"
 
 #include "editor.h"
-#include "live_sector.h"
 
 LiveServer::LiveServer(Editor& editor) :
 	LiveSocket(),
@@ -196,6 +195,7 @@ void LiveServer::broadcastNodes(DirtyList& dirtyList) {
 	
 	try {
 		size_t nodeCount = 0;
+		size_t totalClientCount = 0;
 		
 		// Create a copy of the position list to work with
 		auto posList = dirtyList.GetPosList();
@@ -206,24 +206,7 @@ void LiveServer::broadcastNodes(DirtyList& dirtyList) {
 		if (owner == 0) {
 			logMessage("[Server]: Applying host changes to local map");
 			editor->actionQueue->addAction(static_cast<NetworkedAction*>(editor->actionQueue->createAction(ACTION_REMOTE)));
-		} else {
-			// For non-host changes, verify sector access for each node
-			for (const auto& ind : posList) {
-				int32_t ndx = ind.pos >> 18;
-				int32_t ndy = (ind.pos >> 4) & 0x3FFF;
-				
-				// Make sure the client has permission to edit this sector
-				if (!verifySectorAccess(owner, ndx * 4, ndy * 4)) {
-					// Log and skip this node
-					logMessage(wxString::Format("[Server]: Rejecting unauthorized edit at [%d,%d] from client %u", 
-						ndx * 4, ndy * 4, owner));
-					continue;
-				}
-			}
 		}
-		
-		// First pass: Get all nodes to update before sending to clients to prevent threading issues
-		std::vector<std::tuple<int32_t, int32_t, uint32_t, QTreeNode*>> nodesToUpdate;
 		
 		for (const auto& ind : posList) {
 			int32_t ndx = ind.pos >> 18;
@@ -231,81 +214,69 @@ void LiveServer::broadcastNodes(DirtyList& dirtyList) {
 			uint32_t floors = ind.floors;
 			
 			QTreeNode* node = editor->map.getLeaf(ndx * 4, ndy * 4);
-			if (node) {
-				nodesToUpdate.push_back(std::make_tuple(ndx, ndy, floors, node));
-				nodeCount++;
+			if (!node) {
+				continue;
 			}
-		}
-		
-		// Create a local copy of clients to prevent threading issues
-		std::unordered_map<uint32_t, LivePeer*> clientsCopy;
-		{
-			for (auto& pair : clients) {
-				clientsCopy[pair.first] = pair.second;
-			}
-		}
-		
-		// If we have no nodes to update or no clients, we're done
-		if (nodesToUpdate.empty() || clientsCopy.empty()) {
-			return;
-		}
-		
-		// Second pass: Send the updates to all clients EXCEPT the owner
-		size_t updatedClientCount = 0;
-		
-		for (auto& clientEntry : clientsCopy) {
-			LivePeer* peer = clientEntry.second;
-			if (!peer) continue;
 			
-			uint32_t clientId = peer->getClientId();
+			nodeCount++;
 			
-			// Skip the client who made the changes - they already have them
-			if (clientId == owner) continue;
+			// Track clients who receive updates
+			std::vector<uint32_t> updatedClientIds;
 			
-			// For each node, send both surface and underground data
-			for (const auto& nodeData : nodesToUpdate) {
-				int32_t ndx = std::get<0>(nodeData);
-				int32_t ndy = std::get<1>(nodeData);
-				uint32_t floors = std::get<2>(nodeData);
-				QTreeNode* node = std::get<3>(nodeData);
+			for (auto& clientEntry : clients) {
+				LivePeer* peer = clientEntry.second;
+				if (!peer) continue;
 				
-				try {
-					// Mark the node as visible for this client
-					node->setVisible(clientId, true, true);   // Surface
-					node->setVisible(clientId, false, true);  // Underground
-					
-					// Send both underground and surface layers
-					// 0xFF00 is for underground, 0x00FF is for surface
-					
-					// Always send underground data
-					if (floors & 0xFF00) {
+				const uint32_t clientId = peer->getClientId();
+				
+				// We no longer skip the client who made the change
+				// This ensures clients can see changes from other clients
+				
+				bool sentUpdate = false;
+				
+				// Check if the node is visible to this client
+				if (node->isVisible(clientId, true)) {
+					try {
 						peer->sendNode(clientId, node, ndx, ndy, floors & 0xFF00);
-					}
-					
-					// Always send surface data
-					if (floors & 0x00FF) {
-						peer->sendNode(clientId, node, ndx, ndy, floors & 0x00FF);
+						sentUpdate = true;
+						logMessage(wxString::Format("[Server]: Node [%d,%d,%s] marked as visible for client %u", 
+							ndx, ndy, "underground", clientId));
+						logMessage(wxString::Format("[Server]: Sending node update to client %u", clientId));
+					} catch (std::exception& e) {
+						logMessage(wxString::Format("[Server]: Error sending underground node to client %s: %s", 
+							peer->getName(), e.what()));
 					}
 				}
-				catch (std::exception& e) {
-					logMessage(wxString::Format("[Server]: Error sending node to client %s: %s", 
-						peer->getName(), e.what()));
+				
+				if (node->isVisible(clientId, false)) {
+					try {
+						peer->sendNode(clientId, node, ndx, ndy, floors & 0x00FF);
+						sentUpdate = true;
+						logMessage(wxString::Format("[Server]: Node [%d,%d,%s] marked as visible for client %u", 
+							ndx, ndy, "surface", clientId));
+						logMessage(wxString::Format("[Server]: Sending node update to client %u", clientId));
+					} catch (std::exception& e) {
+						logMessage(wxString::Format("[Server]: Error sending surface node to client %s: %s", 
+							peer->getName(), e.what()));
+					}
+				}
+				
+				if (sentUpdate && std::find(updatedClientIds.begin(), updatedClientIds.end(), clientId) == updatedClientIds.end()) {
+					updatedClientIds.push_back(clientId);
 				}
 			}
 			
-			updatedClientCount++;
+			totalClientCount += updatedClientIds.size();
 		}
 		
 		if (nodeCount > 0) {
 			logMessage(wxString::Format("[Server]: Broadcasted %zu nodes to %zu clients", 
-				nodeCount, updatedClientCount));
+				nodeCount, totalClientCount));
 		}
 		
-		// Update views on the main thread
-		wxTheApp->CallAfter([]() {
-			g_gui.RefreshView();
-			g_gui.UpdateMinimap();
-		});
+		// Make sure the host view is refreshed to show changes
+		g_gui.RefreshView();
+		g_gui.UpdateMinimap();
 		
 	} catch (std::exception& e) {
 		logMessage(wxString::Format("[Server]: Error broadcasting nodes: %s", e.what()));
@@ -434,228 +405,4 @@ void LiveServer::setUsedColor(const wxColor& color) {
 	
 	// Broadcast the host's color change (host always has clientId 0)
 	broadcastColorChange(0, color);
-}
-
-bool LiveServer::requestSectorLock(uint32_t clientId, const SectorCoord& sector) {
-	bool success = sectorManager.requestLock(clientId, sector);
-	
-	// Find the client who requested the lock
-	LivePeer* requestingPeer = nullptr;
-	for (const auto& pair : clients) {
-		if (pair.second->getClientId() == clientId) {
-			requestingPeer = pair.second;
-			break;
-		}
-	}
-	
-	if (!requestingPeer) {
-		logMessage(wxString::Format("[Server]: Client %u not found for sector lock request", clientId));
-		return false;
-	}
-	
-	// Prepare the response
-	NetworkMessage response;
-	response.write<uint8_t>(PACKET_SECTOR_LOCK_RESPONSE);
-	response.write<int32_t>(sector.x);
-	response.write<int32_t>(sector.y);
-	response.write<uint8_t>(success ? 1 : 0);
-	
-	if (!success) {
-		// Include the ID of the client who has the lock
-		response.write<uint32_t>(sectorManager.getLockOwner(sector));
-	} else {
-		// Send a snapshot of the sector data if the lock was granted
-		sendSectorSnapshot(clientId, sector);
-	}
-	
-	// Send the response
-	requestingPeer->send(response);
-	
-	// Log the action
-	if (success) {
-		logMessage(wxString::Format("[Server]: Granted sector lock at [%d,%d] to client %u", 
-			sector.x, sector.y, clientId));
-	} else {
-		logMessage(wxString::Format("[Server]: Denied sector lock at [%d,%d] to client %u (owned by %u)", 
-			sector.x, sector.y, clientId, sectorManager.getLockOwner(sector)));
-	}
-	
-	return success;
-}
-
-void LiveServer::releaseSectorLock(uint32_t clientId, const SectorCoord& sector) {
-	uint32_t lockOwner = sectorManager.getLockOwner(sector);
-	
-	// Only the lock owner can release it
-	if (lockOwner != clientId) {
-		logMessage(wxString::Format("[Server]: Client %u attempted to release lock owned by %u", 
-			clientId, lockOwner));
-		return;
-	}
-	
-	// If the sector is dirty, increment its version
-	if (sectorManager.isDirty(sector)) {
-		incrementSectorVersion(sector);
-	}
-	
-	// Release the lock
-	sectorManager.releaseLock(clientId, sector);
-	
-	logMessage(wxString::Format("[Server]: Released sector lock at [%d,%d] from client %u", 
-		sector.x, sector.y, clientId));
-	
-	// Notify other clients that this sector is now available
-	NetworkMessage notification;
-	notification.write<uint8_t>(PACKET_SECTOR_LOCK_RELEASE);
-	notification.write<int32_t>(sector.x);
-	notification.write<int32_t>(sector.y);
-	notification.write<uint32_t>(clientId);
-	
-	for (auto& clientEntry : clients) {
-		// Don't send to the client who released the lock
-		if (clientEntry.second->getClientId() != clientId) {
-			clientEntry.second->send(notification);
-		}
-	}
-}
-
-bool LiveServer::verifySectorAccess(uint32_t clientId, int x, int y) {
-	try {
-		// Convert to sector coordinates
-		SectorCoord sector = LiveSectorManager::positionToSector(x, y);
-		
-		// The host always has access
-		if (clientId == 0) {
-			return true;
-		}
-		
-		// Check if the client has a lock on this sector
-		bool hasLock = sectorManager.hasLock(clientId, sector);
-		
-		if (hasLock) {
-			// Mark the sector as dirty since it's being edited
-			sectorManager.markDirty(sector);
-			return true;
-		}
-		
-		// At this point, the client doesn't have a lock on this sector
-		
-		// Get the owner of the sector lock, if any
-		uint32_t lockOwner = sectorManager.getLockOwner(sector);
-		
-		// Log unauthorized access attempt
-		logMessage(wxString::Format("[Server]: Client %u attempted unauthorized edit at [%d,%d] in sector [%d,%d]", 
-			clientId, x, y, sector.x, sector.y));
-		
-		if (lockOwner != 0) {
-			// There is a conflict - notify the client
-			wxTheApp->CallAfter([this, clientId, sector]() {
-				handleSectorConflict(clientId, sector);
-			});
-		}
-		
-		return false;
-	}
-	catch (std::exception& e) {
-		logMessage(wxString::Format("[Server]: Error in verifySectorAccess: %s", e.what()));
-		return false;
-	}
-}
-
-void LiveServer::handleSectorConflict(uint32_t requestingClient, const SectorCoord& sector) {
-	uint32_t lockOwner = sectorManager.getLockOwner(sector);
-	
-	// Make sure there is actually a conflict
-	if (lockOwner == 0 || lockOwner == requestingClient) {
-		return;
-	}
-	
-	// Find the client who requested the edit
-	LivePeer* requestingPeer = nullptr;
-	for (const auto& pair : clients) {
-		if (pair.second->getClientId() == requestingClient) {
-			requestingPeer = pair.second;
-			break;
-		}
-	}
-	
-	if (!requestingPeer) {
-		return;
-	}
-	
-	// Send conflict notification
-	NetworkMessage conflictNotification;
-	conflictNotification.write<uint8_t>(PACKET_SECTOR_CONFLICT);
-	conflictNotification.write<int32_t>(sector.x);
-	conflictNotification.write<int32_t>(sector.y);
-	conflictNotification.write<uint32_t>(lockOwner);
-	
-	requestingPeer->send(conflictNotification);
-	
-	logMessage(wxString::Format("[Server]: Notified client %u of sector conflict at [%d,%d] with client %u", 
-		requestingClient, sector.x, sector.y, lockOwner));
-}
-
-void LiveServer::sendSectorSnapshot(uint32_t clientId, const SectorCoord& sector) {
-	// Find the nodes in this sector
-	std::vector<Position> nodes = sectorManager.getSectorNodes(sector);
-	
-	// Find the client
-	LivePeer* targetPeer = nullptr;
-	for (const auto& pair : clients) {
-		if (pair.second->getClientId() == clientId) {
-			targetPeer = pair.second;
-			break;
-		}
-	}
-	
-	if (!targetPeer) {
-		logMessage(wxString::Format("[Server]: Client %u not found for sector snapshot", clientId));
-		return;
-	}
-	
-	// Prepare the header message
-	NetworkMessage headerMsg;
-	headerMsg.write<uint8_t>(PACKET_SECTOR_SNAPSHOT);
-	headerMsg.write<int32_t>(sector.x);
-	headerMsg.write<int32_t>(sector.y);
-	headerMsg.write<uint32_t>(sectorManager.getSectorVersion(sector));
-	headerMsg.write<uint32_t>(nodes.size());
-	
-	targetPeer->send(headerMsg);
-	
-	// Now send data for each node
-	for (const Position& pos : nodes) {
-		QTreeNode* node = editor->map.getLeaf(pos.x, pos.y);
-		
-		if (node) {
-			// Send the node with all visible floors (mask 0xFF means all floors)
-			targetPeer->sendNode(clientId, node, pos.x / 4, pos.y / 4, 0xFFFF);
-		}
-	}
-	
-	logMessage(wxString::Format("[Server]: Sent sector [%d,%d] snapshot with %zu nodes to client %u", 
-		sector.x, sector.y, nodes.size(), clientId));
-}
-
-void LiveServer::incrementSectorVersion(const SectorCoord& sector) {
-	uint32_t newVersion = sectorManager.incrementSectorVersion(sector);
-	
-	// Notify all clients of the new version
-	NetworkMessage versionUpdate;
-	versionUpdate.write<uint8_t>(PACKET_SECTOR_VERSION);
-	versionUpdate.write<int32_t>(sector.x);
-	versionUpdate.write<int32_t>(sector.y);
-	versionUpdate.write<uint32_t>(newVersion);
-	
-	for (auto& clientEntry : clients) {
-		clientEntry.second->send(versionUpdate);
-	}
-	
-	logMessage(wxString::Format("[Server]: Updated sector [%d,%d] to version %u", 
-		sector.x, sector.y, newVersion));
-}
-
-uint32_t LiveServer::getSectorVersion(const SectorCoord& sector) {
-	return sectorManager.getSectorVersion(sector);
 }

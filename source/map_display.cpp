@@ -3526,8 +3526,8 @@ void MapCanvas::OnFindSimilarItems(wxCommandEvent& WXUNUSED(event)) {
         Item* item = selected_items[0];
         dialog->setSearchMode(FindItemDialog::SearchMode::ServerIDs);
         
-        // Set the server ID using FindWindow with wxID_ANY and then setting value
-        if (wxSpinCtrl* server_id_spin = dynamic_cast<wxSpinCtrl*>(dialog->FindWindowByName("search_id"))) {
+        // Set the server ID using the spin control
+        if (wxSpinCtrl* server_id_spin = (wxSpinCtrl*)dialog->FindWindow(wxID_ANY)) {
             server_id_spin->SetValue(item->getID());
         }
     } else {
@@ -3545,13 +3545,13 @@ void MapCanvas::OnFindSimilarItems(wxCommandEvent& WXUNUSED(event)) {
             first = false;
         }
 
-        // Enable range searching using FindWindow with wxID_ANY
-        if (wxCheckBox* use_range = dynamic_cast<wxCheckBox*>(dialog->FindWindowByName("use_range"))) {
+        // Enable range searching
+        if (wxCheckBox* use_range = (wxCheckBox*)dialog->FindWindow(wxID_ANY)) {
             use_range->SetValue(true);
         }
         
-        // Set the range text using FindWindow with wxID_ANY
-        if (wxTextCtrl* range_input = dynamic_cast<wxTextCtrl*>(dialog->FindWindowByName("range_input"))) {
+        // Set the range text
+        if (wxTextCtrl* range_input = (wxTextCtrl*)dialog->FindWindow(wxID_ANY)) {
             range_input->SetValue(wxString(range.str()));
         }
     }
