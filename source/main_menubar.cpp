@@ -242,6 +242,7 @@ MainMenuBar::MainMenuBar(MainFrame* frame) :
 	MAKE_ACTION(GOTO_WEBSITE, wxITEM_NORMAL, OnGotoWebsite);
 	MAKE_ACTION(ABOUT, wxITEM_NORMAL, OnAbout);
 	MAKE_ACTION(SHOW_HOTKEYS, wxITEM_NORMAL, OnShowHotkeys); // Add this line
+	MAKE_ACTION(REFRESH_ITEMS, wxITEM_NORMAL, OnRefreshItems);
 
 
 	// A deleter, this way the frame does not need
@@ -3106,4 +3107,75 @@ void MainMenuBar::onServerConnect(wxCommandEvent& event) {
     }
     
     connectDialog->Destroy();
+}
+
+void MainMenuBar::OnRefreshItems(wxCommandEvent& WXUNUSED(event)) {
+    if (!g_gui.IsEditorOpen()) {
+        return;
+    }
+
+    FindItemDialog dialog(frame, "Refresh Items");
+    dialog.setSearchMode((FindItemDialog::SearchMode)g_settings.getInteger(Config::FIND_ITEM_MODE));
+    
+    if (dialog.ShowModal() == wxID_OK) {
+        Editor* editor = g_gui.GetCurrentEditor();
+        if (!editor) return;
+
+        g_gui.CreateLoadBar("Refreshing items...");
+        
+        // First find all matching items
+        OnSearchForItem::Finder finder(dialog.getResultID(), (uint32_t)g_settings.getInteger(Config::REPLACE_SIZE));
+        foreach_ItemOnMap(g_gui.GetCurrentMap(), finder, false);
+        std::vector<std::pair<Tile*, Item*>>& items = finder.result;
+
+        // Store properties of found items
+        struct ItemData {
+            Position pos;
+            uint16_t id;
+            uint32_t actionId;
+            uint32_t uniqueId;
+            std::string text;
+        };
+        std::vector<ItemData> itemsToRecreate;
+
+        for(const auto& pair : items) {
+            Item* item = pair.second;
+            ItemData data;
+            data.pos = pair.first->getPosition();
+            data.id = item->getID();
+            data.actionId = item->getActionID();
+            data.uniqueId = item->getUniqueID();
+            data.text = item->getText();
+            itemsToRecreate.push_back(data);
+        }
+
+        // Remove the items
+        OnMapRemoveItems::RemoveItemCondition condition(dialog.getResultID());
+        RemoveItemOnMap(g_gui.GetCurrentMap(), condition, false);
+
+        // Recreate the items with same properties
+        for(const auto& data : itemsToRecreate) {
+            Tile* tile = editor->map.getTile(data.pos);
+            if(!tile) continue;
+
+            Item* newItem = Item::Create(data.id);
+            if(!newItem) continue;
+
+            newItem->setActionID(data.actionId);
+            newItem->setUniqueID(data.uniqueId);
+            newItem->setText(data.text);
+            
+            tile->addItem(newItem);
+        }
+
+        g_gui.DestroyLoadBar();
+
+        wxString msg;
+        msg << itemsToRecreate.size() << " items have been refreshed.";
+        g_gui.PopupDialog("Refresh completed", msg, wxOK);
+
+        editor->map.doChange();
+        g_gui.RefreshView();
+    }
+    dialog.Destroy();
 }
