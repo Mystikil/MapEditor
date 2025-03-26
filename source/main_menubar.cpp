@@ -3135,28 +3135,82 @@ void MainMenuBar::OnRefreshItems(wxCommandEvent& WXUNUSED(event)) {
             uint32_t actionId;
             uint32_t uniqueId;
             std::string text;
+            size_t stackpos;     // Store index in tile's item vector
+            Container* container; // Store container if item is inside one
+            size_t containerIndex; // Store index in container
         };
         std::vector<ItemData> itemsToRecreate;
 
         for(const auto& pair : items) {
+            Tile* tile = pair.first;
             Item* item = pair.second;
+            
             ItemData data;
-            data.pos = pair.first->getPosition();
+            data.pos = tile->getPosition();
             data.id = item->getID();
             data.actionId = item->getActionID();
             data.uniqueId = item->getUniqueID();
             data.text = item->getText();
+            data.container = nullptr;
+            data.containerIndex = 0;
+            
+            // Find item's position in tile or container
+            bool found = false;
+            
+            // First check if item is in a container on this tile
+            for(Item* tileItem : tile->items) {
+                if(Container* container = dynamic_cast<Container*>(tileItem)) {
+                    const ItemVector& containerItems = container->getVector();
+                    for(size_t idx = 0; idx < containerItems.size(); ++idx) {
+                        if(containerItems[idx] == item) {
+                            data.container = container;
+                            data.containerIndex = idx;
+                            found = true;
+                            break;
+                        }
+                    }
+                }
+                if(found) break;
+            }
+            
+            // If not in container, find position in tile
+            if(!found) {
+                for(size_t idx = 0; idx < tile->items.size(); ++idx) {
+                    if(tile->items[idx] == item) {
+                        data.stackpos = idx;
+                        break;
+                    }
+                }
+            }
+            
             itemsToRecreate.push_back(data);
         }
 
-        // Remove the items
-        OnMapRemoveItems::RemoveItemCondition condition(dialog.getResultID());
-        RemoveItemOnMap(g_gui.GetCurrentMap(), condition, false);
-
-        // Recreate the items with same properties
+        // Remove and recreate items
         for(const auto& data : itemsToRecreate) {
-            Tile* tile = editor->map.getTile(data.pos);
-            if(!tile) continue;
+            Item* oldItem = nullptr;
+            
+            if(data.container) {
+                // Item is in container
+                ItemVector& containerItems = data.container->getVector();
+                if(data.containerIndex < containerItems.size()) {
+                    oldItem = containerItems[data.containerIndex];
+                    containerItems.erase(containerItems.begin() + data.containerIndex);
+                }
+            } else {
+                // Item is on tile
+                Tile* tile = editor->map.getTile(data.pos);
+                if(!tile) continue;
+                
+                if(data.stackpos < tile->items.size()) {
+                    oldItem = tile->items[data.stackpos];
+                    tile->items.erase(tile->items.begin() + data.stackpos);
+                }
+            }
+            
+            if(oldItem) {
+                delete oldItem;
+            }
 
             Item* newItem = Item::Create(data.id);
             if(!newItem) continue;
@@ -3165,7 +3219,31 @@ void MainMenuBar::OnRefreshItems(wxCommandEvent& WXUNUSED(event)) {
             newItem->setUniqueID(data.uniqueId);
             newItem->setText(data.text);
             
-            tile->addItem(newItem);
+            if(data.container) {
+                // Insert back into container at same position
+                ItemVector& containerItems = data.container->getVector();
+                if(data.containerIndex >= containerItems.size()) {
+                    containerItems.push_back(newItem);
+                } else {
+                    containerItems.insert(
+                        containerItems.begin() + data.containerIndex,
+                        newItem
+                    );
+                }
+            } else {
+                // Insert back into tile at same position
+                Tile* tile = editor->map.getTile(data.pos);
+                if(!tile) continue;
+                
+                if(data.stackpos >= tile->items.size()) {
+                    tile->items.push_back(newItem);
+                } else {
+                    tile->items.insert(
+                        tile->items.begin() + data.stackpos,
+                        newItem
+                    );
+                }
+            }
         }
 
         g_gui.DestroyLoadBar();
