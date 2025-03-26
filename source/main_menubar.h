@@ -120,6 +120,7 @@ namespace MenuBar {
 		SHOW_TOWNS,
 		ALWAYS_SHOW_ZONES,
 		EXT_HOUSE_SHADER,
+		REFRESH_ITEMS,
 
 		WIN_MINIMAP,
 		NEW_PALETTE,
@@ -296,6 +297,9 @@ public:
 	void OnGotoWebsite(wxCommandEvent& event);
 	void OnAbout(wxCommandEvent& event);
 	void OnShowHotkeys(wxCommandEvent& event);
+
+	// Add to class MainMenuBar private section:
+	void OnRefreshItems(wxCommandEvent& event);
 
 protected:
 	// Load and returns a menu item, also sets accelerator

@@ -566,8 +566,9 @@ void LivePeer::parseReceiveChanges(NetworkMessage& message) {
 					
 					logMessage(wxString::Format("[Server]: Successfully processed changes from client %s", name));
 				} else {
-					// Don't delete directly - use the action queue instead
-					
+					// Instead of deleting, just add the action as-is
+					// An empty action won't do anything but will be safely managed by the queue
+					editor.actionQueue->addAction(action);
 					logMessage(wxString::Format("[Server]: No valid changes found in packet from client %s", name));
 				}
 			} catch (std::exception& e) {

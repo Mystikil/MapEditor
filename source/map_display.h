@@ -90,6 +90,8 @@ public:
 	void OnSelectCollectionBrush(wxCommandEvent& event);
 	void OnSelectMoveTo(wxCommandEvent& event);
 
+	void OnFindSimilarItems(wxCommandEvent& event);
+
 	void OnSelectionToDoodad(wxCommandEvent& event);
 	// ---
 	void OnProperties(wxCommandEvent& event);

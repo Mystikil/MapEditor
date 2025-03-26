@@ -242,6 +242,7 @@ MainMenuBar::MainMenuBar(MainFrame* frame) :
 	MAKE_ACTION(GOTO_WEBSITE, wxITEM_NORMAL, OnGotoWebsite);
 	MAKE_ACTION(ABOUT, wxITEM_NORMAL, OnAbout);
 	MAKE_ACTION(SHOW_HOTKEYS, wxITEM_NORMAL, OnShowHotkeys); // Add this line
+	MAKE_ACTION(REFRESH_ITEMS, wxITEM_NORMAL, OnRefreshItems);
 
 
 	// A deleter, this way the frame does not need
@@ -3106,4 +3107,153 @@ void MainMenuBar::onServerConnect(wxCommandEvent& event) {
     }
     
     connectDialog->Destroy();
+}
+
+void MainMenuBar::OnRefreshItems(wxCommandEvent& WXUNUSED(event)) {
+    if (!g_gui.IsEditorOpen()) {
+        return;
+    }
+
+    FindItemDialog dialog(frame, "Refresh Items");
+    dialog.setSearchMode((FindItemDialog::SearchMode)g_settings.getInteger(Config::FIND_ITEM_MODE));
+    
+    if (dialog.ShowModal() == wxID_OK) {
+        Editor* editor = g_gui.GetCurrentEditor();
+        if (!editor) return;
+
+        g_gui.CreateLoadBar("Refreshing items...");
+        
+        // First find all matching items
+        OnSearchForItem::Finder finder(dialog.getResultID(), (uint32_t)g_settings.getInteger(Config::REPLACE_SIZE));
+        foreach_ItemOnMap(g_gui.GetCurrentMap(), finder, false);
+        std::vector<std::pair<Tile*, Item*>>& items = finder.result;
+
+        // Store properties of found items
+        struct ItemData {
+            Position pos;
+            uint16_t id;
+            uint32_t actionId;
+            uint32_t uniqueId;
+            std::string text;
+            size_t stackpos;     // Store index in tile's item vector
+            Container* container; // Store container if item is inside one
+            size_t containerIndex; // Store index in container
+        };
+        std::vector<ItemData> itemsToRecreate;
+
+        for(const auto& pair : items) {
+            Tile* tile = pair.first;
+            Item* item = pair.second;
+            
+            ItemData data;
+            data.pos = tile->getPosition();
+            data.id = item->getID();
+            data.actionId = item->getActionID();
+            data.uniqueId = item->getUniqueID();
+            data.text = item->getText();
+            data.container = nullptr;
+            data.containerIndex = 0;
+            
+            // Find item's position in tile or container
+            bool found = false;
+            
+            // First check if item is in a container on this tile
+            for(Item* tileItem : tile->items) {
+                if(Container* container = dynamic_cast<Container*>(tileItem)) {
+                    const ItemVector& containerItems = container->getVector();
+                    for(size_t idx = 0; idx < containerItems.size(); ++idx) {
+                        if(containerItems[idx] == item) {
+                            data.container = container;
+                            data.containerIndex = idx;
+                            found = true;
+                            break;
+                        }
+                    }
+                }
+                if(found) break;
+            }
+            
+            // If not in container, find position in tile
+            if(!found) {
+                for(size_t idx = 0; idx < tile->items.size(); ++idx) {
+                    if(tile->items[idx] == item) {
+                        data.stackpos = idx;
+                        break;
+                    }
+                }
+            }
+            
+            itemsToRecreate.push_back(data);
+        }
+
+        // Remove and recreate items
+        for(const auto& data : itemsToRecreate) {
+            Item* oldItem = nullptr;
+            
+            if(data.container) {
+                // Item is in container
+                ItemVector& containerItems = data.container->getVector();
+                if(data.containerIndex < containerItems.size()) {
+                    oldItem = containerItems[data.containerIndex];
+                    containerItems.erase(containerItems.begin() + data.containerIndex);
+                }
+            } else {
+                // Item is on tile
+                Tile* tile = editor->map.getTile(data.pos);
+                if(!tile) continue;
+                
+                if(data.stackpos < tile->items.size()) {
+                    oldItem = tile->items[data.stackpos];
+                    tile->items.erase(tile->items.begin() + data.stackpos);
+                }
+            }
+            
+            if(oldItem) {
+                delete oldItem;
+            }
+
+            Item* newItem = Item::Create(data.id);
+            if(!newItem) continue;
+
+            newItem->setActionID(data.actionId);
+            newItem->setUniqueID(data.uniqueId);
+            newItem->setText(data.text);
+            
+            if(data.container) {
+                // Insert back into container at same position
+                ItemVector& containerItems = data.container->getVector();
+                if(data.containerIndex >= containerItems.size()) {
+                    containerItems.push_back(newItem);
+                } else {
+                    containerItems.insert(
+                        containerItems.begin() + data.containerIndex,
+                        newItem
+                    );
+                }
+            } else {
+                // Insert back into tile at same position
+                Tile* tile = editor->map.getTile(data.pos);
+                if(!tile) continue;
+                
+                if(data.stackpos >= tile->items.size()) {
+                    tile->items.push_back(newItem);
+                } else {
+                    tile->items.insert(
+                        tile->items.begin() + data.stackpos,
+                        newItem
+                    );
+                }
+            }
+        }
+
+        g_gui.DestroyLoadBar();
+
+        wxString msg;
+        msg << itemsToRecreate.size() << " items have been refreshed.";
+        g_gui.PopupDialog("Refresh completed", msg, wxOK);
+
+        editor->map.doChange();
+        g_gui.RefreshView();
+    }
+    dialog.Destroy();
 }

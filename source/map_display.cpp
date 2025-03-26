@@ -58,6 +58,7 @@
 #include "table_brush.h"
 #include "materials.h"
 #include "selection.h"
+#include "find_item_window.h"
 
 BEGIN_EVENT_TABLE(MapCanvas, wxGLCanvas)
 EVT_KEY_DOWN(MapCanvas::OnKeyDown)
@@ -87,6 +88,7 @@ EVT_MENU(MAP_POPUP_MENU_COPY_POSITION, MapCanvas::OnCopyPosition)
 EVT_MENU(MAP_POPUP_MENU_PASTE, MapCanvas::OnPaste)
 EVT_MENU(MAP_POPUP_MENU_DELETE, MapCanvas::OnDelete)
 EVT_MENU(MAP_POPUP_MENU_FILL, MapCanvas::OnFill)
+EVT_MENU(MAP_POPUP_MENU_FIND_SIMILAR_ITEMS, MapCanvas::OnFindSimilarItems)
 //----
 EVT_MENU(MAP_POPUP_MENU_COPY_SERVER_ID, MapCanvas::OnCopyServerId)
 EVT_MENU(MAP_POPUP_MENU_COPY_CLIENT_ID, MapCanvas::OnCopyClientId)
@@ -2434,6 +2436,10 @@ void MapPopupMenu::Update() {
 	wxMenuItem* fillItem = Append(MAP_POPUP_MENU_FILL, "&Fill Area", "Fill enclosed area with current brush");
 	fillItem->Enable(g_gui.GetCurrentBrush() != nullptr);
 
+	// Add the Find Similar option
+	wxMenuItem* findSimilarItem = Append(MAP_POPUP_MENU_FIND_SIMILAR_ITEMS, "Find &Similar Items", "Find similar items on the map");
+	findSimilarItem->Enable(anything_selected);
+
 	wxMenuItem* selectionToDoodadItem = Append(MAP_POPUP_MENU_SELECTION_TO_DOODAD, "&Selection to Doodad", "Create a doodad brush from the selected items");
 	selectionToDoodadItem->Enable(anything_selected);
 
@@ -3494,5 +3500,64 @@ void MapCanvas::OnSelectionToDoodad(wxCommandEvent& WXUNUSED(event)) {
             }
         }
     }
+}
+
+void MapCanvas::OnFindSimilarItems(wxCommandEvent& WXUNUSED(event)) {
+    if (editor.selection.size() == 0) {
+        return;
+    }
+
+    // Get the selected tile and items
+    Tile* tile = editor.selection.getSelectedTile();
+    if (!tile) {
+        return;
+    }
+
+    ItemVector selected_items = tile->getSelectedItems();
+    if (selected_items.empty()) {
+        return;
+    }
+
+    // Create and configure the find dialog
+    FindItemDialog* dialog = new FindItemDialog(g_gui.root, "Find Similar Items", false);
+    
+    if (selected_items.size() == 1) {
+        // Single item selected - search by exact ID
+        Item* item = selected_items[0];
+        dialog->setSearchMode(FindItemDialog::SearchMode::ServerIDs);
+        
+        // Set the server ID using the spin control
+        if (wxSpinCtrl* server_id_spin = (wxSpinCtrl*)dialog->FindWindow(wxID_ANY)) {
+            server_id_spin->SetValue(item->getID());
+        }
+    } else {
+        // Multiple items selected - use range search
+        dialog->setSearchMode(FindItemDialog::SearchMode::ServerIDs);
+        
+        // Build range string from selected items
+        std::ostringstream range;
+        bool first = true;
+        for (Item* item : selected_items) {
+            if (!first) {
+                range << ",";
+            }
+            range << item->getID();
+            first = false;
+        }
+
+        // Enable range searching
+        if (wxCheckBox* use_range = (wxCheckBox*)dialog->FindWindow(wxID_ANY)) {
+            use_range->SetValue(true);
+        }
+        
+        // Set the range text
+        if (wxTextCtrl* range_input = (wxTextCtrl*)dialog->FindWindow(wxID_ANY)) {
+            range_input->SetValue(wxString(range.str()));
+        }
+    }
+
+    // Show dialog
+    dialog->ShowModal();
+    dialog->Destroy();
 }
 
