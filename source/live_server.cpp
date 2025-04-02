@@ -36,6 +36,15 @@ LiveServer::~LiveServer() {
 }
 
 bool LiveServer::bind() {
+	// Ensure we're on the main thread for initialization
+	if (!wxThread::IsMain()) {
+		bool success = false;
+		wxTheApp->CallAfter([this, &success]() {
+			success = this->bind();
+		});
+		return success;
+	}
+
 	NetworkConnection& connection = NetworkConnection::getInstance();
 	if (!connection.start()) {
 		setLastError("The previous connection has not been terminated yet.");
@@ -85,6 +94,14 @@ void LiveServer::close() {
 }
 
 void LiveServer::acceptClient() {
+	// Ensure we're on the main thread
+	if (!wxThread::IsMain()) {
+		wxTheApp->CallAfter([this]() {
+			this->acceptClient();
+		});
+		return;
+	}
+
 	static uint32_t id = 0;
 	if (stopped) {
 		return;
@@ -97,31 +114,42 @@ void LiveServer::acceptClient() {
 	}
 
 	acceptor->async_accept(*socket, [this](const boost::system::error_code& error) -> void {
-		if (error) {
-			//
-		} else {
-			LivePeer* peer = new LivePeer(this, std::move(*socket));
-			peer->log = log;
-			peer->receiveHeader();
+		// Queue the client handling on the main thread
+		wxTheApp->CallAfter([this, error]() {
+			if (!error) {
+				static uint32_t nextId = 0;
+				LivePeer* peer = new LivePeer(this, std::move(*socket));
+				peer->log = log;
+				peer->receiveHeader();
 
-			clients.insert(std::make_pair(id++, peer));
-			
-			// Make sure the host's cursor exists
-			if (cursors.find(0) == cursors.end()) {
-				LiveCursor hostCursor;
-				hostCursor.id = 0;
-				hostCursor.color = usedColor;
-				hostCursor.pos = Position(); // Default position
-				cursors[0] = hostCursor;
+				clients.insert(std::make_pair(nextId++, peer));
+				
+				// Make sure the host's cursor exists
+				if (cursors.find(0) == cursors.end()) {
+					LiveCursor hostCursor;
+					hostCursor.id = 0;
+					hostCursor.color = usedColor;
+					hostCursor.pos = Position();
+					cursors[0] = hostCursor;
+				}
+				
+				updateClientList();
 			}
-			
-			updateClientList();
-		}
-		acceptClient();
+			// Queue next accept regardless of error
+			acceptClient();
+		});
 	});
 }
 
 void LiveServer::removeClient(uint32_t id) {
+	// Ensure we're on the main thread
+	if (!wxThread::IsMain()) {
+		wxTheApp->CallAfter([this, id]() {
+			this->removeClient(id);
+		});
+		return;
+	}
+
 	auto it = clients.find(id);
 	if (it == clients.end()) {
 		return;
@@ -138,18 +166,22 @@ void LiveServer::removeClient(uint32_t id) {
 }
 
 void LiveServer::updateCursor(const Position& position) {
+	// Ensure we're on the main thread
+	if (!wxThread::IsMain()) {
+		wxTheApp->CallAfter([this, position]() {
+			this->updateCursor(position);
+		});
+		return;
+	}
+
 	LiveCursor cursor;
-	cursor.id = 0; // Host's cursor ID is always 0
+	cursor.id = 0;
 	cursor.pos = position;
 	cursor.color = usedColor;
 	
-	// Store the cursor in local map (important for host to see other cursors)
 	this->cursors[cursor.id] = cursor;
-	
-	// Broadcast to clients
 	this->broadcastCursor(cursor);
 	
-	// Update the view to show cursor changes
 	g_gui.RefreshView();
 }
 
@@ -192,103 +224,128 @@ void LiveServer::broadcastNodes(DirtyList& dirtyList) {
 	if (dirtyList.Empty() || !editor) {
 		return;
 	}
+
+	// Make a deep copy of the dirty list data to ensure it persists through the async call
+	struct BroadcastData {
+		std::vector<DirtyList::ValueType> positions;
+		uint32_t owner;
+		std::vector<std::unique_ptr<Change>> changes;
+	};
+
+	auto broadcastData = std::make_shared<BroadcastData>();
+	broadcastData->positions.assign(dirtyList.GetPosList().begin(), dirtyList.GetPosList().end());
+	broadcastData->owner = dirtyList.owner;
 	
-	try {
-		size_t nodeCount = 0;
-		size_t totalClientCount = 0;
-		
-		// Create a copy of the position list to work with
-		auto posList = dirtyList.GetPosList();
-		uint32_t owner = dirtyList.owner;
-		
-		// Apply changes to host's map immediately
-		// This ensures the host can see their own changes
-		if (owner == 0) {
-			logMessage("[Server]: Applying host changes to local map");
-			editor->actionQueue->addAction(static_cast<NetworkedAction*>(editor->actionQueue->createAction(ACTION_REMOTE)));
-		}
-		
-		for (const auto& ind : posList) {
-			int32_t ndx = ind.pos >> 18;
-			int32_t ndy = (ind.pos >> 4) & 0x3FFF;
-			uint32_t floors = ind.floors;
-			
-			QTreeNode* node = editor->map.getLeaf(ndx * 4, ndy * 4);
-			if (!node) {
-				continue;
-			}
-			
-			nodeCount++;
-			
-			// Track clients who receive updates
-			std::vector<uint32_t> updatedClientIds;
-			
-			for (auto& clientEntry : clients) {
-				LivePeer* peer = clientEntry.second;
-				if (!peer) continue;
-				
-				const uint32_t clientId = peer->getClientId();
-				
-				// We no longer skip the client who made the change
-				// This ensures clients can see changes from other clients
-				
-				bool sentUpdate = false;
-				
-				// Check if the node is visible to this client
-				if (node->isVisible(clientId, true)) {
-					try {
-						peer->sendNode(clientId, node, ndx, ndy, floors & 0xFF00);
-						sentUpdate = true;
-						logMessage(wxString::Format("[Server]: Node [%d,%d,%s] marked as visible for client %u", 
-							ndx, ndy, "underground", clientId));
-						logMessage(wxString::Format("[Server]: Sending node update to client %u", clientId));
-					} catch (std::exception& e) {
-						logMessage(wxString::Format("[Server]: Error sending underground node to client %s: %s", 
-							peer->getName(), e.what()));
-					}
-				}
-				
-				if (node->isVisible(clientId, false)) {
-					try {
-						peer->sendNode(clientId, node, ndx, ndy, floors & 0x00FF);
-						sentUpdate = true;
-						logMessage(wxString::Format("[Server]: Node [%d,%d,%s] marked as visible for client %u", 
-							ndx, ndy, "surface", clientId));
-						logMessage(wxString::Format("[Server]: Sending node update to client %u", clientId));
-					} catch (std::exception& e) {
-						logMessage(wxString::Format("[Server]: Error sending surface node to client %s: %s", 
-							peer->getName(), e.what()));
-					}
-				}
-				
-				if (sentUpdate && std::find(updatedClientIds.begin(), updatedClientIds.end(), clientId) == updatedClientIds.end()) {
-					updatedClientIds.push_back(clientId);
+	// If this is from the host, copy the changes
+	if (dirtyList.owner == 0) {
+		auto& changes = dirtyList.GetChanges();
+		broadcastData->changes.reserve(changes.size());
+		for (Change* change : changes) {
+			if (change && change->getType() == CHANGE_TILE) {
+				Tile* tile = static_cast<Tile*>(change->getData());
+				if (tile) {
+					// Create a managed copy
+					broadcastData->changes.push_back(std::make_unique<Change>(tile->deepCopy(editor->map)));
 				}
 			}
-			
-			totalClientCount += updatedClientIds.size();
 		}
-		
-		if (nodeCount > 0) {
-			logMessage(wxString::Format("[Server]: Broadcasted %zu nodes to %zu clients", 
-				nodeCount, totalClientCount));
-		}
-		
-		// Make sure the host view is refreshed to show changes
-		g_gui.RefreshView();
-		g_gui.UpdateMinimap();
-		
-	} catch (std::exception& e) {
-		logMessage(wxString::Format("[Server]: Error broadcasting nodes: %s", e.what()));
 	}
+
+	// Process everything on the main thread in a single CallAfter to maintain atomicity
+	wxTheApp->CallAfter([this, broadcastData]() {
+		try {
+			if (!editor) return;
+
+			// Handle host changes first
+			if (broadcastData->owner == 0 && !broadcastData->changes.empty()) {
+				NetworkedAction* action = static_cast<NetworkedAction*>(editor->actionQueue->createAction(ACTION_REMOTE));
+				if (action) {
+					action->owner = broadcastData->owner;
+					
+					// Add the changes to the action - action takes ownership
+					for (auto& change : broadcastData->changes) {
+						if (change) {
+							action->addChange(change.release());
+						}
+					}
+					
+					// Add the action to the queue
+					editor->actionQueue->addAction(action, 0);
+				}
+			}
+
+			// Now handle the network broadcasting
+			// Create a vector of all the work we need to do
+			struct BroadcastWork {
+				LivePeer* peer;
+				QTreeNode* node;
+				int32_t ndx;
+				int32_t ndy;
+				uint32_t floors;
+				uint32_t clientId;
+			};
+			std::vector<BroadcastWork> workItems;
+
+			// First gather all the work without doing any actual sending
+			for (const auto& ind : broadcastData->positions) {
+				int32_t ndx = ind.pos >> 18;
+				int32_t ndy = (ind.pos >> 4) & 0x3FFF;
+				uint32_t floors = ind.floors;
+
+				QTreeNode* node = editor->map.getLeaf(ndx * 4, ndy * 4);
+				if (!node) continue;
+
+				for (auto& clientEntry : clients) {
+					LivePeer* peer = clientEntry.second;
+					if (!peer) continue;
+
+					const uint32_t clientId = peer->getClientId();
+					
+					if (node->isVisible(clientId, true) || node->isVisible(clientId, false)) {
+						workItems.push_back({peer, node, ndx, ndy, floors, clientId});
+					}
+				}
+			}
+
+			// Now process all the work in a single batch
+			for (const auto& work : workItems) {
+				try {
+					if (work.node->isVisible(work.clientId, true)) {
+						work.peer->sendNode(work.clientId, work.node, work.ndx, work.ndy, work.floors & 0xFF00);
+					}
+
+					if (work.node->isVisible(work.clientId, false)) {
+						work.peer->sendNode(work.clientId, work.node, work.ndx, work.ndy, work.floors & 0x00FF);
+					}
+				} catch (std::exception& e) {
+					logMessage(wxString::Format("[Server]: Error sending node to client %s: %s", 
+						work.peer->getName(), e.what()));
+				}
+			}
+
+			// Update the UI once at the end
+			g_gui.RefreshView();
+			g_gui.UpdateMinimap();
+
+		} catch (std::exception& e) {
+			logMessage(wxString::Format("[Server]: Error in broadcast: %s", e.what()));
+		}
+	});
 }
 
 void LiveServer::broadcastCursor(const LiveCursor& cursor) {
+	// Ensure we're on the main thread
+	if (!wxThread::IsMain()) {
+		wxTheApp->CallAfter([this, cursor]() {
+			this->broadcastCursor(cursor);
+		});
+		return;
+	}
+
 	if (clients.empty()) {
 		return;
 	}
 
-	// Always update cursor in local map regardless of ID
 	cursors[cursor.id] = cursor;
 
 	NetworkMessage message;
@@ -297,20 +354,25 @@ void LiveServer::broadcastCursor(const LiveCursor& cursor) {
 
 	for (auto& clientEntry : clients) {
 		LivePeer* peer = clientEntry.second;
-		// Send to all clients, including the one that sent the update
 		peer->send(message);
 	}
 	
-	// Always refresh the view to ensure cursor updates are visible
 	g_gui.RefreshView();
 }
 
 void LiveServer::broadcastChat(const wxString& speaker, const wxString& chatMessage) {
+	// Ensure we're on the main thread
+	if (!wxThread::IsMain()) {
+		wxTheApp->CallAfter([this, speaker, chatMessage]() {
+			this->broadcastChat(speaker, chatMessage);
+		});
+		return;
+	}
+
 	if (clients.empty()) {
 		return;
 	}
 
-	// If the speaker is HOST, use the server name
 	wxString displayName = (speaker == "HOST") ? name : speaker;
 
 	NetworkMessage message;
@@ -322,7 +384,6 @@ void LiveServer::broadcastChat(const wxString& speaker, const wxString& chatMess
 		clientEntry.second->send(message);
 	}
 
-	// Also log the chat message in the server log
 	if (log) {
 		log->Chat(displayName, chatMessage);
 	}

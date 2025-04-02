@@ -198,93 +198,98 @@ ReplaceItemsDialog::ReplaceItemsDialog(wxWindow* parent, bool selectionOnly) :
 	selectionOnly(selectionOnly) {
 	SetSizeHints(wxDefaultSize, wxDefaultSize);
 
-	wxBoxSizer* sizer = new wxBoxSizer(wxVERTICAL);
+	// Create a scrolled window to hold all controls
+	wxScrolledWindow* scrolled = new wxScrolledWindow(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxVSCROLL | wxHSCROLL);
+	scrolled->SetScrollRate(5, 5);
 
+	// Main sizer for the scrolled window
+	wxBoxSizer* main_sizer = new wxBoxSizer(wxVERTICAL);
+
+	// List sizer
 	wxFlexGridSizer* list_sizer = new wxFlexGridSizer(0, 2, 0, 0);
 	list_sizer->SetFlexibleDirection(wxBOTH);
 	list_sizer->SetNonFlexibleGrowMode(wxFLEX_GROWMODE_SPECIFIED);
 	list_sizer->SetMinSize(wxSize(25, 300));
 
-	list = new ReplaceItemsListBox(this);
+	list = new ReplaceItemsListBox(scrolled);
 	list->SetMinSize(wxSize(480, 320));
 
 	list_sizer->Add(list, 0, wxALL | wxEXPAND, 5);
-	sizer->Add(list_sizer, 1, wxALL | wxEXPAND, 5);
+	main_sizer->Add(list_sizer, 1, wxALL | wxEXPAND, 5);
 
+	// Add progress bar
+	progress = new wxGauge(scrolled, wxID_ANY, 100, wxDefaultPosition, wxSize(-1, 25));
+	main_sizer->Add(progress, 0, wxEXPAND | wxALL, 5);
+
+	// Items sizer
 	wxBoxSizer* items_sizer = new wxBoxSizer(wxHORIZONTAL);
 	items_sizer->SetMinSize(wxSize(-1, 30));
 
 	// First column - Replace button and input with reduced size
 	wxBoxSizer* replace_column = new wxBoxSizer(wxVERTICAL);
-	replace_button = new ReplaceItemsButton(this);
+	replace_button = new ReplaceItemsButton(scrolled);
 	replace_column->Add(replace_button, 0, wxALL, 2);
 	
-	replace_range_input = new wxTextCtrl(this, wxID_ANY, "", wxDefaultPosition, wxSize(100, -1));
+	replace_range_input = new wxTextCtrl(scrolled, wxID_ANY, "", wxDefaultPosition, wxSize(100, -1));
 	replace_range_input->SetToolTip("Enter range to replace (e.g., 100-105,200)");
 	replace_column->Add(replace_range_input, 0, wxEXPAND | wxALL, 2);
 	
 	items_sizer->Add(replace_column, 0, wxEXPAND);
 
 	// Arrow bitmap in the middle
-	arrow_bitmap = new wxStaticBitmap(this, wxID_ANY, wxArtProvider::GetBitmap(wxART_GO_FORWARD));
+	arrow_bitmap = new wxStaticBitmap(scrolled, wxID_ANY, wxArtProvider::GetBitmap(wxART_GO_FORWARD));
 	items_sizer->Add(arrow_bitmap, 0, wxALIGN_CENTER | wxALL, 2);
 
 	// Second column - With button and input with reduced size
 	wxBoxSizer* with_column = new wxBoxSizer(wxVERTICAL);
-	with_button = new ReplaceItemsButton(this);
+	with_button = new ReplaceItemsButton(scrolled);
 	with_column->Add(with_button, 0, wxALL, 2);
 	
-	with_range_input = new wxTextCtrl(this, wxID_ANY, "", wxDefaultPosition, wxSize(100, -1));
+	with_range_input = new wxTextCtrl(scrolled, wxID_ANY, "", wxDefaultPosition, wxSize(100, -1));
 	with_range_input->SetToolTip("Enter range to replace with (e.g., 200-205,300)");
 	with_column->Add(with_range_input, 0, wxEXPAND | wxALL, 2);
 	
 	items_sizer->Add(with_column, 0, wxEXPAND);
 
 	// Add button at the end
-	add_button = new wxButton(this, wxID_ANY, "Add", wxDefaultPosition, wxSize(60, -1));
+	add_button = new wxButton(scrolled, wxID_ANY, "Add", wxDefaultPosition, wxSize(60, -1));
 	items_sizer->Add(add_button, 0, wxALIGN_CENTER | wxALL, 2);
 
-	sizer->Add(items_sizer, 0, wxALL | wxEXPAND, 5);
+	main_sizer->Add(items_sizer, 0, wxALL | wxEXPAND, 5);
 
-	// Add border controls after preset controls
+	// Add border controls
 	wxBoxSizer* border_sizer = new wxBoxSizer(wxVERTICAL);
 	
-	// Add border label
-	wxStaticText* border_label = new wxStaticText(this, wxID_ANY, "Replace Borders:");
+	wxStaticText* border_label = new wxStaticText(scrolled, wxID_ANY, "Replace Borders:");
 	border_sizer->Add(border_label, 0, wxALL | wxALIGN_LEFT, 5);
 	
-	// Create horizontal sizer for border selection
 	wxBoxSizer* border_selection_sizer = new wxBoxSizer(wxHORIZONTAL);
 	
-	border_from_choice = new wxChoice(this, wxID_ANY, wxDefaultPosition, wxSize(200, 30));
-	border_to_choice = new wxChoice(this, wxID_ANY, wxDefaultPosition, wxSize(200, 30));
+	border_from_choice = new wxChoice(scrolled, wxID_ANY, wxDefaultPosition, wxSize(200, 30));
+	border_to_choice = new wxChoice(scrolled, wxID_ANY, wxDefaultPosition, wxSize(200, 30));
 	
 	border_selection_sizer->Add(border_from_choice, 0, wxALL | wxALIGN_CENTER_VERTICAL, 5);
 	border_selection_sizer->Add(border_to_choice, 0, wxALL | wxALIGN_CENTER_VERTICAL, 5);
 	
 	border_sizer->Add(border_selection_sizer, 0, wxALL | wxCENTER, 5);
 	
-	// Add border replace button in its own row
-	add_border_button = new wxButton(this, wxID_ANY, "Add Border Items", wxDefaultPosition, wxSize(150, 30));
+	add_border_button = new wxButton(scrolled, wxID_ANY, "Add Border Items", wxDefaultPosition, wxSize(150, 30));
 	border_sizer->Add(add_border_button, 0, wxALL | wxCENTER, 5);
 	
-	sizer->Add(border_sizer, 0, wxALL | wxCENTER, 5);
+	main_sizer->Add(border_sizer, 0, wxALL | wxCENTER, 5);
 
 	// Add wall selection controls
 	wxBoxSizer* wall_sizer = new wxBoxSizer(wxVERTICAL);
 
-	// Add wall label
-	wxStaticText* wall_label = new wxStaticText(this, wxID_ANY, "Replace Walls:");
+	wxStaticText* wall_label = new wxStaticText(scrolled, wxID_ANY, "Replace Walls:");
 	wall_sizer->Add(wall_label, 0, wxALL | wxALIGN_LEFT, 5);
 
-	// Create horizontal sizer for wall selection
 	wxBoxSizer* wall_selection_sizer = new wxBoxSizer(wxHORIZONTAL);
 
-	wall_from_choice = new wxChoice(this, wxID_ANY, wxDefaultPosition, wxSize(200, 30));
-	wall_to_choice = new wxChoice(this, wxID_ANY, wxDefaultPosition, wxSize(200, 30));
-	wall_orientation_choice = new wxChoice(this, wxID_ANY, wxDefaultPosition, wxSize(100, 30));
+	wall_from_choice = new wxChoice(scrolled, wxID_ANY, wxDefaultPosition, wxSize(200, 30));
+	wall_to_choice = new wxChoice(scrolled, wxID_ANY, wxDefaultPosition, wxSize(200, 30));
+	wall_orientation_choice = new wxChoice(scrolled, wxID_ANY, wxDefaultPosition, wxSize(100, 30));
 
-	// Add orientation options
 	wall_orientation_choice->Append("All");
 	wall_orientation_choice->Append("Horizontal");
 	wall_orientation_choice->Append("Vertical");
@@ -298,73 +303,72 @@ ReplaceItemsDialog::ReplaceItemsDialog(wxWindow* parent, bool selectionOnly) :
 
 	wall_sizer->Add(wall_selection_sizer, 0, wxALL | wxCENTER, 5);
 
-	// Add wall replace button
-	add_wall_button = new wxButton(this, wxID_ANY, "Add Wall Items", wxDefaultPosition, wxSize(150, 30));
+	add_wall_button = new wxButton(scrolled, wxID_ANY, "Add Wall Items", wxDefaultPosition, wxSize(150, 30));
 	wall_sizer->Add(add_wall_button, 0, wxALL | wxCENTER, 5);
 
-	sizer->Add(wall_sizer, 0, wxALL | wxCENTER, 5);
+	main_sizer->Add(wall_sizer, 0, wxALL | wxCENTER, 5);
 
-	// Create main buttons row (Execute, Close, Swap)
+	// Create main buttons row
 	wxBoxSizer* buttons_sizer = new wxBoxSizer(wxHORIZONTAL);
 
-	// Left side buttons with fixed width
 	wxBoxSizer* left_buttons = new wxBoxSizer(wxHORIZONTAL);
 	add_button->Connect(wxEVT_BUTTON, wxCommandEventHandler(ReplaceItemsDialog::OnAddButtonClicked), NULL, this);
 	add_button->SetMinSize(wxSize(80, 30));
 	left_buttons->Add(add_button, 0, wxRIGHT, 5);
 
-	remove_button = new wxButton(this, wxID_ANY, wxT("Remove"));
+	remove_button = new wxButton(scrolled, wxID_ANY, wxT("Remove"));
 	remove_button->Enable(false);
 	remove_button->SetMinSize(wxSize(80, 30));
 	left_buttons->Add(remove_button, 0, wxRIGHT, 5);
 
 	buttons_sizer->Add(left_buttons, 0, wxALIGN_CENTER_VERTICAL | wxLEFT, 5);
 
-	// Right side buttons with fixed width
 	wxBoxSizer* right_buttons = new wxBoxSizer(wxHORIZONTAL);
-	execute_button = new wxButton(this, wxID_ANY, wxT("Execute"));
+	execute_button = new wxButton(scrolled, wxID_ANY, wxT("Execute"));
 	execute_button->Enable(false);
 	execute_button->SetMinSize(wxSize(100, 30));
 	right_buttons->Add(execute_button, 0, wxRIGHT, 5);
 
-	close_button = new wxButton(this, wxID_ANY, wxT("Close"));
+	close_button = new wxButton(scrolled, wxID_ANY, wxT("Close"));
 	close_button->SetMinSize(wxSize(80, 30));
 	right_buttons->Add(close_button, 0, wxRIGHT, 5);
 
-	// Add swap checkbox after close button with increased size
-	swap_checkbox = new wxCheckBox(this, wxID_ANY, "Swap Items");
-	swap_checkbox->SetMinSize(wxSize(120, 35));  // Increased width and height
+	swap_checkbox = new wxCheckBox(scrolled, wxID_ANY, "Swap Items");
+	swap_checkbox->SetMinSize(wxSize(120, 35));
 	swap_checkbox->SetToolTip("When checked, items will be swapped instead of just replaced");
 	right_buttons->Add(swap_checkbox, 0, wxLEFT | wxALIGN_CENTER_VERTICAL, 10);
 
 	buttons_sizer->Add(right_buttons, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 5);
 
-	sizer->Add(buttons_sizer, 1, wxALL | wxLEFT | wxRIGHT | wxSHAPED, 5);
+	main_sizer->Add(buttons_sizer, 1, wxALL | wxLEFT | wxRIGHT | wxSHAPED, 5);
 
-	// Add spacing between button rows
-	sizer->AddSpacer(10);
+	main_sizer->AddSpacer(10);
 
-	// Create preset controls row at the bottom
+	// Create preset controls row
 	wxBoxSizer* preset_sizer = new wxBoxSizer(wxHORIZONTAL);
 	
-	// Create preset dropdown with increased height
-	preset_choice = new wxChoice(this, wxID_ANY, wxDefaultPosition, wxSize(150, 30));
+	preset_choice = new wxChoice(scrolled, wxID_ANY, wxDefaultPosition, wxSize(150, 30));
 	preset_sizer->Add(preset_choice, 0, wxALL | wxALIGN_CENTER_VERTICAL, 5);
 	
-	// Add load button
-	load_preset_button = new wxButton(this, wxID_ANY, wxT("Load"), wxDefaultPosition, wxSize(60, 30));
+	load_preset_button = new wxButton(scrolled, wxID_ANY, wxT("Load"), wxDefaultPosition, wxSize(60, 30));
 	preset_sizer->Add(load_preset_button, 0, wxALL | wxALIGN_CENTER_VERTICAL, 5);
 	
-	// Add preset management buttons with proper size
-	add_preset_button = new wxButton(this, wxID_ANY, wxT("Add Preset"), wxDefaultPosition, wxSize(100, 30));
+	add_preset_button = new wxButton(scrolled, wxID_ANY, wxT("Add Preset"), wxDefaultPosition, wxSize(100, 30));
 	preset_sizer->Add(add_preset_button, 0, wxALL | wxALIGN_CENTER_VERTICAL, 5);
 	
-	remove_preset_button = new wxButton(this, wxID_ANY, wxT("Remove Preset"), wxDefaultPosition, wxSize(100, 30));
+	remove_preset_button = new wxButton(scrolled, wxID_ANY, wxT("Remove Preset"), wxDefaultPosition, wxSize(100, 30));
 	preset_sizer->Add(remove_preset_button, 0, wxALL | wxALIGN_CENTER_VERTICAL, 5);
 	
-	sizer->Add(preset_sizer, 0, wxALL | wxCENTER, 5);
+	main_sizer->Add(preset_sizer, 0, wxALL | wxCENTER, 5);
 
-	SetSizer(sizer);
+	// Set the sizer for the scrolled window
+	scrolled->SetSizer(main_sizer);
+
+	// Create a sizer for the dialog to hold the scrolled window
+	wxBoxSizer* dialog_sizer = new wxBoxSizer(wxVERTICAL);
+	dialog_sizer->Add(scrolled, 1, wxEXPAND | wxALL, 5);
+	SetSizer(dialog_sizer);
+
 	Layout();
 	Centre(wxBOTH);
 
@@ -385,27 +389,13 @@ ReplaceItemsDialog::ReplaceItemsDialog(wxWindow* parent, bool selectionOnly) :
 	border_to_choice->Connect(wxEVT_CHOICE, wxCommandEventHandler(ReplaceItemsDialog::OnBorderToSelect), NULL, this);
 	add_border_button->Connect(wxEVT_BUTTON, wxCommandEventHandler(ReplaceItemsDialog::OnAddBorderItems), NULL, this);
 	add_wall_button->Connect(wxEVT_BUTTON, wxCommandEventHandler(ReplaceItemsDialog::OnAddWallItems), NULL, this);
+	replace_range_input->Bind(wxEVT_TEXT, &ReplaceItemsDialog::OnIdInput, this);
+	with_range_input->Bind(wxEVT_TEXT, &ReplaceItemsDialog::OnIdInput, this);
 
-	// Load initial preset list
+	// Load initial data
 	RefreshPresetList();
-
-	// Load initial border lists
 	LoadBorderChoices();
-
-	// Load wall choices
 	LoadWallChoices();
-
-	// Add these lines after creating the border choice controls
-	border_from_choice->Bind(wxEVT_CHOICE, &ReplaceItemsDialog::OnBorderFromSelect, this);
-	border_to_choice->Bind(wxEVT_CHOICE, &ReplaceItemsDialog::OnBorderToSelect, this);
-
-	// Add new bindings
-	wall_from_choice->Bind(wxEVT_CHOICE, &ReplaceItemsDialog::OnWallFromSelect, this);
-	wall_to_choice->Bind(wxEVT_CHOICE, &ReplaceItemsDialog::OnWallToSelect, this);
-	add_wall_button->Bind(wxEVT_BUTTON, &ReplaceItemsDialog::OnAddWallItems, this);
-	// Add to constructor around line 369
-replace_range_input->Bind(wxEVT_TEXT, &ReplaceItemsDialog::OnIdInput, this);
-with_range_input->Bind(wxEVT_TEXT, &ReplaceItemsDialog::OnIdInput, this);
 }
 
 ReplaceItemsDialog::~ReplaceItemsDialog() {

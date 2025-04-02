@@ -541,7 +541,34 @@ void ActionQueue::resetTimer() {
 	}
 }
 
+void ActionQueue::addAction(Action* action, int stacking_delay) {
+	// Ensure we're on the main thread
+	if (!wxThread::IsMain()) {
+		wxTheApp->CallAfter([=]() {
+			this->addAction(action, stacking_delay);
+		});
+		return;
+	}
+
+	BatchAction* batch = createBatch(action->getType());
+	batch->addAndCommitAction(action);
+	if (batch->size() == 0) {
+		delete batch;
+		return;
+	}
+
+	addBatch(batch, stacking_delay);
+}
+
 void ActionQueue::addBatch(BatchAction* batch, int stacking_delay) {
+	// Ensure we're on the main thread
+	if (!wxThread::IsMain()) {
+		wxTheApp->CallAfter([=]() {
+			this->addBatch(batch, stacking_delay);
+		});
+		return;
+	}
+
 	ASSERT(batch);
 	ASSERT(current <= actions.size());
 
@@ -602,17 +629,6 @@ void ActionQueue::addBatch(BatchAction* batch, int stacking_delay) {
 		batch->timestamp = time(nullptr);
 		current++;
 	} while (false);
-}
-
-void ActionQueue::addAction(Action* action, int stacking_delay) {
-	BatchAction* batch = createBatch(action->getType());
-	batch->addAndCommitAction(action);
-	if (batch->size() == 0) {
-		delete batch;
-		return;
-	}
-
-	addBatch(batch, stacking_delay);
 }
 
 void ActionQueue::undo() {
