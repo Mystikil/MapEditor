@@ -2460,17 +2460,14 @@ void MapPopupMenu::Update() {
 				topSelectedItem && topSelectedItem->getRAWBrush()) {
 				// Call the existing handler to change the current brush to RAW.
 				// This reuses the logic in OnSelectRAWBrush and maintains consistent behavior.
-				if (editor.selection.size() != 1) {
-					return;
-				}
-				Tile* tile = editor.selection.getSelectedTile();
-				if (!tile) {
-					return;
-				}
-				Item* item = tile->getTopSelectedItem();
-
-				if (item && item->getRAWBrush()) {
-					g_gui.SelectBrush(item->getRAWBrush(), TILESET_RAW);
+				if (editor.selection.size() == 1) {
+					Tile* tile = editor.selection.getSelectedTile();
+					if (tile) {
+						Item* item = tile->getTopSelectedItem();
+						if (item && item->getRAWBrush()) {
+							g_gui.SelectBrush(item->getRAWBrush(), TILESET_RAW);
+						}
+					}
 				}
 			}
 
