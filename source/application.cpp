@@ -398,7 +398,8 @@ MainFrame::MainFrame(const wxString& title, const wxPoint& pos, const wxSize& si
 MainFrame::~MainFrame() = default;
 
 void MainFrame::OnIdle(wxIdleEvent& event) {
-	////
+	g_gui.CheckAutoSave();
+	event.Skip();
 }
 
 #ifdef _USE_UPDATER_

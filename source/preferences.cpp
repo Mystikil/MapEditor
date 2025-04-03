@@ -100,6 +100,21 @@ wxNotebookPage* PreferencesWindow::CreateGeneralPage() {
 
 	sizer->AddSpacer(10);
 
+	// Add autosave options
+	wxBoxSizer* autosave_sizer = newd wxBoxSizer(wxHORIZONTAL); 
+	autosave_chkbox = newd wxCheckBox(general_page, wxID_ANY, "Enable autosave");
+	autosave_chkbox->SetValue(g_settings.getBoolean(Config::AUTO_SAVE_ENABLED));
+	autosave_chkbox->SetToolTip("Automatically save a backup of your map periodically");
+	autosave_sizer->Add(autosave_chkbox, 0, wxALL, 5);
+
+	autosave_interval_spin = newd wxSpinCtrl(general_page, wxID_ANY, i2ws(g_settings.getInteger(Config::AUTO_SAVE_INTERVAL)), 
+		wxDefaultPosition, wxSize(120, -1), wxSP_ARROW_KEYS, 1, 7200, 60);
+	autosave_interval_spin->SetToolTip("How often (in seconds) should autosave occur");
+	autosave_sizer->Add(autosave_interval_spin, 0, wxALL, 5);
+	autosave_sizer->Add(newd wxStaticText(general_page, wxID_ANY, "seconds"), 0, wxALL | wxALIGN_CENTER_VERTICAL, 5);
+
+	sizer->Add(autosave_sizer);
+
 	auto* grid_sizer = newd wxFlexGridSizer(2, 10, 10);
 	grid_sizer->AddGrowableCol(1);
 
@@ -741,4 +756,6 @@ void PreferencesWindow::Apply() {
 	}
 
 	g_settings.setInteger(Config::AUTO_SELECT_RAW_ON_RIGHTCLICK, auto_select_raw_chkbox->GetValue());
+	g_settings.setInteger(Config::AUTO_SAVE_ENABLED, autosave_chkbox->GetValue());
+	g_settings.setInteger(Config::AUTO_SAVE_INTERVAL, autosave_interval_spin->GetValue());
 }

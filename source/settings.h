@@ -185,6 +185,8 @@ namespace Config {
 		EXT_HOUSE_SHADER,
 
 		AUTO_SELECT_RAW_ON_RIGHTCLICK,
+		AUTO_SAVE_ENABLED,
+		AUTO_SAVE_INTERVAL,
 
 		// Network/Live settings
 		LIVE_HOST,

@@ -126,6 +126,8 @@ protected:
 
 	// Add with other checkbox declarations
 	wxCheckBox* auto_select_raw_chkbox;
+	wxCheckBox* autosave_chkbox;
+	wxSpinCtrl* autosave_interval_spin;
 
 	DECLARE_EVENT_TABLE()
 };

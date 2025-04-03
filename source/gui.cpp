@@ -223,7 +223,9 @@ GUI::GUI() :
 	use_custom_thickness(false),
 	custom_thickness_mod(0.0),
 	progressBar(nullptr),
-	disabled_counter(0) {
+	disabled_counter(0),
+	last_autosave(time(nullptr)),
+	last_autosave_check(time(nullptr)) {
 	doodad_buffer_map = newd BaseMap();
 }
 
@@ -2149,4 +2151,73 @@ int GUI::GetHotkeyEventId(const std::string& action) {
 	// This needs to be implemented based on your menu system
 	// Return -1 if no matching action is found
 	return -1; // Temporary return until implementation
+}
+
+void GUI::CheckAutoSave() {
+	uint32_t now = time(nullptr);
+	
+	// Only check once per second
+	if (now - last_autosave_check < 1) {
+		return;
+	}
+	last_autosave_check = now;
+
+	if (!g_settings.getBoolean(Config::AUTO_SAVE_ENABLED)) {
+		OutputDebugStringA("Autosave disabled\n");
+		return;
+	}
+	
+	if (!IsEditorOpen()) {
+		OutputDebugStringA("No editor open - skipping autosave check\n");
+		return;
+	}
+
+	uint32_t interval = g_settings.getInteger(Config::AUTO_SAVE_INTERVAL); // Already in seconds
+	uint32_t time_passed = now - last_autosave;
+	
+	char debug_buffer[256];
+	sprintf(debug_buffer, "Autosave check - Time passed: %u seconds, Interval: %u seconds, Next save in: %u seconds\n", 
+			time_passed, interval, interval - (time_passed % interval));
+	OutputDebugStringA(debug_buffer);
+	
+	if (now - last_autosave >= interval) {
+		Editor* editor = GetCurrentEditor();
+		if (editor) {
+			OutputDebugStringA("Performing autosave...\n");
+			
+			// Create autosave directory in RME data folder
+			wxString data_dir = GetDataDirectory();
+			wxString autosave_dir = data_dir + "maps/autosave/";
+			
+			if (!wxDirExists(data_dir + "maps")) {
+				wxMkdir(data_dir + "maps", wxS_DIR_DEFAULT);
+			}
+			if (!wxDirExists(autosave_dir)) {
+				wxMkdir(autosave_dir, wxS_DIR_DEFAULT);
+			}
+			
+			// Create autosave filename based on current map name
+			FileName current = wxstr(editor->map.getName());
+			wxString name = current.GetName();
+			if (name.empty()) {
+				name = "untitled";
+			}
+			wxString ext = current.GetExt();
+			if (ext.empty()) {
+				ext = "otbm";
+			}
+			
+			wxString autosave_name = autosave_dir + name + "_autosave_" + 
+				wxDateTime::Now().Format("%Y-%m-%d_%H-%M-%S") + "." + ext;
+
+			OutputDebugStringA("Saving to: ");
+			OutputDebugStringA(autosave_name.c_str());
+			OutputDebugStringA("\n");
+
+			// Use existing SaveCurrentMap with our autosave filename
+			SaveCurrentMap(autosave_name, false);
+			last_autosave = now;
+			OutputDebugStringA("Autosave complete\n");
+		}
+	}
 }

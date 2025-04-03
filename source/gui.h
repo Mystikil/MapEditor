@@ -482,6 +482,10 @@ public:
 
 	// Add after line 395 (public members section)
 	bool minimap_enabled;
+
+	void CheckAutoSave();
+	uint32_t last_autosave;
+	uint32_t last_autosave_check;
 };
 
 extern GUI g_gui;
