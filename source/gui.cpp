@@ -173,6 +173,7 @@
 #include "live_client.h"
 #include "live_tab.h"
 #include "live_server.h"
+#include <wx/regex.h>
 
 #ifdef __WXOSX__
 	#include <AGL/agl.h>
@@ -2201,7 +2202,36 @@ void GUI::CheckAutoSave() {
 			wxString name = current.GetName();
 			if (name.empty()) {
 				name = "untitled";
+			} else {
+				// Remove any existing autosave timestamps from the name
+				size_t pos;
+				while ((pos = name.find("_autosave_")) != wxString::npos) {
+					// Find the end of the timestamp (next underscore or end of string)
+					size_t end = name.find("_", pos + 10); // Skip past "_autosave_"
+					if (end == wxString::npos) {
+						// If no underscore found, remove everything after _autosave_
+						name = name.substr(0, pos);
+					} else {
+						// Remove the _autosave_ and timestamp portion
+						name = name.substr(0, pos);
+					}
+				}
+
+			/*
+			} else {
+				// Strip any existing autosave timestamps from the name
+				wxString pattern = "_autosave_[0-9]{4}-[0-9]{2}-[0-9]{2}_[0-9]{2}-[0-9]{2}-[0-9]{2}";
+				wxRegEx regex(pattern);
+				while (regex.Matches(name)) {
+					size_t start, len;
+					regex.GetMatch(&start, &len);
+					name = name.Mid(0, start) + name.Mid(start + len);
+				}
 			}
+			
+			*/
+			}
+
 			wxString ext = current.GetExt();
 			if (ext.empty()) {
 				ext = "otbm";
