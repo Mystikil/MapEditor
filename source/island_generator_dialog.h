@@ -34,7 +34,9 @@ enum {
     ID_ISLAND_SHAPE_SELECT,
     ID_ISLAND_SIZE_CHANGE,
     ID_ISLAND_ROUGHNESS_CHANGE,
-    ID_ISLAND_SEED_TEXT
+    ID_ISLAND_SEED_TEXT,
+    ID_ISLAND_BORDER_SELECT,
+    ID_ISLAND_BORDER_PREVIEW
 };
 
 class IslandPreviewButton : public DCButton {
@@ -73,6 +75,8 @@ public:
     void OnRandomizeSeed(wxCommandEvent& event);
     void OnPreviewUpdate(wxCommandEvent& event);
     void OnGenerateMultiple(wxCommandEvent& event);
+    void OnBorderSelect(wxCommandEvent& event);
+    void OnBorderPreview(wxCommandEvent& event);
 
 private:
     void UpdateWidgets();
@@ -82,6 +86,15 @@ private:
     wxString GetDataDirectoryForVersion(const wxString& versionStr);
     std::vector<std::pair<uint16_t, uint16_t>> ParseRangeString(const wxString& input);
     void OnIdInput(wxCommandEvent& event);
+    void LoadBorderChoices();
+    void UpdateBorderPreview();
+
+    struct BorderData {
+        wxString name;
+        int id;
+        std::vector<uint16_t> items;
+        wxBitmap preview;
+    };
 
     // UI Controls
     IslandPreviewButton* ground_button;
@@ -99,6 +112,12 @@ private:
     wxGauge* progress;
     wxStaticBitmap* preview_bitmap;
     wxCheckBox* use_automagic;
+
+    // Border controls
+    wxListBox* border_list;
+    wxStaticBitmap* border_preview;
+    std::vector<BorderData> border_data;
+    int selected_border_id;
 
     // Position controls
     wxSpinCtrl* pos_x_spin;

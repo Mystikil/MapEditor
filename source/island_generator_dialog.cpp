@@ -34,6 +34,8 @@ BEGIN_EVENT_TABLE(IslandGeneratorDialog, wxDialog)
     EVT_SPINCTRL(ID_ISLAND_SIZE_CHANGE, IslandGeneratorDialog::OnSizeChange)
     EVT_SPINCTRL(ID_ISLAND_ROUGHNESS_CHANGE, IslandGeneratorDialog::OnRoughnessChange)
     EVT_TEXT(ID_ISLAND_SEED_TEXT, IslandGeneratorDialog::OnSeedText)
+    EVT_LISTBOX(ID_ISLAND_BORDER_SELECT, IslandGeneratorDialog::OnBorderSelect)
+    EVT_BUTTON(ID_ISLAND_BORDER_PREVIEW, IslandGeneratorDialog::OnBorderPreview)
 END_EVENT_TABLE()
 
 IslandPreviewButton::IslandPreviewButton(wxWindow* parent) :
@@ -76,16 +78,18 @@ private:
 };
 
 IslandGeneratorDialog::IslandGeneratorDialog(wxWindow* parent) :
-    wxDialog(parent, wxID_ANY, "Island Generator", wxDefaultPosition, wxSize(800, 700), 
-             wxDEFAULT_DIALOG_STYLE) {
+    wxDialog(parent, wxID_ANY, "Island Generator", wxDefaultPosition, wxSize(1000, 700), 
+             wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER) {
     
     // Create scrolled window for content
     wxScrolledWindow* scrolled = new wxScrolledWindow(this, wxID_ANY, wxDefaultPosition, 
                                                      wxDefaultSize, wxVSCROLL | wxHSCROLL);
     scrolled->SetScrollRate(5, 5);
 
-    // Main sizer
-    wxBoxSizer* main_sizer = new wxBoxSizer(wxVERTICAL);
+    // Main sizer with left and right columns
+    wxBoxSizer* main_sizer = new wxBoxSizer(wxHORIZONTAL);
+    wxBoxSizer* left_column = new wxBoxSizer(wxVERTICAL);
+    wxBoxSizer* right_column = new wxBoxSizer(wxVERTICAL);
 
     // Ground and Water selection row
     wxBoxSizer* type_row = new wxBoxSizer(wxHORIZONTAL);
@@ -122,7 +126,7 @@ IslandGeneratorDialog::IslandGeneratorDialog(wxWindow* parent) :
     water_sizer->Add(water_input_row, 0, wxEXPAND);
     type_row->Add(water_sizer, 1, wxALL | wxEXPAND, 5);
 
-    main_sizer->Add(type_row, 0, wxALL | wxEXPAND, 5);
+    left_column->Add(type_row, 0, wxALL | wxEXPAND, 5);
 
     // Position and Shape row
     wxBoxSizer* pos_shape_row = new wxBoxSizer(wxHORIZONTAL);
@@ -159,7 +163,7 @@ IslandGeneratorDialog::IslandGeneratorDialog(wxWindow* parent) :
     shape_sizer->Add(shape_choice, 0, wxALL | wxEXPAND, 5);
     pos_shape_row->Add(shape_sizer, 1, wxALL | wxEXPAND, 5);
 
-    main_sizer->Add(pos_shape_row, 0, wxALL | wxEXPAND, 5);
+    left_column->Add(pos_shape_row, 0, wxALL | wxEXPAND, 5);
 
     // Size and Roughness row
     wxBoxSizer* size_rough_row = new wxBoxSizer(wxHORIZONTAL);
@@ -167,7 +171,7 @@ IslandGeneratorDialog::IslandGeneratorDialog(wxWindow* parent) :
     // Size control
     wxStaticBoxSizer* size_sizer = new wxStaticBoxSizer(wxVERTICAL, scrolled, "Island Size");
     size_spin = new wxSpinCtrl(scrolled, wxID_ANY, "50", wxDefaultPosition, wxDefaultSize, 
-                              wxSP_ARROW_KEYS, 10, 500, 50);
+                              wxSP_ARROW_KEYS, 10, 1000, 50);
     size_sizer->Add(size_spin, 0, wxALL | wxEXPAND, 5);
     size_rough_row->Add(size_sizer, 1, wxALL | wxEXPAND, 5);
 
@@ -178,7 +182,7 @@ IslandGeneratorDialog::IslandGeneratorDialog(wxWindow* parent) :
     roughness_sizer->Add(roughness_spin, 0, wxALL | wxEXPAND, 5);
     size_rough_row->Add(roughness_sizer, 1, wxALL | wxEXPAND, 5);
 
-    main_sizer->Add(size_rough_row, 0, wxALL | wxEXPAND, 5);
+    left_column->Add(size_rough_row, 0, wxALL | wxEXPAND, 5);
 
     // Multiple islands controls
     wxStaticBoxSizer* multi_sizer = new wxStaticBoxSizer(wxVERTICAL, scrolled, "Multiple Islands");
@@ -195,7 +199,7 @@ IslandGeneratorDialog::IslandGeneratorDialog(wxWindow* parent) :
     multi_grid->Add(islands_spacing_spin);
 
     multi_sizer->Add(multi_grid, 0, wxALL | wxEXPAND, 5);
-    main_sizer->Add(multi_sizer, 0, wxALL | wxEXPAND, 5);
+    left_column->Add(multi_sizer, 0, wxALL | wxEXPAND, 5);
 
     // Seed input row
     wxStaticBoxSizer* seed_sizer = new wxStaticBoxSizer(wxHORIZONTAL, scrolled, "Generation Seed");
@@ -203,23 +207,23 @@ IslandGeneratorDialog::IslandGeneratorDialog(wxWindow* parent) :
     random_seed_button = new wxButton(scrolled, wxID_ANY, "Random");
     seed_sizer->Add(seed_input, 1, wxALL | wxEXPAND, 5);
     seed_sizer->Add(random_seed_button, 0, wxALL, 5);
-    main_sizer->Add(seed_sizer, 0, wxALL | wxEXPAND, 5);
+    left_column->Add(seed_sizer, 0, wxALL | wxEXPAND, 5);
 
     // Automagic checkbox
     use_automagic = new wxCheckBox(scrolled, wxID_ANY, "Use Automagic for Borders");
     use_automagic->SetValue(true);
-    main_sizer->Add(use_automagic, 0, wxALL | wxEXPAND, 5);
+    left_column->Add(use_automagic, 0, wxALL | wxEXPAND, 5);
 
     // Preview area
     wxStaticBoxSizer* preview_sizer = new wxStaticBoxSizer(wxVERTICAL, scrolled, "Preview");
     preview_bitmap = new wxStaticBitmap(scrolled, wxID_ANY, 
                                        wxBitmap(200, 200, wxBITMAP_SCREEN_DEPTH));
     preview_sizer->Add(preview_bitmap, 0, wxALL | wxEXPAND, 5);
-    main_sizer->Add(preview_sizer, 1, wxALL | wxEXPAND, 5);
+    left_column->Add(preview_sizer, 1, wxALL | wxEXPAND, 5);
 
     // Progress bar
     progress = new wxGauge(scrolled, wxID_ANY, 100, wxDefaultPosition, wxSize(-1, 20));
-    main_sizer->Add(progress, 0, wxALL | wxEXPAND, 5);
+    left_column->Add(progress, 0, wxALL | wxEXPAND, 5);
 
     // Buttons row
     wxBoxSizer* button_sizer = new wxBoxSizer(wxHORIZONTAL);
@@ -229,7 +233,27 @@ IslandGeneratorDialog::IslandGeneratorDialog(wxWindow* parent) :
     button_sizer->Add(generate_button, 1, wxALL, 5);
     button_sizer->Add(generate_multiple_button, 1, wxALL, 5);
     button_sizer->Add(cancel_button, 1, wxALL, 5);
-    main_sizer->Add(button_sizer, 0, wxALL | wxEXPAND, 5);
+    left_column->Add(button_sizer, 0, wxALL | wxEXPAND, 5);
+
+    // Border List (right column)
+    wxStaticBoxSizer* border_sizer = new wxStaticBoxSizer(wxVERTICAL, scrolled, "Border Style");
+    
+    // Create border list
+    border_list = new wxListBox(scrolled, ID_ISLAND_BORDER_SELECT, 
+                               wxDefaultPosition, wxSize(300, 400), 
+                               0, nullptr, wxLB_SINGLE | wxLB_HSCROLL);
+    border_sizer->Add(border_list, 1, wxEXPAND | wxALL, 5);
+
+    // Border preview
+    border_preview = new wxStaticBitmap(scrolled, ID_ISLAND_BORDER_PREVIEW, 
+                                       wxBitmap(200, 200, wxBITMAP_SCREEN_DEPTH));
+    border_sizer->Add(border_preview, 0, wxALL | wxCENTER, 5);
+
+    right_column->Add(border_sizer, 1, wxEXPAND | wxALL, 5);
+
+    // Add both columns to main sizer
+    main_sizer->Add(left_column, 1, wxEXPAND | wxALL, 5);
+    main_sizer->Add(right_column, 0, wxEXPAND | wxALL, 5);
 
     // Set sizer for scrolled window
     scrolled->SetSizer(main_sizer);
@@ -248,10 +272,17 @@ IslandGeneratorDialog::IslandGeneratorDialog(wxWindow* parent) :
     seed = wxString::Format("%d", wxGetLocalTime());
     seed_input->SetValue(seed);
     start_position = Position(0, 0, 7);
+    selected_border_id = -1;
+
+    // Load borders
+    LoadBorderChoices();
 
     // Initial state
     UpdateWidgets();
     Centre(wxBOTH);
+
+    // Make dialog non-modal
+    Show(true);
 }
 
 IslandGeneratorDialog::~IslandGeneratorDialog() {
@@ -359,6 +390,83 @@ void IslandGeneratorDialog::UpdatePreview() {
     // This will be implemented in the next step
 }
 
+void IslandGeneratorDialog::LoadBorderChoices() {
+    border_list->Clear();
+    border_data.clear();
+    
+    // Load borders.xml
+    wxString dataDir = GetDataDirectoryForVersion(g_gui.GetCurrentVersion().getName());
+    if(dataDir.IsEmpty()) return;
+    
+    wxString bordersPath = g_gui.GetDataDirectory() + "/" + dataDir + "/borders.xml";
+    
+    pugi::xml_document doc;
+    if(doc.load_file(bordersPath.mb_str())) {
+        for(pugi::xml_node borderNode = doc.child("materials").child("border"); 
+            borderNode; borderNode = borderNode.next_sibling("border")) {
+            
+            BorderData data;
+            data.id = borderNode.attribute("id").as_int();
+            data.name = wxString::Format("Border %d", data.id);
+            
+            // Load all border items
+            for(pugi::xml_node itemNode = borderNode.child("borderitem"); 
+                itemNode; itemNode = itemNode.next_sibling("borderitem")) {
+                uint16_t itemId = itemNode.attribute("item").as_uint();
+                data.items.push_back(itemId);
+            }
+            
+            // Create preview bitmap
+            if(!data.items.empty()) {
+                const ItemType& type = g_items.getItemType(data.items[0]);
+                if(type.id != 0) {
+                    Sprite* sprite = g_gui.gfx.getSprite(type.clientID);
+                    if(sprite) {
+                        wxMemoryDC dc;
+                        data.preview = wxBitmap(32, 32, 32);
+                        dc.SelectObject(data.preview);
+                        sprite->DrawTo(&dc, SPRITE_SIZE_32x32, 0, 0, 32, 32);
+                        dc.SelectObject(wxNullBitmap);
+                    }
+                }
+            }
+            
+            border_data.push_back(data);
+            border_list->Append(data.name);
+        }
+    }
+    
+    if(!border_data.empty()) {
+        border_list->SetSelection(0);
+        selected_border_id = border_data[0].id;
+        UpdateBorderPreview();
+    }
+}
+
+void IslandGeneratorDialog::UpdateBorderPreview() {
+    if(selected_border_id == -1) return;
+    
+    // Find selected border data
+    for(const BorderData& data : border_data) {
+        if(data.id == selected_border_id) {
+            border_preview->SetBitmap(data.preview);
+            break;
+        }
+    }
+}
+
+void IslandGeneratorDialog::OnBorderSelect(wxCommandEvent& event) {
+    int idx = event.GetSelection();
+    if(idx >= 0 && idx < (int)border_data.size()) {
+        selected_border_id = border_data[idx].id;
+        UpdateBorderPreview();
+    }
+}
+
+void IslandGeneratorDialog::OnBorderPreview(wxCommandEvent& WXUNUSED(event)) {
+    UpdateBorderPreview();
+}
+
 void IslandGeneratorDialog::GenerateIsland() {
     Editor* editor = g_gui.GetCurrentEditor();
     if (!editor) return;
@@ -366,12 +474,11 @@ void IslandGeneratorDialog::GenerateIsland() {
     // Create action to hold all changes
     Action* action = editor->actionQueue->createAction(ACTION_DRAW);
     
-    // Calculate island dimensions based on size
-    int radius = island_size / 2;
-    int start_x = start_position.x - radius;
-    int start_y = start_position.y - radius;
-    int end_x = start_position.x + radius;
-    int end_y = start_position.y + radius;
+    // Calculate island dimensions based on size (no more division by 2)
+    int start_x = start_position.x;
+    int start_y = start_position.y;
+    int end_x = start_position.x + island_size;
+    int end_y = start_position.y + island_size;
 
     // Initialize random number generator with seed
     std::mt19937 rng(std::hash<std::string>{}(nstr(seed)));
@@ -380,87 +487,131 @@ void IslandGeneratorDialog::GenerateIsland() {
     SimpleNoise noise;
     noise.SetSeed(rng());
 
-    // Generate the island
+    // First pass: Generate base shape
+    std::vector<std::vector<bool>> isGround(island_size + 2, std::vector<bool>(island_size + 2, false));
+    
+    // Calculate center and radius for shape generation
+    float center_x = start_x + island_size / 2.0f;
+    float center_y = start_y + island_size / 2.0f;
+    float max_radius = island_size / 2.0f;
+
+    // First pass: Generate initial shape
+    for (int y = 0; y <= island_size; ++y) {
+        for (int x = 0; x <= island_size; ++x) {
+            float dx = (x - island_size/2.0f) / max_radius;
+            float dy = (y - island_size/2.0f) / max_radius;
+
+            bool should_place = false;
+            float base_noise = (noise.GetNoise(x * 0.05f, y * 0.05f) + 1.0f) * 0.5f;
+            float detail_noise = (noise.GetNoise(x * 0.15f, y * 0.15f) + 1.0f) * 0.5f;
+            float combined_noise = base_noise * 0.7f + detail_noise * 0.3f;
+            
+            if (selected_shape == "Circular") {
+                float distance = std::sqrt(dx * dx + dy * dy);
+                float threshold = 1.0f - (roughness / 200.0f) * combined_noise;
+                should_place = distance <= threshold;
+            }
+            else if (selected_shape == "Square") {
+                float distance = std::max(std::abs(dx), std::abs(dy));
+                float threshold = 1.0f - (roughness / 200.0f) * combined_noise;
+                should_place = distance <= threshold;
+            }
+            else if (selected_shape == "Irregular") {
+                float distance = std::sqrt(dx * dx + dy * dy);
+                float noise_influence = roughness / 100.0f;
+                float threshold = 1.0f - noise_influence * combined_noise;
+                should_place = distance <= threshold;
+            }
+
+            if (should_place) {
+                isGround[y][x] = true;
+            }
+        }
+    }
+
+    // Second pass: Remove isolated ground tiles and ensure connectivity
+    std::vector<std::vector<bool>> connected = isGround;
+    std::queue<std::pair<int, int>> floodQueue;
+    
+    // Start flood fill from center
+    int center_tile_x = island_size / 2;
+    int center_tile_y = island_size / 2;
+    if (isGround[center_tile_y][center_tile_x]) {
+        floodQueue.push({center_tile_x, center_tile_y});
+        std::vector<std::vector<bool>> visited(island_size + 2, std::vector<bool>(island_size + 2, false));
+        visited[center_tile_y][center_tile_x] = true;
+
+        while (!floodQueue.empty()) {
+            auto [x, y] = floodQueue.front();
+            floodQueue.pop();
+
+            // Check all 8 neighbors
+            for (int dy = -1; dy <= 1; ++dy) {
+                for (int dx = -1; dx <= 1; ++dx) {
+                    if (dx == 0 && dy == 0) continue;
+                    
+                    int nx = x + dx;
+                    int ny = y + dy;
+                    
+                    if (nx >= 0 && nx < island_size && ny >= 0 && ny < island_size &&
+                        isGround[ny][nx] && !visited[ny][nx]) {
+                        visited[ny][nx] = true;
+                        floodQueue.push({nx, ny});
+                    }
+                }
+            }
+        }
+
+        // Only keep connected ground tiles
+        for (int y = 0; y <= island_size; ++y) {
+            for (int x = 0; x <= island_size; ++x) {
+                connected[y][x] = visited[y][x];
+            }
+        }
+    }
+
+    // Generate the island using the processed shape
     progress->SetValue(0);
     int total_tiles = (end_x - start_x + 1) * (end_y - start_y + 1);
     int current_tile = 0;
 
-    for (int y = start_y; y <= end_y; ++y) {
-        for (int x = start_x; x <= end_x; ++x) {
+    // Store ground tile positions for border placement
+    std::vector<Position> groundTiles;
+
+    for (int y = 0; y <= island_size; ++y) {
+        for (int x = 0; x <= island_size; ++x) {
             // Update progress
             current_tile++;
             progress->SetValue((current_tile * 100) / total_tiles);
 
-            // Calculate distance from center for circular/square shapes
-            float center_x = start_position.x;
-            float center_y = start_position.y;
-            float dx = (x - center_x) / radius;
-            float dy = (y - center_y) / radius;
+            int map_x = start_x + x;
+            int map_y = start_y + y;
 
-            bool should_place = false;
-            
-            if (selected_shape == "Circular") {
-                // For circular islands, use distance from center
-                float distance = std::sqrt(dx * dx + dy * dy);
-                should_place = distance <= 1.0f;
-                
-                // Add some roughness to the edge
-                if (std::abs(distance - 1.0f) < (roughness / 100.0f)) {
-                    should_place = (rng() % 100) < (100 - roughness);
-                }
-            }
-            else if (selected_shape == "Square") {
-                // For square islands, use max of x/y distance
-                float distance = std::max(std::abs(dx), std::abs(dy));
-                should_place = distance <= 1.0f;
-                
-                // Add some roughness to the edge
-                if (std::abs(distance - 1.0f) < (roughness / 100.0f)) {
-                    should_place = (rng() % 100) < (100 - roughness);
-                }
-            }
-            else if (selected_shape == "Irregular") {
-                // For irregular islands, combine noise with base shape
-                float distance = std::sqrt(dx * dx + dy * dy);
-                float noise_val = (noise.GetNoise(x * 0.1f, y * 0.1f) + 1.0f) * 0.5f;
-                noise_val = noise_val * (roughness / 100.0f);
-                should_place = distance <= (1.0f + noise_val);
+            // Create or get the tile
+            Tile* tile = editor->map.getTile(map_x, map_y, start_position.z);
+            if (!tile) {
+                tile = editor->map.createTile(map_x, map_y, start_position.z);
             }
 
-            if (should_place) {
-                // Create or get the tile
-                Tile* tile = editor->map.getTile(x, y, start_position.z);
-                if (!tile) {
-                    tile = editor->map.createTile(x, y, start_position.z);
-                }
+            // Create a copy for the action
+            Tile* new_tile = tile->deepCopy(editor->map);
 
-                // Create a copy for the action
-                Tile* new_tile = tile->deepCopy(editor->map);
-
-                // Set the ground
+            if (connected[y][x]) {
+                // Place ground
                 if (ground_id > 0) {
                     Item* ground_item = Item::Create(ground_id);
                     new_tile->addItem(ground_item);
                 }
-
-                // Add the change to the action
-                action->addChange(newd Change(new_tile));
+                groundTiles.push_back(Position(map_x, map_y, start_position.z));
             } else {
-                // Place water around the island
-                Tile* tile = editor->map.getTile(x, y, start_position.z);
-                if (!tile) {
-                    tile = editor->map.createTile(x, y, start_position.z);
-                }
-
-                Tile* new_tile = tile->deepCopy(editor->map);
-                
+                // Place water
                 if (water_id > 0) {
                     Item* water_item = Item::Create(water_id);
                     new_tile->addItem(water_item);
                 }
-
-                action->addChange(newd Change(new_tile));
             }
+
+            action->addChange(newd Change(new_tile));
         }
     }
 
@@ -469,7 +620,60 @@ void IslandGeneratorDialog::GenerateIsland() {
 
     // Apply borders if automagic is enabled
     if (use_automagic->GetValue()) {
-        editor->borderizeSelection();
+        if(selected_border_id != -1) {
+            // Find selected border data
+            for(const BorderData& data : border_data) {
+                if(data.id == selected_border_id) {
+                    Action* borderAction = editor->actionQueue->createAction(ACTION_DRAW);
+                    
+                    // For each ground tile, check if it needs borders
+                    for(const Position& pos : groundTiles) {
+                        // Check all 8 surrounding tiles
+                        for(int dy = -1; dy <= 1; dy++) {
+                            for(int dx = -1; dx <= 1; dx++) {
+                                if(dx == 0 && dy == 0) continue;
+                                
+                                Position checkPos(pos.x + dx, pos.y + dy, pos.z);
+                                bool isNeighborGround = false;
+                                
+                                // Check if neighbor position is in our ground tiles list
+                                for(const Position& groundPos : groundTiles) {
+                                    if(groundPos == checkPos) {
+                                        isNeighborGround = true;
+                                        break;
+                                    }
+                                }
+                                
+                                if(!isNeighborGround) {
+                                    // This is an edge that needs a border
+                                    Tile* tile = editor->map.getTile(checkPos.x, checkPos.y, checkPos.z);
+                                    if(!tile) {
+                                        tile = editor->map.createTile(checkPos.x, checkPos.y, checkPos.z);
+                                    }
+                                    
+                                    Tile* new_tile = tile->deepCopy(editor->map);
+                                    
+                                    // Add a border item
+                                    if(!data.items.empty()) {
+                                        // Select appropriate border piece based on position
+                                        size_t index = ((dx + 1) * 3 + (dy + 1)) % data.items.size();
+                                        Item* border_item = Item::Create(data.items[index]);
+                                        new_tile->addItem(border_item);
+                                    }
+                                    
+                                    borderAction->addChange(newd Change(new_tile));
+                                }
+                            }
+                        }
+                    }
+                    
+                    editor->addAction(borderAction);
+                    break;
+                }
+            }
+        } else {
+            editor->borderizeSelection();
+        }
     }
 
     // Refresh the view
