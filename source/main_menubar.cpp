@@ -76,7 +76,15 @@
 #include "string_utils.h"
 #include "hotkey_manager.h"
 
+const wxEventType EVT_MENU = wxEVT_COMMAND_MENU_SELECTED;
+
 BEGIN_EVENT_TABLE(MainMenuBar, wxEvtHandler)
+	EVT_MENU(MenuBar::NEW, MainMenuBar::OnNew)
+	EVT_MENU(MenuBar::OPEN, MainMenuBar::OnOpen)
+	EVT_MENU(MenuBar::SAVE, MainMenuBar::OnSave)
+	EVT_MENU(MenuBar::SAVE_AS, MainMenuBar::OnSaveAs)
+	EVT_MENU(MenuBar::GENERATE_MAP, MainMenuBar::OnGenerateMap)
+	EVT_MENU(MenuBar::MAP_MENU_GENERATE_ISLAND, MainMenuBar::OnGenerateIsland)
 END_EVENT_TABLE()
 
 MainMenuBar::MainMenuBar(MainFrame* frame) :
@@ -3256,4 +3264,16 @@ void MainMenuBar::OnRefreshItems(wxCommandEvent& WXUNUSED(event)) {
         g_gui.RefreshView();
     }
     dialog.Destroy();
+}
+
+void MainMenuBar::OnGenerateIsland(wxCommandEvent& WXUNUSED(event)) {
+    if (!g_gui.IsVersionLoaded()) {
+        return;
+    }
+
+    if (MapTab* tab = g_gui.GetCurrentMapTab()) {
+        if (MapWindow* window = tab->GetView()) {
+            window->ShowIslandGeneratorDialog();
+        }
+    }
 }

@@ -162,6 +162,8 @@ namespace MenuBar {
 		EXPERIMENTAL_FOG,
 		MAP_REMOVE_DUPLICATES,
 		SHOW_HOTKEYS,
+		MAP_MENU_REPLACE_ITEMS,
+		MAP_MENU_GENERATE_ISLAND,
 	};
 }
 
@@ -300,6 +302,7 @@ public:
 
 	// Add to class MainMenuBar private section:
 	void OnRefreshItems(wxCommandEvent& event);
+	void OnGenerateIsland(wxCommandEvent& event);
 
 protected:
 	// Load and returns a menu item, also sets accelerator

@@ -20,6 +20,7 @@
 
 #include "position.h"
 #include "replace_items_window.h"
+#include "island_generator_dialog.h"
 
 class MapCanvas;
 class DCButton;
@@ -78,6 +79,10 @@ public:
 	void CloseReplaceItemsDialog();
 	void OnReplaceItemsDialogClose(wxCloseEvent& event);
 
+	void ShowIslandGeneratorDialog();
+	void CloseIslandGeneratorDialog();
+	void OnIslandGeneratorDialogClose(wxCloseEvent& event);
+
 protected:
 	// For internal use, call to resize the scrollbars with
 	// the newd dimensions of *this* window
@@ -93,6 +98,7 @@ protected:
 
 private:
 	ReplaceItemsDialog* replaceItemsDialog;
+	IslandGeneratorDialog* islandGeneratorDialog;
 	Position previous_position;
 
 	friend class MainFrame;

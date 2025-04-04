@@ -77,7 +77,7 @@ EVT_MOUSEWHEEL(MapCanvas::OnWheel)
 EVT_ENTER_WINDOW(MapCanvas::OnGainMouse)
 EVT_LEAVE_WINDOW(MapCanvas::OnLoseMouse)
 
-// Drawing events
+// Drawing events 
 EVT_PAINT(MapCanvas::OnPaint)
 EVT_ERASE_BACKGROUND(MapCanvas::OnEraseBackground)
 
@@ -88,6 +88,7 @@ EVT_MENU(MAP_POPUP_MENU_COPY_POSITION, MapCanvas::OnCopyPosition)
 EVT_MENU(MAP_POPUP_MENU_PASTE, MapCanvas::OnPaste)
 EVT_MENU(MAP_POPUP_MENU_DELETE, MapCanvas::OnDelete)
 EVT_MENU(MAP_POPUP_MENU_FILL, MapCanvas::OnFill)
+EVT_MENU(MAP_POPUP_MENU_GENERATE_ISLAND, MapCanvas::OnGenerateIsland)
 EVT_MENU(MAP_POPUP_MENU_FIND_SIMILAR_ITEMS, MapCanvas::OnFindSimilarItems)
 //----
 EVT_MENU(MAP_POPUP_MENU_COPY_SERVER_ID, MapCanvas::OnCopyServerId)
@@ -2436,6 +2437,9 @@ void MapPopupMenu::Update() {
 	wxMenuItem* fillItem = Append(MAP_POPUP_MENU_FILL, "&Fill Area", "Fill enclosed area with current brush");
 	fillItem->Enable(g_gui.GetCurrentBrush() != nullptr);
 
+	// Add the Generate Island option
+	Append(MAP_POPUP_MENU_GENERATE_ISLAND, "Generate &Island", "Generate an island at this location");
+
 	// Add the Find Similar option
 	wxMenuItem* findSimilarItem = Append(MAP_POPUP_MENU_FIND_SIMILAR_ITEMS, "Find &Similar Items", "Find similar items on the map");
 	findSimilarItem->Enable(anything_selected);
@@ -3554,6 +3558,21 @@ void MapCanvas::OnFindSimilarItems(wxCommandEvent& WXUNUSED(event)) {
     }
 
     // Show dialog
+    dialog->ShowModal();
+    dialog->Destroy();
+}
+
+void MapCanvas::OnGenerateIsland(wxCommandEvent& WXUNUSED(event)) {
+    // Get cursor position for island generation
+    int map_x, map_y;
+    MouseToMap(&map_x, &map_y);
+
+    // Create and show the island generator dialog
+    IslandGeneratorDialog* dialog = new IslandGeneratorDialog(g_gui.root);
+    
+    // Set the initial position to the clicked location
+    dialog->SetStartPosition(Position(map_x, map_y, floor));
+    
     dialog->ShowModal();
     dialog->Destroy();
 }

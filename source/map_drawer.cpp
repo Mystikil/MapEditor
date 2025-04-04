@@ -1530,6 +1530,9 @@ void MapDrawer::DrawTile(TileLocation* location) {
 	int map_y = location->getY();
 	int map_z = location->getZ();
 
+		// Ground-only rendering at high zoom levels
+	bool high_zoom = zoom >= 8.0;
+
 	Waypoint* waypoint = canvas->editor.map.waypoints.getWaypoint(location);
 	if (options.show_tooltips && location->getWaypointCount() > 0) {
 		if (waypoint) {
@@ -1551,6 +1554,23 @@ void MapDrawer::DrawTile(TileLocation* location) {
 	int draw_y = ((map_y * TileSize) - view_scroll_y) - offset;
 
 	uint8_t r = 255, g = 255, b = 255;
+
+
+	if (high_zoom) {
+		// At high zoom only render ground
+		if (tile->ground) {
+			if (as_minimap) {
+				uint8_t color = tile->getMiniMapColor();
+				r = (uint8_t)(int(color / 36) % 6 * 51);
+				g = (uint8_t)(int(color / 6) % 6 * 51);
+				b = (uint8_t)(color % 6 * 51);
+				BlitSquare(draw_x, draw_y, r, g, b, 255);
+			} else {
+				BlitItem(draw_x, draw_y, tile, tile->ground, false, r, g, b);
+			}
+		}
+		return;
+	}
 
 	// begin filters for ground tile
 	if (!as_minimap) {

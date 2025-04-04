@@ -91,6 +91,7 @@ public:
 	void OnSelectMoveTo(wxCommandEvent& event);
 
 	void OnFindSimilarItems(wxCommandEvent& event);
+	void OnGenerateIsland(wxCommandEvent& event);
 
 	void OnSelectionToDoodad(wxCommandEvent& event);
 	// ---
@@ -101,7 +102,7 @@ public:
 
 	void ScreenToMap(int screen_x, int screen_y, int* map_x, int* map_y);
 	void GetScreenCenter(int* map_x, int* map_y);
-
+ 
 	void StartPasting();
 	void EndPasting();
 	void EnterSelectionMode();

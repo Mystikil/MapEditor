@@ -15,6 +15,7 @@
 // along with this program. If not, see <http://www.gnu.org/licenses/>.
 //////////////////////////////////////////////////////////////////////
 
+#include "lod_manager.h"
 #ifndef RME_MAP_DRAWER_H_
 #define RME_MAP_DRAWER_H_
 
@@ -95,6 +96,7 @@ class MapDrawer {
 	Editor& editor;
 	DrawingOptions options;
 	std::shared_ptr<LightDrawer> light_drawer;
+	LODManager lod_manager;
 
 	float zoom;
 
@@ -135,6 +137,8 @@ public:
 	void DrawGrid();
 	void DrawTooltips();
 	void DrawLight();
+
+
 
 	void TakeScreenshot(uint8_t* screenshot_buffer);
 

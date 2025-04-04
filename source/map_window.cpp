@@ -25,7 +25,8 @@
 MapWindow::MapWindow(wxWindow* parent, Editor& editor) :
 	wxPanel(parent, PANE_MAIN),
 	editor(editor),
-	replaceItemsDialog(nullptr) {
+	replaceItemsDialog(nullptr),
+	islandGeneratorDialog(nullptr) {
 	int GL_settings[3];
 	GL_settings[0] = WX_GL_RGBA;
 	GL_settings[1] = WX_GL_DOUBLEBUFFER;
@@ -78,6 +79,30 @@ void MapWindow::OnReplaceItemsDialogClose(wxCloseEvent& event) {
 	}
 }
 
+void MapWindow::ShowIslandGeneratorDialog() {
+	if (islandGeneratorDialog) {
+		return;
+	}
+
+	islandGeneratorDialog = new IslandGeneratorDialog(this);
+	islandGeneratorDialog->Connect(wxEVT_CLOSE_WINDOW, wxCloseEventHandler(MapWindow::OnIslandGeneratorDialogClose), NULL, this);
+	islandGeneratorDialog->Show();
+}
+
+void MapWindow::CloseIslandGeneratorDialog() {
+	if (islandGeneratorDialog) {
+		islandGeneratorDialog->Close();
+	}
+}
+
+void MapWindow::OnIslandGeneratorDialogClose(wxCloseEvent& event) {
+	if (islandGeneratorDialog) {
+		islandGeneratorDialog->Disconnect(wxEVT_CLOSE_WINDOW, wxCloseEventHandler(MapWindow::OnIslandGeneratorDialogClose), NULL, this);
+		islandGeneratorDialog->Destroy();
+		islandGeneratorDialog = nullptr;
+	}
+}
+
 void MapWindow::SetSize(int x, int y, bool center) {
 	if (x == 0 || y == 0) {
 		return;
@@ -102,6 +127,9 @@ void MapWindow::UpdateScrollbars(int nx, int ny) {
 void MapWindow::UpdateDialogs(bool show) {
 	if (replaceItemsDialog) {
 		replaceItemsDialog->Show(show);
+	}
+	if (islandGeneratorDialog) {
+		islandGeneratorDialog->Show(show);
 	}
 }
 
