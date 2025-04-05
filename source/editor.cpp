@@ -15,7 +15,7 @@
 // along with this program. If not, see <http://www.gnu.org/licenses/>.
 //////////////////////////////////////////////////////////////////////
 
-
+ 
 #include "main.h"
 
 #include "editor.h"
@@ -2057,5 +2057,169 @@ void Editor::updateMinimapTile(Tile* tile) {
 		positions.push_back(tile->getPosition());
 		g_gui.minimap->UpdateDrawnTiles(positions);
 	}
+}
+
+uint32_t Editor::validateGrounds(bool validateStack, bool generateEmpty, bool removeDuplicates) {
+    uint32_t changes = 0;
+    actionQueue->clear();
+    selection.clear();
+
+    g_gui.CreateLoadBar("Validating ground tiles...");
+
+    if (validateStack) {
+        changes += validateGroundStacks();
+    }
+
+    if (generateEmpty) {
+        changes += generateEmptySurroundedGrounds();
+    }
+
+    if (removeDuplicates) {
+        changes += removeDuplicateGrounds();
+    }
+
+    g_gui.DestroyLoadBar();
+
+    if (changes > 0) {
+        map.doChange();
+    }
+
+    return changes;
+}
+
+uint32_t Editor::validateGroundStacks() {
+    uint32_t changes = 0;
+    int done = 0;
+    int total = map.getTileCount();
+
+    for (MapIterator iter = map.begin(); iter != map.end(); ++iter) {
+        if (done % 8192 == 0) {
+            g_gui.SetLoadDone(int(done / float(total) * 100.f));
+        }
+
+        Tile* tile = (*iter)->get();
+        if (!tile) {
+            continue;
+        }
+
+        // Check if there's a ground tile above other items
+        if (tile->ground && !tile->items.empty()) {
+            bool groundAboveItems = false;
+            for (Item* item : tile->items) {
+                if (item && !item->isGroundTile()) {
+                    groundAboveItems = true;
+                    break;
+                }
+            }
+
+            if (groundAboveItems) {
+                // Move ground tile to bottom
+                Item* ground = tile->ground;
+                tile->ground = nullptr;
+                tile->items.insert(tile->items.begin(), ground);
+                changes++;
+            }
+        }
+
+        done++;
+    }
+
+    return changes;
+}
+
+uint32_t Editor::generateEmptySurroundedGrounds() {
+    uint32_t changes = 0;
+    int done = 0;
+    int total = map.getTileCount();
+
+    for (MapIterator iter = map.begin(); iter != map.end(); ++iter) {
+        if (done % 8192 == 0) {
+            g_gui.SetLoadDone(int(done / float(total) * 100.f));
+        }
+
+        Tile* tile = (*iter)->get();
+        if (!tile || tile->ground) {
+            continue;
+        }
+
+        Position pos = tile->getPosition();
+        
+        // Check surrounding tiles
+        bool allSurroundingHaveGround = true;
+        uint16_t surroundingGroundId = 0;
+        
+        for (int x = -1; x <= 1 && allSurroundingHaveGround; ++x) {
+            for (int y = -1; y <= 1 && allSurroundingHaveGround; ++y) {
+                if (x == 0 && y == 0) continue;
+                
+                Tile* surroundingTile = map.getTile(pos.x + x, pos.y + y, pos.z);
+                if (!surroundingTile || !surroundingTile->ground) {
+                    allSurroundingHaveGround = false;
+                    break;
+                }
+                
+                if (surroundingGroundId == 0) {
+                    surroundingGroundId = surroundingTile->ground->getID();
+                }
+            }
+        }
+
+        if (allSurroundingHaveGround && surroundingGroundId > 0) {
+            // Create new ground tile matching surrounding tiles
+            tile->ground = Item::Create(surroundingGroundId);
+            changes++;
+        }
+
+        done++;
+    }
+
+    return changes;
+}
+
+uint32_t Editor::removeDuplicateGrounds() {
+    uint32_t changes = 0;
+    int done = 0;
+    int total = map.getTileCount();
+
+    for (MapIterator iter = map.begin(); iter != map.end(); ++iter) {
+        if (done % 8192 == 0) {
+            g_gui.SetLoadDone(int(done / float(total) * 100.f));
+        }
+
+        Tile* tile = (*iter)->get();
+        if (!tile) {
+            continue;
+        }
+
+        // Count ground tiles
+        std::vector<Item*> groundTiles;
+        if (tile->ground) {
+            groundTiles.push_back(tile->ground);
+        }
+
+        for (Item* item : tile->items) {
+            if (item && item->isGroundTile()) {
+                groundTiles.push_back(item);
+            }
+        }
+
+        // Remove duplicate grounds, keeping only the first one
+        if (groundTiles.size() > 1) {
+            // Keep the first ground tile
+            tile->ground = groundTiles[0];
+            
+            // Remove all other ground tiles
+            auto it = std::remove_if(tile->items.begin(), tile->items.end(),
+                [](Item* item) { return item && item->isGroundTile(); });
+            
+            tile->items.erase(it, tile->items.end());
+            
+            changes += groundTiles.size() - 1;
+        }
+
+        done++;
+    }
+
+    return changes;
 }
 

@@ -103,6 +103,34 @@ void MapWindow::OnIslandGeneratorDialogClose(wxCloseEvent& event) {
 	}
 }
 
+void MapWindow::ShowGroundValidationDialog() {
+	if (groundValidationDialog) {
+		return;
+	}
+
+	groundValidationDialog = new GroundValidationDialog(this);
+	if (groundValidationDialog->ShowModal() == wxID_OK) {
+		// Get validation options
+		bool validateStack = groundValidationDialog->shouldValidateGroundStack();
+		bool generateEmpty = groundValidationDialog->shouldGenerateEmptySurroundedGrounds();
+		bool removeDuplicates = groundValidationDialog->shouldRemoveDuplicateGrounds();
+
+		// Perform validation
+		uint32_t changes = editor.validateGrounds(validateStack, generateEmpty, removeDuplicates);
+
+		// Show results
+		wxString message;
+		message << changes << " ground tiles have been modified.";
+		g_gui.PopupDialog("Ground Validation", message, wxOK);
+
+		// Refresh view
+		g_gui.RefreshView();
+	}
+
+	groundValidationDialog->Destroy();
+	groundValidationDialog = nullptr;
+}
+
 void MapWindow::SetSize(int x, int y, bool center) {
 	if (x == 0 || y == 0) {
 		return;

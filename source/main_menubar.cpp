@@ -161,7 +161,7 @@ MainMenuBar::MainMenuBar(MainFrame* frame) :
 	MAKE_ACTION(MAP_REMOVE_ITEMS, wxITEM_NORMAL, OnMapRemoveItems);
 	MAKE_ACTION(MAP_REMOVE_CORPSES, wxITEM_NORMAL, OnMapRemoveCorpses);
 	MAKE_ACTION(MAP_REMOVE_DUPLICATES, wxITEM_NORMAL, OnMapRemoveDuplicates);
-
+	MAKE_ACTION(MAP_VALIDATE_GROUND, wxITEM_NORMAL, OnMapValidateGround);
 	MAKE_ACTION(MAP_REMOVE_UNREACHABLE_TILES, wxITEM_NORMAL, OnMapRemoveUnreachable);
 	MAKE_ACTION(MAP_CLEANUP, wxITEM_NORMAL, OnMapCleanup);
 	MAKE_ACTION(MAP_CLEAN_HOUSE_ITEMS, wxITEM_NORMAL, OnMapCleanHouseItems);
@@ -3274,6 +3274,23 @@ void MainMenuBar::OnGenerateIsland(wxCommandEvent& WXUNUSED(event)) {
     if (MapTab* tab = g_gui.GetCurrentMapTab()) {
         if (MapWindow* window = tab->GetView()) {
             window->ShowIslandGeneratorDialog();
+        }
+    }
+}
+
+void MainMenuBar::OnMapValidateGround(wxCommandEvent& WXUNUSED(event)) {
+    if (!g_gui.IsEditorOpen()) {
+        return;
+    }
+
+    Editor* editor = g_gui.GetCurrentEditor();
+    if (!editor) {
+        return;
+    }
+
+    if (MapTab* tab = g_gui.GetCurrentMapTab()) {
+        if (MapWindow* window = tab->GetView()) {
+            window->ShowGroundValidationDialog();
         }
     }
 }

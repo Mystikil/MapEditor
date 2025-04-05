@@ -21,6 +21,7 @@
 #include "position.h"
 #include "replace_items_window.h"
 #include "island_generator_dialog.h"
+#include "ground_validation_dialog.h"
 
 class MapCanvas;
 class DCButton;
@@ -83,6 +84,10 @@ public:
 	void CloseIslandGeneratorDialog();
 	void OnIslandGeneratorDialogClose(wxCloseEvent& event);
 
+	void ShowGroundValidationDialog();
+	void CloseGroundValidationDialog();
+	void OnGroundValidationDialogClose(wxCloseEvent& event);
+
 protected:
 	// For internal use, call to resize the scrollbars with
 	// the newd dimensions of *this* window
@@ -99,6 +104,7 @@ protected:
 private:
 	ReplaceItemsDialog* replaceItemsDialog;
 	IslandGeneratorDialog* islandGeneratorDialog;
+	GroundValidationDialog* groundValidationDialog;
 	Position previous_position;
 
 	friend class MainFrame;

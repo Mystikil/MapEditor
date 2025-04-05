@@ -391,6 +391,7 @@
     <ClInclude Include="..\..\source\automagic_settings.h" />
     <ClInclude Include="..\..\source\live_action_packets.h" />
     <ClInclude Include="..\..\source\island_generator_dialog.h" />
+    <ClInclude Include="..\..\source\ground_validation_dialog.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\source\json\json_spirit_reader.cpp">
@@ -691,6 +692,7 @@
     <ClCompile Include="..\..\source\borderize_window.cpp" />
     <ClCompile Include="..\..\source\automagic_settings.cpp" />
     <ClCompile Include="..\..\source\island_generator_dialog.cpp" />
+    <ClCompile Include="..\..\source\ground_validation_dialog.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="Editor.rc">

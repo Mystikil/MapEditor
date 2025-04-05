@@ -135,6 +135,12 @@ public: // Functions
 	void updateMinimap(const PositionVector& positions);
 	void updateMinimapTile(Tile* tile);
 
+	// Ground validation methods
+	uint32_t validateGrounds(bool validateStack, bool generateEmpty, bool removeDuplicates);
+	uint32_t validateGroundStacks();
+	uint32_t generateEmptySurroundedGrounds();
+	uint32_t removeDuplicateGrounds();
+
 protected:
 	void drawInternal(const Position offset, bool alt, bool dodraw);
 	void drawInternal(const PositionVector& posvec, bool alt, bool dodraw);

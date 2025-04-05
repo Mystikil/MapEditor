@@ -43,6 +43,7 @@ namespace MenuBar {
 		REDO,
 		FIND_ITEM,
 		REPLACE_ITEMS,
+
 		SEARCH_ON_MAP_EVERYTHING,
 		SEARCH_ON_MAP_UNIQUE,
 		SEARCH_ON_MAP_ACTION,
@@ -164,6 +165,7 @@ namespace MenuBar {
 		SHOW_HOTKEYS,
 		MAP_MENU_REPLACE_ITEMS,
 		MAP_MENU_GENERATE_ISLAND,
+		MAP_VALIDATE_GROUND,
 	};
 }
 
@@ -259,7 +261,8 @@ public:
 	void OnMapCleanup(wxCommandEvent& event);
 	void OnMapProperties(wxCommandEvent& event);
 	void OnMapStatistics(wxCommandEvent& event);
-	void OnMapRemoveDuplicates(wxCommandEvent& (event));
+	void OnMapRemoveDuplicates(wxCommandEvent& event);
+	void OnMapValidateGround(wxCommandEvent& event);
 
 	// View Menu
 	void OnToolbars(wxCommandEvent& event);
