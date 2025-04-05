@@ -1,0 +1,44 @@
+#ifndef RME_AUTOMAGIC_SETTINGS_H_
+#define RME_AUTOMAGIC_SETTINGS_H_
+
+#include <wx/dialog.h>
+#include <wx/checkbox.h>
+#include <wx/button.h>
+#include <wx/sizer.h>
+#include <wx/stattext.h>
+#include <wx/statbox.h>
+
+class AutomagicSettingsDialog : public wxDialog {
+public:
+    AutomagicSettingsDialog(wxWindow* parent);
+    virtual ~AutomagicSettingsDialog();
+
+    // Get the current settings from the dialog
+    bool IsAutomagicEnabled() const;
+    bool IsSameGroundTypeBorderEnabled() const;
+    bool IsWallsRepelBordersEnabled() const;
+    bool IsLayerCarpetsEnabled() const;
+    bool IsBorderizeDeleteEnabled() const;
+
+protected:
+    // Event handlers
+    void OnClickOK(wxCommandEvent& event);
+    void OnClickCancel(wxCommandEvent& event);
+    void OnAutomagicCheck(wxCommandEvent& event);
+    void OnSameGroundTypeCheck(wxCommandEvent& event);
+    void OnClose(wxCloseEvent& event);
+
+    // UI elements
+    wxCheckBox* automagic_enabled_checkbox;
+    wxCheckBox* same_ground_type_checkbox;
+    wxCheckBox* walls_repel_borders_checkbox;
+    wxCheckBox* layer_carpets_checkbox;
+    wxCheckBox* borderize_delete_checkbox;
+    wxStdDialogButtonSizer* buttons_sizer;
+    wxButton* ok_button;
+    wxButton* cancel_button;
+
+    DECLARE_EVENT_TABLE()
+};
+
+#endif // RME_AUTOMAGIC_SETTINGS_H_
