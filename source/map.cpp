@@ -276,11 +276,29 @@ bool Map::convert(const ConversionMap& rm, bool showdialog) {
 }
 
 void Map::cleanInvalidTiles(bool showdialog) {
+	uint64_t tiles_done = 0;
+	uint64_t removed_count = 0;
+	bool has_tiles = false;
+
+	// First check if there are any tiles to process
+	for (MapIterator miter = begin(); miter != end(); ++miter) {
+		Tile* tile = (*miter)->get();
+		if (tile && tile->size() > 0) {
+			has_tiles = true;
+			break;
+		}
+	}
+
+	if (!has_tiles) {
+		if (showdialog) {
+			g_gui.PopupDialog("Cleanup Complete", "No tiles found to process.", wxOK);
+		}
+		return;
+	}
+
 	if (showdialog) {
 		g_gui.CreateLoadBar("Removing invalid tiles...");
 	}
-
-	uint64_t tiles_done = 0;
 
 	for (MapIterator miter = begin(); miter != end(); ++miter) {
 		Tile* tile = (*miter)->get();
@@ -296,6 +314,7 @@ void Map::cleanInvalidTiles(bool showdialog) {
 			} else {
 				delete *item_iter;
 				item_iter = tile->items.erase(item_iter);
+				++removed_count;
 			}
 		}
 
@@ -307,6 +326,11 @@ void Map::cleanInvalidTiles(bool showdialog) {
 
 	if (showdialog) {
 		g_gui.DestroyLoadBar();
+		if (removed_count > 0) {
+			g_gui.PopupDialog("Cleanup Complete", "Removed " + i2ws(removed_count) + " invalid tiles.", wxOK);
+		} else {
+			g_gui.PopupDialog("Cleanup Complete", "No invalid tiles found.", wxOK);
+		}
 	}
 }
 
