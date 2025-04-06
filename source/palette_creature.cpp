@@ -24,6 +24,11 @@
 #include "creature_brush.h"
 #include "spawn_brush.h"
 #include "materials.h"
+#include <wx/dir.h>
+#include <wx/filefn.h>
+
+// Define the new event ID for the Load NPCs button
+#define PALETTE_LOAD_NPCS_BUTTON 1952
 
 // ============================================================================
 // Creature palette
@@ -35,6 +40,7 @@ EVT_LISTBOX(PALETTE_CREATURE_LISTBOX, CreaturePalettePanel::OnListBoxChange)
 
 EVT_TOGGLEBUTTON(PALETTE_CREATURE_BRUSH_BUTTON, CreaturePalettePanel::OnClickCreatureBrushButton)
 EVT_TOGGLEBUTTON(PALETTE_SPAWN_BRUSH_BUTTON, CreaturePalettePanel::OnClickSpawnBrushButton)
+EVT_BUTTON(PALETTE_LOAD_NPCS_BUTTON, CreaturePalettePanel::OnClickLoadNPCsButton)
 
 EVT_SPINCTRL(PALETTE_CREATURE_SPAWN_TIME, CreaturePalettePanel::OnChangeSpawnTime)
 EVT_SPINCTRL(PALETTE_CREATURE_SPAWN_SIZE, CreaturePalettePanel::OnChangeSpawnSize)
@@ -51,6 +57,11 @@ CreaturePalettePanel::CreaturePalettePanel(wxWindow* parent, wxWindowID id) :
 
 	creature_list = newd SortableListBox(this, PALETTE_CREATURE_LISTBOX);
 	sidesizer->Add(creature_list, 1, wxEXPAND);
+	
+	// Add load NPCs button
+	load_npcs_button = newd wxButton(this, PALETTE_LOAD_NPCS_BUTTON, "Load NPCs Folder");
+	sidesizer->Add(load_npcs_button, 0, wxEXPAND);
+	
 	topsizer->Add(sidesizer, 1, wxEXPAND);
 
 	// Brush selection
@@ -261,6 +272,51 @@ void CreaturePalettePanel::OnClickSpawnBrushButton(wxCommandEvent& event) {
 	SelectSpawnBrush();
 	g_gui.ActivatePalette(GetParentPalette());
 	g_gui.SelectBrush();
+}
+
+void CreaturePalettePanel::OnClickLoadNPCsButton(wxCommandEvent& event) {
+	wxDirDialog dlg(g_gui.root, "Select NPC folder", "", wxDD_DEFAULT_STYLE | wxDD_DIR_MUST_EXIST);
+	if (dlg.ShowModal() == wxID_OK) {
+		wxString folder = dlg.GetPath();
+		LoadNPCsFromFolder(folder);
+	}
+}
+
+bool CreaturePalettePanel::LoadNPCsFromFolder(const wxString& folder) {
+	// Get all .xml files in the folder
+	wxArrayString files;
+	wxDir::GetAllFiles(folder, &files, "*.xml", wxDIR_FILES);
+	
+	if (files.GetCount() == 0) {
+		wxMessageBox("No XML files found in the selected folder.", "Error", wxOK | wxICON_INFORMATION, g_gui.root);
+		return false;
+	}
+	
+	wxArrayString warnings;
+	int loadedCount = 0;
+	
+	for (size_t i = 0; i < files.GetCount(); ++i) {
+		wxString error;
+		bool ok = g_creatures.importXMLFromOT(FileName(files[i]), error, warnings);
+		if (ok) {
+			loadedCount++;
+		} else {
+			warnings.Add("Failed to load " + files[i] + ": " + error);
+		}
+	}
+	
+	if (!warnings.IsEmpty()) {
+		g_gui.ListDialog("NPC loader messages", warnings);
+	}
+	
+	if (loadedCount > 0) {
+		g_gui.PopupDialog("Success", wxString::Format("Successfully loaded %d NPC files.", loadedCount), wxOK);
+		g_gui.RefreshPalettes();
+		return true;
+	} else {
+		wxMessageBox("No NPCs could be loaded from the selected folder.", "Error", wxOK | wxICON_INFORMATION, g_gui.root);
+		return false;
+	}
 }
 
 void CreaturePalettePanel::OnChangeSpawnTime(wxSpinEvent& event) {
