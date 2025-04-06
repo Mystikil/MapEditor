@@ -18,6 +18,7 @@
 #include "main.h"
 
 #include <wx/grid.h>
+#include <wx/choice.h>
 
 #include "tile.h"
 #include "item.h"
@@ -54,7 +55,8 @@ AddItemWindow::AddItemWindow(wxWindow* win_parent, TilesetCategoryType categoryT
 	item_id_field(nullptr),
 	item_id_label(nullptr),
 	item_name_label(nullptr),
-	item_button(nullptr) {
+	item_button(nullptr),
+	tileset_choice(nullptr) {
 	wxSizer* topsizer = newd wxBoxSizer(wxVERTICAL);
 	wxString description = "Add a Item";
 
@@ -78,6 +80,31 @@ AddItemWindow::AddItemWindow(wxWindow* win_parent, TilesetCategoryType categoryT
 	item_id_field = newd wxSpinCtrl(this, wxID_ANY, i2ws(itemId), wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS, 100, 100000);
 	item_id_field->Connect(wxEVT_COMMAND_SPINCTRL_UPDATED, wxCommandEventHandler(AddItemWindow::OnChangeItemId), NULL, this);
 	subsizer->Add(item_id_field, wxSizerFlags(1).Expand());
+	
+	// Add tileset selection dropdown
+	subsizer->Add(newd wxStaticText(this, wxID_ANY, "Tileset"));
+	tileset_choice = newd wxChoice(this, wxID_ANY);
+	
+	// Populate the choice with all available tilesets
+	int currentSelection = 0;
+	int index = 0;
+	for (TilesetContainer::iterator iter = g_materials.tilesets.begin(); iter != g_materials.tilesets.end(); ++iter) {
+		if (iter->second->getCategory(category_type)) {
+			tileset_choice->Append(wxstr(iter->first));
+			// Set current selection to the provided tileset if it matches
+			if (tileset_item && iter->second == tileset_item) {
+				currentSelection = index;
+			}
+			index++;
+		}
+	}
+	
+	// Select the current tileset if available
+	if (tileset_choice->GetCount() > 0) {
+		tileset_choice->SetSelection(currentSelection);
+	}
+	
+	subsizer->Add(tileset_choice, wxSizerFlags(1).Expand());
 
 	boxsizer->Add(subsizer, wxSizerFlags(1).Expand());
 
@@ -97,13 +124,32 @@ AddItemWindow::AddItemWindow(wxWindow* win_parent, TilesetCategoryType categoryT
 void AddItemWindow::OnClickOK(wxCommandEvent& WXUNUSED(event)) {
 	const ItemType& it = g_items.getItemType(item_id_field->GetValue());
 	if (it.id != 0) {
-		g_materials.addToTileset(tileset_item->name, it.id, category_type);
-		g_materials.modify();
-		g_gui.PopupDialog("Item added to Tileset", "'" + it.name + "' has been added to tileset '" + tileset_item->name + "'", wxOK);
+		// Get the selected tileset name from the dropdown
+		wxString tilesetName;
+		if (tileset_choice && tileset_choice->GetSelection() != wxNOT_FOUND) {
+			tilesetName = tileset_choice->GetString(tileset_choice->GetSelection());
+		}
+		
+		// If no tileset is selected, use the initial tileset
+		if (tilesetName.IsEmpty() && tileset_item) {
+			tilesetName = wxstr(tileset_item->name);
+		}
+		
+		// Make sure we have a valid tileset name
+		if (!tilesetName.IsEmpty()) {
+			std::string stdTilesetName = nstr(tilesetName);
+			g_materials.addToTileset(stdTilesetName, it.id, category_type);
+			g_materials.modify();
+			g_gui.PopupDialog("Item added to Tileset", 
+				wxString::Format("'%s' (ID: %d) has been added to tileset '%s'", 
+				wxString(it.name.c_str()), it.id, tilesetName), wxOK);
 
-		EndModal(1);
+			EndModal(1);
+		} else {
+			g_gui.PopupDialog("Error", "No tileset selected", wxOK);
+		}
 	} else {
-		g_gui.PopupDialog("Something went wrong", "You need to select any item", wxOK);
+		g_gui.PopupDialog("Error", "You need to select an item", wxOK);
 	}
 }
 

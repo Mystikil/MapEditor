@@ -20,6 +20,7 @@
 #include "palette_brushlist.h"
 #include "gui.h"
 #include "brush.h"
+#include "raw_brush.h"
 #include "add_tileset_window.h"
 #include "add_item_window.h"
 #include "materials.h"
@@ -31,6 +32,7 @@
 BEGIN_EVENT_TABLE(BrushPalettePanel, PalettePanel)
 EVT_BUTTON(wxID_ADD, BrushPalettePanel::OnClickAddItemToTileset)
 EVT_BUTTON(wxID_NEW, BrushPalettePanel::OnClickAddTileset)
+EVT_BUTTON(BUTTON_QUICK_ADD_ITEM, BrushPalettePanel::OnClickQuickAddItem)
 EVT_CHOICEBOOK_PAGE_CHANGING(wxID_ANY, BrushPalettePanel::OnSwitchingPage)
 EVT_CHOICEBOOK_PAGE_CHANGED(wxID_ANY, BrushPalettePanel::OnPageChanged)
 END_EVENT_TABLE()
@@ -39,7 +41,9 @@ BrushPalettePanel::BrushPalettePanel(wxWindow* parent, const TilesetContainer& t
 	PalettePanel(parent, id),
 	palette_type(category),
 	choicebook(nullptr),
-	size_panel(nullptr) {
+	size_panel(nullptr),
+	quick_add_button(nullptr),
+	last_tileset_name("") {
 	wxSizer* topsizer = newd wxBoxSizer(wxVERTICAL);
 
 	// Create the tileset panel
@@ -55,6 +59,12 @@ BrushPalettePanel::BrushPalettePanel(wxWindow* parent, const TilesetContainer& t
 
 		wxButton* buttonAddItemToTileset = newd wxButton(this, wxID_ADD, "Add new Item");
 		tmpsizer->Add(buttonAddItemToTileset, wxSizerFlags(0).Center());
+		
+		// Create the Quick Add Item button, initially disabled
+		quick_add_button = newd wxButton(this, BUTTON_QUICK_ADD_ITEM, "Quick Add Item");
+		quick_add_button->SetToolTip("Quickly add the currently selected brush to the last used tileset");
+		quick_add_button->Enable(false); // Disabled until a tileset is added
+		tmpsizer->Add(quick_add_button, wxSizerFlags(0).Center());
 
 		topsizer->Add(tmpsizer, 0, wxCENTER, 10);
 	}
@@ -249,14 +259,103 @@ void BrushPalettePanel::OnClickAddItemToTileset(wxCommandEvent& WXUNUSED(event))
 
 	auto _it = g_materials.tilesets.find(tilesetName);
 	if (_it != g_materials.tilesets.end()) {
+		// Get the currently selected brush
+		Brush* brush = GetSelectedBrush();
+		uint16_t item_id = 0;
+		
+		// Try to get the item ID from the brush if it's a RAW brush
+		if (brush && brush->isRaw()) {
+			RAWBrush* raw_brush = brush->asRaw();
+			if (raw_brush) {
+				item_id = raw_brush->getItemID();
+			}
+		}
+		
+		// Create the Add Item Window
 		wxDialog* w = newd AddItemWindow(g_gui.root, palette_type, _it->second);
+		
+		// If we have a valid item ID, set it in the window
+		if (item_id > 0) {
+			AddItemWindow* addItemWindow = static_cast<AddItemWindow*>(w);
+			addItemWindow->SetItemIdToItemButton(item_id);
+		}
+		
 		int ret = w->ShowModal();
+		
+		// Get the selected tileset name from the dialog
+		AddItemWindow* addItemWindow = static_cast<AddItemWindow*>(w);
+		if (addItemWindow->tileset_choice && 
+			addItemWindow->tileset_choice->GetSelection() != wxNOT_FOUND) {
+			tilesetName = nstr(addItemWindow->tileset_choice->GetString(
+				addItemWindow->tileset_choice->GetSelection()));
+		}
+		
 		w->Destroy();
 
 		if (ret != 0) {
+			// Item was successfully added, store the tileset name for Quick Add
+			last_tileset_name = tilesetName;
+			
+			// Enable the Quick Add button
+			if (quick_add_button) {
+				quick_add_button->Enable(true);
+			}
+			
 			g_gui.RebuildPalettes();
 		}
 	}
+}
+
+void BrushPalettePanel::OnClickQuickAddItem(wxCommandEvent& WXUNUSED(event)) {
+	// Check if we have a last used tileset name
+	if (last_tileset_name.empty()) {
+		g_gui.PopupDialog("Error", "No tileset has been used yet. Please use Add Item first.", wxOK);
+		return;
+	}
+	
+	// Get the currently selected brush
+	Brush* brush = GetSelectedBrush();
+	if (!brush) {
+		g_gui.PopupDialog("Error", "No brush is currently selected.", wxOK);
+		return;
+	}
+	
+	// Check if the brush is a RAW brush that we can add to the tileset
+	if (!brush->isRaw()) {
+		g_gui.PopupDialog("Error", "Only raw items can be added to tilesets.", wxOK);
+		return;
+	}
+	
+	RAWBrush* raw_brush = brush->asRaw();
+	if (!raw_brush) {
+		g_gui.PopupDialog("Error", "Failed to get item data from the selected brush.", wxOK);
+		return;
+	}
+	
+	uint16_t item_id = raw_brush->getItemID();
+	
+	// Check if the tileset still exists
+	auto it = g_materials.tilesets.find(last_tileset_name);
+	if (it == g_materials.tilesets.end()) {
+		g_gui.PopupDialog("Error", "The last used tileset no longer exists.", wxOK);
+		last_tileset_name = "";
+		if (quick_add_button) {
+			quick_add_button->Enable(false);
+		}
+		return;
+	}
+	
+	// Add the item to the tileset
+	g_materials.addToTileset(last_tileset_name, item_id, palette_type);
+	g_materials.modify();
+	
+	// Show success message with the item name and ID
+	const ItemType& item_type = g_items.getItemType(item_id);
+	g_gui.PopupDialog("Item Added", wxString::Format("Item '%s' (ID: %d) has been added to tileset '%s'", 
+		wxString(item_type.name.c_str()), item_id, wxString(last_tileset_name.c_str())), wxOK);
+	
+	// Rebuild palettes to show the changes
+	g_gui.RebuildPalettes();
 }
 
 // ============================================================================

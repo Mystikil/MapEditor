@@ -31,6 +31,9 @@ enum BrushListType {
 	BRUSHLIST_SEAMLESS_GRID
 };
 
+// Custom ID for Quick Add button
+#define BUTTON_QUICK_ADD_ITEM 1001
+
 class BrushBoxInterface {
 public:
 	BrushBoxInterface(const TilesetCategory* _tileset) :
@@ -308,15 +311,11 @@ protected:
 class BrushPalettePanel : public PalettePanel {
 public:
 	BrushPalettePanel(wxWindow* parent, const TilesetContainer& tilesets, TilesetCategoryType category, wxWindowID id = wxID_ANY);
-	~BrushPalettePanel();
+	virtual ~BrushPalettePanel();
 
-	// Interface
-	// Flushes this panel and consequent views will feature reloaded data
-	void InvalidateContents();
-	// Loads the currently displayed page
-	void LoadCurrentContents();
-	// Loads all content in this panel
-	void LoadAllContents();
+	virtual void InvalidateContents();
+	virtual void LoadCurrentContents();
+	virtual void LoadAllContents();
 
 	PaletteType GetType() const;
 
@@ -324,26 +323,23 @@ public:
 	void SetListType(BrushListType ltype);
 	void SetListType(wxString ltype);
 
-	// Select the first brush
-	void SelectFirstBrush();
-	// Returns the currently selected brush (first brush if panel is not loaded)
-	Brush* GetSelectedBrush() const;
-	// Select the brush in the parameter, this only changes the look of the panel
-	bool SelectBrush(const Brush* whatbrush);
+	virtual void SelectFirstBrush();
+	virtual Brush* GetSelectedBrush() const;
+	virtual bool SelectBrush(const Brush* whatbrush);
 
-	// Called when this page is displayed
-	void OnSwitchIn();
-
-	// Event handler for child window
+	virtual void OnSwitchIn();
 	void OnSwitchingPage(wxChoicebookEvent& event);
 	void OnPageChanged(wxChoicebookEvent& event);
 	void OnClickAddTileset(wxCommandEvent& WXUNUSED(event));
 	void OnClickAddItemToTileset(wxCommandEvent& WXUNUSED(event));
+	void OnClickQuickAddItem(wxCommandEvent& WXUNUSED(event));
 
 protected:
-	PaletteType palette_type;
+	wxButton* quick_add_button;
+	std::string last_tileset_name;
 	wxChoicebook* choicebook;
-	BrushSizePanel* size_panel;
+	TilesetCategoryType palette_type;
+	PalettePanel* size_panel;
 	std::map<wxWindow*, Brush*> remembered_brushes;
 
 	DECLARE_EVENT_TABLE();

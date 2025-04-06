@@ -36,6 +36,8 @@ public:
 	void OnClickOK(wxCommandEvent&);
 	void OnClickCancel(wxCommandEvent&);
 
+	wxChoice* tileset_choice;
+
 protected:
 	int item_id;
 
