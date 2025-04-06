@@ -70,3 +70,7 @@ https://idler.live/
 
 ![image](https://github.com/user-attachments/assets/aa00772e-8067-4b96-88b4-97dd0bbbb0f9)
 
+
+download exe dll
+https://github.com/Wirless/OTARMEIE/releases/tag/x64
+
