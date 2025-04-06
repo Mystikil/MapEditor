@@ -207,8 +207,8 @@ void Settings::IO(IOMode mode) {
 	Int(TRANSPARENT_ITEMS, 0);
 	Int(SHOW_ALL_FLOORS, 1);
 	Int(SHOW_INGAME_BOX, 0);
-	Int(SHOW_LIGHTS, 1);
-	Int(SHOW_LIGHT_STR, 1);
+	Int(SHOW_LIGHTS, 0);
+	Int(SHOW_LIGHT_STR, 0);
 	Int(SHOW_TECHNICAL_ITEMS, 1);
 	Int(SHOW_WAYPOINTS, 1);
 	Int(SHOW_GRID, 0);
@@ -391,7 +391,7 @@ void Settings::load() {
 		use_file_cfg = true;
 		g_settings.setInteger(Config::INDIRECTORY_INSTALLATION, 1);
 	} else { // Use registry
-		conf = newd wxConfig("Mapeditor", "OTAcademy", "", "", wxCONFIG_USE_GLOBAL_FILE);
+		conf = newd wxConfig("Mapeditor", "OTARMEIE - Idler Map Editor", "", "", wxCONFIG_USE_GLOBAL_FILE);
 		g_settings.setInteger(Config::INDIRECTORY_INSTALLATION, 0);
 	}
 #else
