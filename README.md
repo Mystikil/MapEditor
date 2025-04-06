@@ -1,5 +1,7 @@
 What is this? Idler Map Editor
 =============
+
+
 ![image](https://github.com/user-attachments/assets/fa261227-5d88-4d00-9c60-0f48e393adc5)
 
 
@@ -63,5 +65,8 @@ Required libraries:
 
 [Compile on macOS](https://github.com/hjnilsson/rme/wiki/Compiling-on-macOS)
 
-functions
+Extras:
+https://idler.live/
+
+![image](https://github.com/user-attachments/assets/aa00772e-8067-4b96-88b4-97dd0bbbb0f9)
 
