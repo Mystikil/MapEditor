@@ -1,5 +1,6 @@
 What is this? Idlers Tavern has screenshots of the new functions!!!!!![][][][][]
 =============
+![image](https://github.com/user-attachments/assets/fa261227-5d88-4d00-9c60-0f48e393adc5)
 
 
 https://discord.gg/FD2cYKBq5E
