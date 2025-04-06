@@ -72,5 +72,8 @@ https://idler.live/
 
 
 download exe dll
+[Release (1).zip](https://github.com/user-attachments/files/19621775/Release.1.zip)
+
+and put in OTARMEIE FOLDER of this repo 
 https://github.com/Wirless/OTARMEIE/releases/tag/x64
 
