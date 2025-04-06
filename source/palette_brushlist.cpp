@@ -358,6 +358,29 @@ void BrushPalettePanel::OnClickQuickAddItem(wxCommandEvent& WXUNUSED(event)) {
 	g_gui.RebuildPalettes();
 }
 
+const BrushPalettePanel::SelectionInfo& BrushPalettePanel::GetSelectionInfo() const {
+	static SelectionInfo selection;
+	selection.brushes.clear();
+	
+	// First add the currently selected brush if available
+	Brush* selected = GetSelectedBrush();
+	if (selected) {
+		selection.brushes.push_back(selected);
+	}
+	
+	// Now, depending on the panel type, try to get more brushes
+	if (choicebook) {
+		wxWindow* page = choicebook->GetCurrentPage();
+		BrushPanel* panel = dynamic_cast<BrushPanel*>(page);
+		if (panel) {
+			// Here we could add additional brushes based on multi-selection
+			// if implemented in the various panel types
+		}
+	}
+	
+	return selection;
+}
+
 // ============================================================================
 // Brush Panel
 // A container of brush buttons

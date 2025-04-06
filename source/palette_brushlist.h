@@ -313,6 +313,14 @@ public:
 	BrushPalettePanel(wxWindow* parent, const TilesetContainer& tilesets, TilesetCategoryType category, wxWindowID id = wxID_ANY);
 	virtual ~BrushPalettePanel();
 
+	// Structure to hold selection information
+	struct SelectionInfo {
+		std::vector<Brush*> brushes;
+	};
+	
+	// Get currently selected brushes
+	const SelectionInfo& GetSelectionInfo() const;
+
 	virtual void InvalidateContents();
 	virtual void LoadCurrentContents();
 	virtual void LoadAllContents();

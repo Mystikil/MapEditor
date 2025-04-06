@@ -32,6 +32,12 @@ public:
 	void OnItemClicked(wxMouseEvent& event);
 	void SetItemIdToItemButton(uint16_t id);
 	void OnChangeItemId(wxCommandEvent& WXUNUSED(event));
+	void OnRangeToggle(wxCommandEvent& WXUNUSED(event));
+	void OnRangeFieldChange(wxSpinEvent& event);
+	void OnUseCurrentItem(wxCommandEvent& event);
+	void OnQuickRange(wxCommandEvent& event);
+	void UpdateRangeFields(bool show);
+	void UpdateRangeInfo();
 
 	void OnClickOK(wxCommandEvent&);
 	void OnClickCancel(wxCommandEvent&);
@@ -45,6 +51,14 @@ protected:
 	wxStaticText* item_id_label;
 	wxStaticText* item_name_label;
 	DCButton* item_button;
+	
+	// Range selection controls
+	wxCheckBox* range_checkbox;
+	wxSpinCtrl* range_start_field;
+	wxSpinCtrl* range_end_field;
+	wxStaticText* range_start_label;
+	wxStaticText* range_end_label;
+	wxStaticText* range_info_label;
 
 	TilesetCategoryType category_type;
 	Tileset* tileset_item;
