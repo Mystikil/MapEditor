@@ -2136,6 +2136,7 @@ void MainMenuBar::OnMapCleanup(wxCommandEvent& WXUNUSED(event)) {
         try {
             // Process invalid items if selected
             if (cleanInvalid->GetValue()) {
+                // Update loading bar message but keep the same bar
                 g_gui.SetLoadDone(0, "Removing invalid tiles...");
                 currentMap.cleanInvalidTiles(true);
                 g_gui.SetLoadDone(50); // Set to 50% after invalid tiles
@@ -2202,6 +2203,7 @@ void MainMenuBar::OnMapCleanup(wxCommandEvent& WXUNUSED(event)) {
                     condition.startProgress = cleanInvalid->GetValue() ? 50 : 0;
                     condition.endProgress = 100;
 
+                    // Update loading bar message but keep the same bar
                     g_gui.SetLoadDone(condition.startProgress, "Removing items by ID range...");
                     int64_t count = RemoveItemOnMap(currentMap, condition, false);
                     totalCount += count;
@@ -2211,6 +2213,9 @@ void MainMenuBar::OnMapCleanup(wxCommandEvent& WXUNUSED(event)) {
             // Ensure progress bar reaches 100%
             g_gui.SetLoadDone(100);
             
+            // Destroy the loading bar before showing the popup
+            g_gui.DestroyLoadBar();
+            
             // Show results
             wxString msg;
             msg << totalCount << " items removed in total.";
@@ -2219,10 +2224,10 @@ void MainMenuBar::OnMapCleanup(wxCommandEvent& WXUNUSED(event)) {
             currentMap.doChange();
         }
         catch (...) {
+            // Make sure to destroy the loading bar on error
+            g_gui.DestroyLoadBar();
             g_gui.PopupDialog("Error", "An error occurred during cleanup.", wxOK | wxICON_ERROR);
         }
-
-        g_gui.DestroyLoadBar();
     }
 
     dialog->Destroy();

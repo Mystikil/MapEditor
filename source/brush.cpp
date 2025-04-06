@@ -189,6 +189,15 @@ void Brushes::addBrush(Brush* brush) {
 	brushes.insert(std::make_pair(brush->getName(), brush));
 }
 
+void Brushes::removeBrush(const std::string& name) {
+	auto it = brushes.find(name);
+	if (it != brushes.end()) {
+		// We don't delete the brush here because it might be stored elsewhere
+		// or we may have just temporarily removed it
+		brushes.erase(it);
+	}
+}
+
 Brush* Brushes::getBrush(const std::string& name) const {
 	auto it = brushes.find(name);
 	if (it != brushes.end()) {

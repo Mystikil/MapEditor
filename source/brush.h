@@ -68,6 +68,7 @@ public:
 	Brush* getBrush(const std::string& name) const;
 
 	void addBrush(Brush* brush);
+	void removeBrush(const std::string& name);
 
 	bool unserializeBorder(pugi::xml_node node, wxArrayString& warnings);
 	bool unserializeBrush(pugi::xml_node node, wxArrayString& warnings);

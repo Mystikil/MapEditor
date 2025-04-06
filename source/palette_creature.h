@@ -58,17 +58,23 @@ public:
 	void OnClickCreatureBrushButton(wxCommandEvent& event);
 	void OnClickSpawnBrushButton(wxCommandEvent& event);
 	void OnClickLoadNPCsButton(wxCommandEvent& event);
+	void OnClickLoadMonstersButton(wxCommandEvent& event);
+	void OnClickPurgeCreaturesButton(wxCommandEvent& event);
 
 protected:
 	void SelectCreatureBrush();
 	void SelectSpawnBrush();
 	bool LoadNPCsFromFolder(const wxString& folder);
+	bool LoadMonstersFromFolder(const wxString& folder);
+	bool PurgeCreaturePalettes();
 
 	wxChoice* tileset_choice;
 	SortableListBox* creature_list;
 	wxToggleButton* creature_brush_button;
 	wxToggleButton* spawn_brush_button;
 	wxButton* load_npcs_button;
+	wxButton* load_monsters_button;
+	wxButton* purge_creatures_button;
 	wxSpinCtrl* creature_spawntime_spin;
 	wxSpinCtrl* spawn_size_spin;
 

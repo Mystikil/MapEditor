@@ -301,14 +301,13 @@ void Map::cleanInvalidTiles(bool showdialog) {
 
 	if (!has_invalid_tiles) {
 		if (showdialog) {
+			g_gui.SetLoadDone(100);
 			g_gui.PopupDialog("Cleanup Complete", "No invalid tiles found.", wxOK);
 		}
 		return;
 	}
 
-	if (showdialog) {
-		g_gui.CreateLoadBar("Removing invalid tiles...");
-	}
+	// Note: We don't create a loading bar here anymore, it should be created by the caller
 
 	for (MapIterator miter = begin(); miter != end(); ++miter) {
 		Tile* tile = (*miter)->get();
@@ -335,7 +334,8 @@ void Map::cleanInvalidTiles(bool showdialog) {
 	}
 
 	if (showdialog) {
-		g_gui.DestroyLoadBar();
+		g_gui.SetLoadDone(100);
+		// Note: We don't destroy the loading bar here anymore, it should be destroyed by the caller
 		g_gui.PopupDialog("Cleanup Complete", "Removed " + i2ws(removed_count) + " invalid tiles.", wxOK);
 	}
 }

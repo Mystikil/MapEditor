@@ -29,6 +29,8 @@
 
 // Define the new event ID for the Load NPCs button
 #define PALETTE_LOAD_NPCS_BUTTON 1952
+#define PALETTE_LOAD_MONSTERS_BUTTON 1953
+#define PALETTE_PURGE_CREATURES_BUTTON 1954
 
 // ============================================================================
 // Creature palette
@@ -41,6 +43,8 @@ EVT_LISTBOX(PALETTE_CREATURE_LISTBOX, CreaturePalettePanel::OnListBoxChange)
 EVT_TOGGLEBUTTON(PALETTE_CREATURE_BRUSH_BUTTON, CreaturePalettePanel::OnClickCreatureBrushButton)
 EVT_TOGGLEBUTTON(PALETTE_SPAWN_BRUSH_BUTTON, CreaturePalettePanel::OnClickSpawnBrushButton)
 EVT_BUTTON(PALETTE_LOAD_NPCS_BUTTON, CreaturePalettePanel::OnClickLoadNPCsButton)
+EVT_BUTTON(PALETTE_LOAD_MONSTERS_BUTTON, CreaturePalettePanel::OnClickLoadMonstersButton)
+EVT_BUTTON(PALETTE_PURGE_CREATURES_BUTTON, CreaturePalettePanel::OnClickPurgeCreaturesButton)
 
 EVT_SPINCTRL(PALETTE_CREATURE_SPAWN_TIME, CreaturePalettePanel::OnChangeSpawnTime)
 EVT_SPINCTRL(PALETTE_CREATURE_SPAWN_SIZE, CreaturePalettePanel::OnChangeSpawnSize)
@@ -58,9 +62,19 @@ CreaturePalettePanel::CreaturePalettePanel(wxWindow* parent, wxWindowID id) :
 	creature_list = newd SortableListBox(this, PALETTE_CREATURE_LISTBOX);
 	sidesizer->Add(creature_list, 1, wxEXPAND);
 	
-	// Add load NPCs button
+	// Add buttons for loading NPCs, monsters, and purging creatures
+	wxSizer* buttonSizer = newd wxBoxSizer(wxHORIZONTAL);
+	
 	load_npcs_button = newd wxButton(this, PALETTE_LOAD_NPCS_BUTTON, "Load NPCs Folder");
-	sidesizer->Add(load_npcs_button, 0, wxEXPAND);
+	buttonSizer->Add(load_npcs_button, 1, wxEXPAND | wxRIGHT, 5);
+	
+	load_monsters_button = newd wxButton(this, PALETTE_LOAD_MONSTERS_BUTTON, "Load Monsters Folder");
+	buttonSizer->Add(load_monsters_button, 1, wxEXPAND | wxLEFT, 5);
+	
+	sidesizer->Add(buttonSizer, 0, wxEXPAND | wxTOP, 5);
+	
+	purge_creatures_button = newd wxButton(this, PALETTE_PURGE_CREATURES_BUTTON, "Purge Creatures");
+	sidesizer->Add(purge_creatures_button, 0, wxEXPAND | wxTOP, 5);
 	
 	topsizer->Add(sidesizer, 1, wxEXPAND);
 
@@ -282,6 +296,24 @@ void CreaturePalettePanel::OnClickLoadNPCsButton(wxCommandEvent& event) {
 	}
 }
 
+void CreaturePalettePanel::OnClickLoadMonstersButton(wxCommandEvent& event) {
+	wxDirDialog dlg(g_gui.root, "Select Monsters folder", "", wxDD_DEFAULT_STYLE | wxDD_DIR_MUST_EXIST);
+	if (dlg.ShowModal() == wxID_OK) {
+		wxString folder = dlg.GetPath();
+		LoadMonstersFromFolder(folder);
+	}
+}
+
+void CreaturePalettePanel::OnClickPurgeCreaturesButton(wxCommandEvent& event) {
+	// Confirmation dialog
+	long response = wxMessageBox("Are you sure you want to purge all creatures from the palette? This cannot be undone.", 
+		"Confirm Purge", wxYES_NO | wxICON_QUESTION, g_gui.root);
+	
+	if (response == wxYES) {
+		PurgeCreaturePalettes();
+	}
+}
+
 bool CreaturePalettePanel::LoadNPCsFromFolder(const wxString& folder) {
 	// Get all .xml files in the folder
 	wxArrayString files;
@@ -311,12 +343,135 @@ bool CreaturePalettePanel::LoadNPCsFromFolder(const wxString& folder) {
 	
 	if (loadedCount > 0) {
 		g_gui.PopupDialog("Success", wxString::Format("Successfully loaded %d NPC files.", loadedCount), wxOK);
+		
+		// Refresh the palette
 		g_gui.RefreshPalettes();
+		
+		// Refresh current tileset and creature list
+		OnUpdate();
+		
 		return true;
 	} else {
 		wxMessageBox("No NPCs could be loaded from the selected folder.", "Error", wxOK | wxICON_INFORMATION, g_gui.root);
 		return false;
 	}
+}
+
+bool CreaturePalettePanel::LoadMonstersFromFolder(const wxString& folder) {
+	// Get all .xml files in the folder
+	wxArrayString files;
+	wxDir::GetAllFiles(folder, &files, "*.xml", wxDIR_FILES);
+	
+	if (files.GetCount() == 0) {
+		wxMessageBox("No XML files found in the selected folder.", "Error", wxOK | wxICON_INFORMATION, g_gui.root);
+		return false;
+	}
+	
+	wxArrayString warnings;
+	int loadedCount = 0;
+	
+	for (size_t i = 0; i < files.GetCount(); ++i) {
+		wxString error;
+		bool ok = g_creatures.importXMLFromOT(FileName(files[i]), error, warnings);
+		if (ok) {
+			loadedCount++;
+		} else {
+			warnings.Add("Failed to load " + files[i] + ": " + error);
+		}
+	}
+	
+	if (!warnings.IsEmpty()) {
+		g_gui.ListDialog("Monster loader messages", warnings);
+	}
+	
+	if (loadedCount > 0) {
+		g_gui.PopupDialog("Success", wxString::Format("Successfully loaded %d monster files.", loadedCount), wxOK);
+		
+		// Refresh the palette
+		g_gui.RefreshPalettes();
+		
+		// Refresh current tileset and creature list
+		OnUpdate();
+		
+		return true;
+	} else {
+		wxMessageBox("No monsters could be loaded from the selected folder.", "Error", wxOK | wxICON_INFORMATION, g_gui.root);
+		return false;
+	}
+}
+
+bool CreaturePalettePanel::PurgeCreaturePalettes() {
+	// Track success
+	bool success = false;
+	
+	// Create vectors to store brushes that need to be removed
+	std::vector<Brush*> brushesToRemove;
+	
+	// Collect creature brushes from the "NPCs" and "Others" tilesets
+	if (g_materials.tilesets.count("NPCs") > 0) {
+		Tileset* npcTileset = g_materials.tilesets["NPCs"];
+		TilesetCategory* npcCategory = npcTileset->getCategory(TILESET_CREATURE);
+		if (npcCategory) {
+			for (BrushVector::iterator it = npcCategory->brushlist.begin(); it != npcCategory->brushlist.end(); ++it) {
+				brushesToRemove.push_back(*it);
+			}
+			npcCategory->brushlist.clear();
+			success = true;
+		}
+	}
+	
+	if (g_materials.tilesets.count("Others") > 0) {
+		Tileset* othersTileset = g_materials.tilesets["Others"];
+		TilesetCategory* othersCategory = othersTileset->getCategory(TILESET_CREATURE);
+		if (othersCategory) {
+			for (BrushVector::iterator it = othersCategory->brushlist.begin(); it != othersCategory->brushlist.end(); ++it) {
+				brushesToRemove.push_back(*it);
+			}
+			othersCategory->brushlist.clear();
+			success = true;
+		}
+	}
+	
+	// Remove creature brushes from g_brushes
+	// We need to collect the keys to remove first to avoid modifying the map during iteration
+	const BrushMap& allBrushes = g_brushes.getMap();
+	std::vector<std::string> brushKeysToRemove;
+	
+	for (BrushMap::const_iterator it = allBrushes.begin(); it != allBrushes.end(); ++it) {
+		if (it->second && it->second->isCreature()) {
+			brushKeysToRemove.push_back(it->first);
+		}
+	}
+	
+	// Now remove the brushes from g_brushes
+	for (std::vector<std::string>::iterator it = brushKeysToRemove.begin(); it != brushKeysToRemove.end(); ++it) {
+		g_brushes.removeBrush(*it);
+	}
+	
+	// Delete the brush objects to prevent memory leaks
+	for (std::vector<Brush*>::iterator it = brushesToRemove.begin(); it != brushesToRemove.end(); ++it) {
+		delete *it;
+	}
+	
+	// Clear creature database
+	g_creatures.clear();
+	
+	// Recreate empty tilesets if needed
+	g_materials.createOtherTileset();
+	
+	// Refresh the palette
+	g_gui.RefreshPalettes();
+	
+	// Refresh current tileset and creature list in this panel
+	OnUpdate();
+	
+	if (success) {
+		g_gui.PopupDialog("Success", "All creatures have been purged from the palettes.", wxOK);
+	} else {
+		wxMessageBox("There was a problem purging the creatures.", "Error", wxOK | wxICON_ERROR, g_gui.root);
+	}
+	
+	return success;
 }
 
 void CreaturePalettePanel::OnChangeSpawnTime(wxSpinEvent& event) {
