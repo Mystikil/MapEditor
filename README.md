@@ -1,9 +1,12 @@
-What is this? Idlers Tavern has screenshots of the new functions!!!!!![][][][][]
+What is this? Idler Map Editor
 =============
 ![image](https://github.com/user-attachments/assets/fa261227-5d88-4d00-9c60-0f48e393adc5)
 
 
-https://discord.gg/FD2cYKBq5E
+![image](https://github.com/user-attachments/assets/44c2defe-7cb3-4998-b371-15b1387a4b7f)
+
+
+Idlers tavern : https://discord.gg/FD2cYKBq5E
 
 OTR
 https://discord.gg/sdxUJJdFzC
@@ -59,3 +62,6 @@ Required libraries:
 [Compile on Arch Linux](https://github.com/hjnilsson/rme/wiki/Compiling-on-Arch-Linux)
 
 [Compile on macOS](https://github.com/hjnilsson/rme/wiki/Compiling-on-macOS)
+
+functions
+
