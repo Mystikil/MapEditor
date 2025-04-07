@@ -29,6 +29,7 @@
 #include "main_menubar.h"
 #include "updater.h"
 #include "artprovider.h"
+#include "dark_mode_manager.h"
 
 #include "materials.h"
 #include "map.h"
@@ -121,6 +122,9 @@ bool Application::OnInit() {
 	FixVersionDiscrapencies();
 	g_gui.LoadHotkeys();
 	ClientVersion::loadVersions();
+
+	// Initialize dark mode manager
+	g_darkMode.Initialize();
 
 #ifdef _USE_PROCESS_COM
 	m_single_instance_checker = newd wxSingleInstanceChecker; // Instance checker has to stay alive throughout the applications lifetime
@@ -393,6 +397,14 @@ MainFrame::MainFrame(const wxString& title, const wxPoint& pos, const wxSize& si
 	g_gui.aui_manager->Update();
 
 	UpdateMenubar();
+    
+	// Apply dark mode if enabled
+	if (g_darkMode.IsDarkModeEnabled()) {
+		g_darkMode.ApplyTheme(this);
+		g_darkMode.ApplyThemeToMainMenuBar(menu_bar);
+		g_darkMode.ApplyThemeToMainToolBar(tool_bar);
+		g_darkMode.ApplyThemeToStatusBar(GetStatusBar());
+	}
 }
 
 MainFrame::~MainFrame() = default;

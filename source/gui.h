@@ -486,6 +486,9 @@ public:
 	void CheckAutoSave();
 	uint32_t last_autosave;
 	uint32_t last_autosave_check;
+
+	// Dark mode
+	void ApplyDarkMode();
 };
 
 extern GUI g_gui;

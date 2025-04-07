@@ -26,6 +26,9 @@
 #include "gui.h"
 
 #include "preferences.h"
+#include "main_menubar.h"
+#include "main_toolbar.h"
+#include "dark_mode_manager.h"
 
 BEGIN_EVENT_TABLE(PreferencesWindow, wxDialog)
 EVT_BUTTON(wxID_OK, PreferencesWindow::OnClickOK)
@@ -227,18 +230,23 @@ wxNotebookPage* PreferencesWindow::CreateGraphicsPage() {
 
 	hide_items_when_zoomed_chkbox = newd wxCheckBox(graphics_page, wxID_ANY, "Hide items when zoomed out");
 	hide_items_when_zoomed_chkbox->SetValue(g_settings.getBoolean(Config::HIDE_ITEMS_WHEN_ZOOMED));
+	hide_items_when_zoomed_chkbox->SetToolTip("Hides items when zooming out too far.");
 	sizer->Add(hide_items_when_zoomed_chkbox, 0, wxLEFT | wxTOP, 5);
-	SetWindowToolTip(hide_items_when_zoomed_chkbox, "When this option is checked, \"loose\" items will be hidden when you zoom very far out.");
 
 	icon_selection_shadow_chkbox = newd wxCheckBox(graphics_page, wxID_ANY, "Use icon selection shadow");
 	icon_selection_shadow_chkbox->SetValue(g_settings.getBoolean(Config::USE_GUI_SELECTION_SHADOW));
+	icon_selection_shadow_chkbox->SetToolTip("When this option is enabled, a darker shadow will be used for selection highlights (for icon-based palettes).");
 	sizer->Add(icon_selection_shadow_chkbox, 0, wxLEFT | wxTOP, 5);
-	SetWindowToolTip(icon_selection_shadow_chkbox, "When this option is checked, selected items in the palette menu will be shaded.");
 
-	use_memcached_chkbox = newd wxCheckBox(graphics_page, wxID_ANY, "Use memcached sprites");
-	use_memcached_chkbox->SetValue(g_settings.getBoolean(Config::USE_MEMCACHED_SPRITES));
+	use_memcached_chkbox = newd wxCheckBox(graphics_page, wxID_ANY, "Cache sprites in memory");
+	use_memcached_chkbox->SetValue(g_settings.getBoolean(Config::USE_MEMCACHED_SPRITES_TO_SAVE));
+	use_memcached_chkbox->SetToolTip("Uncheck this to conserve memory.");
 	sizer->Add(use_memcached_chkbox, 0, wxLEFT | wxTOP, 5);
-	SetWindowToolTip(use_memcached_chkbox, "When this is checked, sprites will be loaded into memory at startup and unpacked at runtime. This is faster but consumes more memory.\nIf it is not checked, the editor will use less memory but there will be a performance decrease due to reading sprites from the disk.");
+
+	dark_mode_chkbox = newd wxCheckBox(graphics_page, wxID_ANY, "Use dark mode");
+	dark_mode_chkbox->SetValue(g_settings.getBoolean(Config::DARK_MODE));
+	dark_mode_chkbox->SetToolTip("Enable dark mode for the application interface.");
+	sizer->Add(dark_mode_chkbox, 0, wxLEFT | wxTOP, 5);
 
 	sizer->AddSpacer(10);
 
@@ -610,6 +618,7 @@ void PreferencesWindow::OnCollapsiblePane(wxCollapsiblePaneEvent& event) {
 void PreferencesWindow::Apply() {
 	bool must_restart = false;
 	bool palette_update_needed = false;
+	bool dark_mode_changed = false;
 
 	// General
 	g_settings.setInteger(Config::WELCOME_DIALOG, show_welcome_dialog_chkbox->GetValue());
@@ -661,6 +670,13 @@ void PreferencesWindow::Apply() {
 			g_gui.gfx.cleanSoftwareSprites();
 		}
 		g_settings.setInteger(Config::ICON_BACKGROUND, 255);
+	}
+
+	// Dark mode setting
+	bool new_dark_mode_value = dark_mode_chkbox->GetValue();
+	if (g_settings.getBoolean(Config::DARK_MODE) != new_dark_mode_value) {
+		g_settings.setInteger(Config::DARK_MODE, new_dark_mode_value ? 1 : 0);
+		dark_mode_changed = true;
 	}
 
 	// Screenshots
@@ -750,6 +766,12 @@ void PreferencesWindow::Apply() {
 
 	if (must_restart) {
 		g_gui.PopupDialog(this, "Notice", "You must restart the editor for the changes to take effect.", wxOK);
+	}
+
+	if (dark_mode_changed) {
+		g_darkMode.ToggleDarkMode();
+		g_darkMode.ApplyTheme(g_gui.root);
+		g_gui.PopupDialog(this, "Dark Mode Changed", "The application theme has been changed. Some elements may require a restart to display correctly.", wxOK);
 	}
 
 	if (!palette_update_needed) {

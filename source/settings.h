@@ -194,6 +194,8 @@ namespace Config {
 		LIVE_PASSWORD,
 		LIVE_USERNAME,
 
+		DARK_MODE,
+
 		LAST,
 	};
 

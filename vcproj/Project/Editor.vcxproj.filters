@@ -392,6 +392,7 @@
     <ClInclude Include="..\..\source\live_action_packets.h" />
     <ClInclude Include="..\..\source\island_generator_dialog.h" />
     <ClInclude Include="..\..\source\ground_validation_dialog.h" />
+    <ClInclude Include="..\..\source\dark_mode_manager.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\source\json\json_spirit_reader.cpp">
@@ -693,6 +694,7 @@
     <ClCompile Include="..\..\source\automagic_settings.cpp" />
     <ClCompile Include="..\..\source\island_generator_dialog.cpp" />
     <ClCompile Include="..\..\source\ground_validation_dialog.cpp" />
+    <ClCompile Include="..\..\source\dark_mode_manager.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="Editor.rc">

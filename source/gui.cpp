@@ -173,6 +173,7 @@
 #include "live_client.h"
 #include "live_tab.h"
 #include "live_server.h"
+#include "dark_mode_manager.h"
 #include <wx/regex.h>
 
 #ifdef __WXOSX__
@@ -2258,6 +2259,45 @@ void GUI::CheckAutoSave() {
 			SaveCurrentMap(autosave_name, false);
 			last_autosave = now;
 			OutputDebugStringA("Autosave complete\n");
+		}
+	}
+}
+
+void GUI::ApplyDarkMode() {
+	if (root) {
+		g_darkMode.ApplyTheme(root);
+        
+		// Apply to all floating windows and panes
+		if (aui_manager) {
+			wxAuiPaneInfoArray& panes = aui_manager->GetAllPanes();
+			for (size_t i = 0; i < panes.GetCount(); ++i) {
+				if (panes[i].window) {
+					g_darkMode.ApplyTheme(panes[i].window);
+				}
+			}
+			aui_manager->Update();
+		}
+        
+		// Apply to the menu bar
+		if (MainMenuBar* menuBar = dynamic_cast<MainMenuBar*>(root->GetMenuBar())) {
+			g_darkMode.ApplyThemeToMainMenuBar(menuBar);
+		}
+        
+		// Apply to minimap if it exists
+		if (minimap) {
+			g_darkMode.ApplyTheme(minimap);
+		}
+        
+		// Apply to search window if it exists
+		if (search_result_window) {
+			g_darkMode.ApplyTheme(search_result_window);
+		}
+        
+		// Apply to all palette windows
+		for (PaletteWindow* palette : palettes) {
+			if (palette) {
+				g_darkMode.ApplyTheme(palette);
+			}
 		}
 	}
 }

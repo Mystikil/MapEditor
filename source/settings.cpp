@@ -374,6 +374,13 @@ void Settings::IO(IOMode mode) {
 	Int(DRAW_LOCKED_DOOR, 0);
 	//Int(HIGHLIGHT_LOCKED_DOORS, 0);
 
+	Int(AUTO_SAVE_ENABLED, 0);
+	Int(AUTO_SAVE_INTERVAL, 5);
+
+	// Dark Mode
+	section("Interface");
+	Int(DARK_MODE, 0);
+
 #undef section
 #undef Int
 #undef IntToSave
