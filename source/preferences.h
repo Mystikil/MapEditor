@@ -87,6 +87,17 @@ protected:
 	wxSpinCtrl* software_clean_amount_spin;
 	*/
 
+	// Automagic
+	wxCheckBox* automagic_enabled_chkbox;
+	wxCheckBox* same_ground_type_chkbox;
+	wxCheckBox* walls_repel_borders_chkbox;
+	wxCheckBox* layer_carpets_chkbox;
+	wxCheckBox* borderize_delete_chkbox;
+	wxCheckBox* borderize_paste_chkbox;
+	wxCheckBox* borderize_drag_chkbox;
+	wxSpinCtrl* borderize_drag_threshold_spin;
+	wxSpinCtrl* borderize_paste_threshold_spin;
+
 	// Interface
 	wxChoice* terrain_palette_style_choice;
 	wxChoice* collection_palette_style_choice;
@@ -124,6 +135,7 @@ protected:
 	wxNotebookPage* CreateUIPage();
 	wxNotebookPage* CreateEditorPage();
 	wxNotebookPage* CreateClientPage();
+	wxNotebookPage* CreateAutomagicPage();
 
 	// Add with other checkbox declarations
 	wxCheckBox* auto_select_raw_chkbox;

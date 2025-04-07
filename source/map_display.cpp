@@ -1817,6 +1817,17 @@ void MapCanvas::OnKeyDown(wxKeyEvent& event) {
 			keyCode = WXK_CONTROL_D;
 			break;
 		}
+		case 'a':
+		case 'A': {
+			bool new_state = !g_settings.getBoolean(Config::USE_AUTOMAGIC);
+			g_settings.setInteger(Config::USE_AUTOMAGIC, new_state ? 1 : 0);
+			if (new_state) {
+				g_gui.SetStatusText("Automagic enabled.");
+			} else {
+				g_gui.SetStatusText("Automagic disabled.");
+			}
+			break;
+		}
 		default: {
 			event.Skip();
 			break;

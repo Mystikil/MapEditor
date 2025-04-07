@@ -138,7 +138,9 @@ MainMenuBar::MainMenuBar(MainFrame* frame) :
 	MAKE_ACTION(SELECT_MODE_CURRENT, wxITEM_RADIO, OnSelectionTypeChange);
 	MAKE_ACTION(SELECT_MODE_VISIBLE, wxITEM_RADIO, OnSelectionTypeChange);
 
-	MAKE_ACTION(AUTOMAGIC, wxITEM_CHECK, OnToggleAutomagic);
+	// Remove the AUTOMAGIC action as it's now handled by 'A' hotkey
+	// MAKE_ACTION(AUTOMAGIC, wxITEM_CHECK, OnToggleAutomagic);
+	
 	MAKE_ACTION(BORDERIZE_SELECTION, wxITEM_NORMAL, OnBorderizeSelection);
 	MAKE_ACTION(BORDERIZE_MAP, wxITEM_NORMAL, OnBorderizeMap);
 	MAKE_ACTION(RANDOMIZE_SELECTION, wxITEM_NORMAL, OnRandomizeSelection);
@@ -494,7 +496,8 @@ void MainMenuBar::LoadValues() {
 			break;
 	}
 
-	CheckItem(AUTOMAGIC, g_settings.getBoolean(Config::USE_AUTOMAGIC));
+	// No longer needed as automagic is controlled through preferences and hotkey 'A'
+	 CheckItem(AUTOMAGIC, g_settings.getBoolean(Config::USE_AUTOMAGIC));
 
 	CheckItem(SHOW_SHADE, g_settings.getBoolean(Config::SHOW_SHADE));
 	CheckItem(SHOW_INGAME_BOX, g_settings.getBoolean(Config::SHOW_INGAME_BOX));
@@ -1369,15 +1372,13 @@ void MainMenuBar::OnPaste(wxCommandEvent& WXUNUSED(event)) {
 	g_gui.PreparePaste();
 }
 
-void MainMenuBar::OnToggleAutomagic(wxCommandEvent& WXUNUSED(event)) {
-	AutomagicSettingsDialog dialog(frame);
-	if (dialog.ShowModal() == wxID_OK) {
-		// Settings are saved in the dialog's OnClickOK method
-		// Update the menu item check state
-		CheckItem(MenuBar::AUTOMAGIC, g_settings.getBoolean(Config::USE_AUTOMAGIC));
+// OnToggleAutomagic method removed - automagic is now controlled by 'A' hotkey
+	g_settings.setInteger(Config::USE_AUTOMAGIC, IsItemChecked(MenuBar::AUTOMAGIC));
+	g_settings.setInteger(Config::BORDER_IS_GROUND, IsItemChecked(MenuBar::AUTOMAGIC));
+	if (g_settings.getInteger(Config::USE_AUTOMAGIC)) {
+		g_gui.SetStatusText("Automagic enabled.");
 	} else {
-		// Restore the menu item check state to match the current setting
-		CheckItem(MenuBar::AUTOMAGIC, g_settings.getBoolean(Config::USE_AUTOMAGIC));
+		g_gui.SetStatusText("Automagic disabled.");
 	}
 }
 

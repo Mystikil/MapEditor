@@ -49,6 +49,7 @@ PreferencesWindow::PreferencesWindow(wxWindow* parent, bool clientVersionSelecte
 	book->AddPage(CreateGraphicsPage(), "Graphics");
 	book->AddPage(CreateUIPage(), "Interface");
 	book->AddPage(CreateClientPage(), "Client Version", clientVersionSelected);
+	book->AddPage(CreateAutomagicPage(), "Automagic");
 
 	sizer->Add(book, 1, wxEXPAND | wxALL, 10);
 
@@ -593,6 +594,114 @@ wxNotebookPage* PreferencesWindow::CreateClientPage() {
 	return client_page;
 }
 
+wxNotebookPage* PreferencesWindow::CreateAutomagicPage() {
+	wxNotebookPage* automagic_page = newd wxPanel(book, wxID_ANY);
+	wxSizer* sizer = newd wxBoxSizer(wxVERTICAL);
+
+	// Create main checkbox for enabling/disabling automagic
+	automagic_enabled_chkbox = newd wxCheckBox(automagic_page, wxID_ANY, "Enable Automagic");
+	automagic_enabled_chkbox->SetValue(g_settings.getBoolean(Config::USE_AUTOMAGIC));
+	automagic_enabled_chkbox->SetToolTip("Automatically apply borders and wall connections when editing (Toggle with 'A' key)");
+	sizer->Add(automagic_enabled_chkbox, 0, wxLEFT | wxTOP, 5);
+
+	// Create settings group for detailed options
+	wxStaticBoxSizer* settings_sizer = newd wxStaticBoxSizer(wxVERTICAL, automagic_page, "Border Settings");
+	
+	same_ground_type_chkbox = newd wxCheckBox(automagic_page, wxID_ANY, "Same Ground Type Border");
+	same_ground_type_chkbox->SetValue(g_settings.getBoolean(Config::SAME_GROUND_TYPE_BORDER));
+	same_ground_type_chkbox->SetToolTip("Preserve existing borders and only apply borders for the current ground type");
+	settings_sizer->Add(same_ground_type_chkbox, 0, wxALL, 5);
+	
+	walls_repel_borders_chkbox = newd wxCheckBox(automagic_page, wxID_ANY, "Walls Repel Borders");
+	walls_repel_borders_chkbox->SetValue(g_settings.getBoolean(Config::WALLS_REPEL_BORDERS));
+	walls_repel_borders_chkbox->SetToolTip("When enabled, walls will block border generation, preventing borders from crossing through walls");
+	settings_sizer->Add(walls_repel_borders_chkbox, 0, wxALL, 5);
+	
+	layer_carpets_chkbox = newd wxCheckBox(automagic_page, wxID_ANY, "Layer Carpets");
+	layer_carpets_chkbox->SetValue(g_settings.getBoolean(Config::LAYER_CARPETS));
+	layer_carpets_chkbox->SetToolTip("When enabled, carpet brushes will be placed on top of existing carpets instead of replacing them");
+	settings_sizer->Add(layer_carpets_chkbox, 0, wxALL, 5);
+	
+	borderize_delete_chkbox = newd wxCheckBox(automagic_page, wxID_ANY, "Borderize on Delete");
+	borderize_delete_chkbox->SetValue(g_settings.getBoolean(Config::BORDERIZE_DELETE));
+	borderize_delete_chkbox->SetToolTip("When enabled, deleting items will trigger automatic bordering of surrounding tiles");
+	settings_sizer->Add(borderize_delete_chkbox, 0, wxALL, 5);
+	
+	// Paste/Drag borderize settings
+	borderize_paste_chkbox = newd wxCheckBox(automagic_page, wxID_ANY, "Borderize on Paste");
+	borderize_paste_chkbox->SetValue(g_settings.getBoolean(Config::BORDERIZE_PASTE));
+	borderize_paste_chkbox->SetToolTip("When enabled, pasting will trigger automatic bordering");
+	settings_sizer->Add(borderize_paste_chkbox, 0, wxALL, 5);
+	
+	wxBoxSizer* paste_threshold_sizer = newd wxBoxSizer(wxHORIZONTAL);
+	paste_threshold_sizer->Add(newd wxStaticText(automagic_page, wxID_ANY, "Paste Borderize Threshold:  "), 0, wxLEFT | wxTOP, 5);
+	borderize_paste_threshold_spin = newd wxSpinCtrl(automagic_page, wxID_ANY, i2ws(g_settings.getInteger(Config::BORDERIZE_PASTE_THRESHOLD)), wxDefaultPosition, wxDefaultSize);
+	paste_threshold_sizer->Add(borderize_paste_threshold_spin, 0, wxLEFT | wxTOP, 5);
+	settings_sizer->Add(paste_threshold_sizer, 0, wxALL, 0);
+	
+	borderize_drag_chkbox = newd wxCheckBox(automagic_page, wxID_ANY, "Borderize on Drag");
+	borderize_drag_chkbox->SetValue(g_settings.getBoolean(Config::BORDERIZE_DRAG));
+	borderize_drag_chkbox->SetToolTip("When enabled, dragging will trigger automatic bordering");
+	settings_sizer->Add(borderize_drag_chkbox, 0, wxALL, 5);
+	
+	wxBoxSizer* drag_threshold_sizer = newd wxBoxSizer(wxHORIZONTAL);
+	drag_threshold_sizer->Add(newd wxStaticText(automagic_page, wxID_ANY, "Drag Borderize Threshold:  "), 0, wxLEFT | wxTOP, 5);
+	borderize_drag_threshold_spin = newd wxSpinCtrl(automagic_page, wxID_ANY, i2ws(g_settings.getInteger(Config::BORDERIZE_DRAG_THRESHOLD)), wxDefaultPosition, wxDefaultSize);
+	drag_threshold_sizer->Add(borderize_drag_threshold_spin, 0, wxLEFT | wxTOP, 5);
+	settings_sizer->Add(drag_threshold_sizer, 0, wxALL, 0);
+	
+	sizer->Add(settings_sizer, 0, wxEXPAND | wxALL, 5);
+	
+	// Add description text
+	wxStaticText* description = newd wxStaticText(automagic_page, wxID_ANY, 
+		"The Automagic system automatically applies borders and wall connections.\n\n"
+		"When 'Same Ground Type Border' is enabled, the editor will:\n"
+		"- Preserve existing borders on tiles\n"
+		"- Only apply borders for the current ground type\n"
+		"- Respect Z-axis positioning of existing borders\n\n"
+		"When 'Walls Repel Borders' is enabled, the editor will:\n"
+		"- Prevent borders from crossing through walls\n"
+		"- Treat walls as barriers for border generation\n"
+		"The threshold values control the maximum selection size for\n"
+		"auto-borderizing during paste and drag operations.");
+	sizer->Add(description, 0, wxALL, 5);
+	
+	// Make dependent controls dynamically enable/disable based on master checkbox
+	automagic_enabled_chkbox->Bind(wxEVT_CHECKBOX, [this](wxCommandEvent&) {
+		bool enabled = automagic_enabled_chkbox->GetValue();
+		same_ground_type_chkbox->Enable(enabled);
+		walls_repel_borders_chkbox->Enable(enabled);
+		layer_carpets_chkbox->Enable(enabled);
+		borderize_delete_chkbox->Enable(enabled);
+		borderize_paste_chkbox->Enable(enabled);
+		borderize_drag_chkbox->Enable(enabled);
+		borderize_paste_threshold_spin->Enable(enabled && borderize_paste_chkbox->GetValue());
+		borderize_drag_threshold_spin->Enable(enabled && borderize_drag_chkbox->GetValue());
+	});
+	
+	borderize_paste_chkbox->Bind(wxEVT_CHECKBOX, [this](wxCommandEvent&) {
+		borderize_paste_threshold_spin->Enable(automagic_enabled_chkbox->GetValue() && borderize_paste_chkbox->GetValue());
+	});
+	
+	borderize_drag_chkbox->Bind(wxEVT_CHECKBOX, [this](wxCommandEvent&) {
+		borderize_drag_threshold_spin->Enable(automagic_enabled_chkbox->GetValue() && borderize_drag_chkbox->GetValue());
+	});
+	
+	// Initial state setup
+	bool enabled = automagic_enabled_chkbox->GetValue();
+	same_ground_type_chkbox->Enable(enabled);
+	walls_repel_borders_chkbox->Enable(enabled);
+	layer_carpets_chkbox->Enable(enabled);
+	borderize_delete_chkbox->Enable(enabled);
+	borderize_paste_chkbox->Enable(enabled);
+	borderize_drag_chkbox->Enable(enabled);
+	borderize_paste_threshold_spin->Enable(enabled && borderize_paste_chkbox->GetValue());
+	borderize_drag_threshold_spin->Enable(enabled && borderize_drag_chkbox->GetValue());
+	
+	automagic_page->SetSizerAndFit(sizer);
+	return automagic_page;
+}
+
 // Event handlers!
 
 void PreferencesWindow::OnClickOK(wxCommandEvent& WXUNUSED(event)) {
@@ -789,4 +898,13 @@ void PreferencesWindow::Apply() {
 	g_settings.setInteger(Config::AUTO_SELECT_RAW_ON_RIGHTCLICK, auto_select_raw_chkbox->GetValue());
 	g_settings.setInteger(Config::AUTO_SAVE_ENABLED, autosave_chkbox->GetValue());
 	g_settings.setInteger(Config::AUTO_SAVE_INTERVAL, autosave_interval_spin->GetValue());
+	g_settings.setInteger(Config::USE_AUTOMAGIC, automagic_enabled_chkbox->GetValue());
+	g_settings.setInteger(Config::SAME_GROUND_TYPE_BORDER, same_ground_type_chkbox->GetValue());
+	g_settings.setInteger(Config::WALLS_REPEL_BORDERS, walls_repel_borders_chkbox->GetValue());
+	g_settings.setInteger(Config::LAYER_CARPETS, layer_carpets_chkbox->GetValue());
+	g_settings.setInteger(Config::BORDERIZE_DELETE, borderize_delete_chkbox->GetValue());
+	g_settings.setInteger(Config::BORDERIZE_PASTE, borderize_paste_chkbox->GetValue());
+	g_settings.setInteger(Config::BORDERIZE_PASTE_THRESHOLD, borderize_paste_threshold_spin->GetValue());
+	g_settings.setInteger(Config::BORDERIZE_DRAG, borderize_drag_chkbox->GetValue());
+	g_settings.setInteger(Config::BORDERIZE_DRAG_THRESHOLD, borderize_drag_threshold_spin->GetValue());
 }
