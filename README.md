@@ -19,6 +19,11 @@ https://discord.gg/CavZvnvRey
 Rangers Arcani
 https://discord.gg/Wp5wZcCczu
 
+TIBIA TRADE:
+https://discord.gg/BtrYU3tn7a
+
+ADVERTISE YOUR OT SERVER WITH IDLER_PL CONTACT IDLER_PL ON DISCORD.
+
 This is a map editor for game servers that derivied from [OpenTibia](https://github.com/opentibia/server) server project.
 
 It is a fork of a [Map Editor](https://github.com/hampusborgos/rme) created by [Remere](https://github.com/hampusborgos).
