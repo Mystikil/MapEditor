@@ -22,7 +22,7 @@ https://discord.gg/Wp5wZcCczu
 TIBIA TRADE:
 https://discord.gg/BtrYU3tn7a
 
-ADVERTISE YOUR OT SERVER WITH IDLER_PL CONTACT IDLER_PL ON DISCORD.
+ADVERTISE YOUR OT SERVER WITH Idler_pl ON DISCORD.
 
 This is a map editor for game servers that derivied from [OpenTibia](https://github.com/opentibia/server) server project.
 
