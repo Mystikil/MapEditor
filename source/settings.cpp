@@ -234,7 +234,7 @@ void Settings::IO(IOMode mode) {
 
 	section("Version");
 	Int(VERSION_ID, 0);
-	Int(CHECK_SIGNATURES, 1);
+	Int(CHECK_SIGNATURES, 0);
 	Int(USE_CUSTOM_DATA_DIRECTORY, 0);
 	String(DATA_DIRECTORY, "");
 	String(EXTENSIONS_DIRECTORY, "");
@@ -391,7 +391,7 @@ void Settings::load() {
 		use_file_cfg = true;
 		g_settings.setInteger(Config::INDIRECTORY_INSTALLATION, 1);
 	} else { // Use registry
-		conf = newd wxConfig("IME", "IDLERMAPEDITOR", "", "", wxCONFIG_USE_GLOBAL_FILE);
+		conf = newd wxConfig("IME", "Idlerlive", "", "", wxCONFIG_USE_GLOBAL_FILE);
 		g_settings.setInteger(Config::INDIRECTORY_INSTALLATION, 0);
 	}
 #else

@@ -18,8 +18,8 @@
 #ifndef RME_DEFINITIONS_H_
 #define RME_DEFINITIONS_H_
 
-#define __W_RME_APPLICATION_NAME__ wxString("OTARMEIE - Idler Map Editor")
-#define __RME_APPLICATION_NAME__ std::string("OTARMEIE - Idler Map Editor")
+#define __W_RME_APPLICATION_NAME__ wxString("https://idler.live/ Idler Map Editor!")
+#define __RME_APPLICATION_NAME__ std::string("https://idler.live/ Idler Map Editor!")
 
 // Version info
 // xxyyzzt (major, minor, subversion)
