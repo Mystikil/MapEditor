@@ -26,6 +26,8 @@
 #include <wx/wfstream.h>
 #include <wx/xml/xml.h>
 #include <algorithm>
+#include <queue>
+#include <set>
 
 #include "gui.h"
 #include "editor.h"
@@ -89,6 +91,7 @@ EVT_MENU(MAP_POPUP_MENU_PASTE, MapCanvas::OnPaste)
 EVT_MENU(MAP_POPUP_MENU_DELETE, MapCanvas::OnDelete)
 EVT_MENU(MAP_POPUP_MENU_FILL, MapCanvas::OnFill)
 EVT_MENU(MAP_POPUP_MENU_GENERATE_ISLAND, MapCanvas::OnGenerateIsland)
+EVT_MENU(MAP_POPUP_MENU_CREATE_HOUSE, MapCanvas::OnCreateHouse)
 EVT_MENU(MAP_POPUP_MENU_FIND_SIMILAR_ITEMS, MapCanvas::OnFindSimilarItems)
 //----
 EVT_MENU(MAP_POPUP_MENU_COPY_SERVER_ID, MapCanvas::OnCopyServerId)
@@ -2451,6 +2454,9 @@ void MapPopupMenu::Update() {
 	// Add the Generate Island option
 	Append(MAP_POPUP_MENU_GENERATE_ISLAND, "Generate &Island", "Generate an island at this location");
 
+	// Add the Create House option
+	Append(MAP_POPUP_MENU_CREATE_HOUSE, "Create &House", "Auto-detect house boundaries based on walls and doors");
+
 	// Add the Find Similar option
 	wxMenuItem* findSimilarItem = Append(MAP_POPUP_MENU_FIND_SIMILAR_ITEMS, "Find &Similar Items", "Find similar items on the map");
 	findSimilarItem->Enable(anything_selected);
@@ -3573,18 +3579,563 @@ void MapCanvas::OnFindSimilarItems(wxCommandEvent& WXUNUSED(event)) {
     dialog->Destroy();
 }
 
-void MapCanvas::OnGenerateIsland(wxCommandEvent& WXUNUSED(event)) {
+void MapCanvas::OnGenerateIsland(wxCommandEvent& event) {
     // Get cursor position for island generation
     int map_x, map_y;
     MouseToMap(&map_x, &map_y);
 
     // Create and show the island generator dialog
-    IslandGeneratorDialog* dialog = new IslandGeneratorDialog(g_gui.root);
+	IslandGeneratorDialog dialog(this);
     
     // Set the initial position to the clicked location
-    dialog->SetStartPosition(Position(map_x, map_y, floor));
-    
-    dialog->ShowModal();
-    dialog->Destroy();
+	dialog.SetStartPosition(Position(map_x, map_y, floor));
+	
+	dialog.ShowModal();
+	Refresh();
 }
 
+void MapCanvas::OnCreateHouse(wxCommandEvent& event) {
+	int start_map_x = last_click_map_x;
+	int start_map_y = last_click_map_y;
+	int current_floor = floor;
+
+	if (start_map_x == -1 || start_map_y == -1) {
+		g_gui.PopupDialog("Error", "You must click on a tile inside the house you want to create.", wxOK);
+		return;
+	}
+
+	// Check if we're already on a house tile
+	Tile* start_tile = editor.map.getTile(start_map_x, start_map_y, current_floor);
+	if (start_tile && start_tile->isHouseTile()) {
+		g_gui.PopupDialog("Warning", "This tile already belongs to a house. Please select a tile that doesn't belong to any house.", wxOK);
+		return;
+	}
+
+	// Initialize structures to track visited/enclosed tiles
+	std::set<Position> enclosed_tiles;
+	std::set<Position> visited;
+	std::queue<Position> to_check;
+	Position exit_position;
+
+	// Start at the clicked position
+	Position start_pos(start_map_x, start_map_y, current_floor);
+	to_check.push(start_pos);
+
+	// Use BFS to find all enclosed tiles within walls/doors
+	int safety_counter = 0;
+	int max_tiles = g_settings.getInteger(Config::MAX_HOUSE_TILES); // Use the setting from preferences
+	
+	while (!to_check.empty() && safety_counter < max_tiles) {
+		safety_counter++;
+		Position pos = to_check.front();
+		to_check.pop();
+
+		if (visited.count(pos) > 0) {
+			continue;
+		}
+		visited.insert(pos);
+
+		// Get the tile at this position
+		Tile* tile = editor.map.getTile(pos);
+		if (!tile) {
+			// Create the tile if it doesn't exist
+			tile = editor.map.createTile(pos.x, pos.y, pos.z);
+			if (!tile) continue;
+		}
+
+		// Skip if this is already part of a house
+		if (tile->isHouseTile()) {
+			continue;
+		}
+
+		// Check if we hit a wall, door, or window
+		bool is_boundary = false;
+		for (ItemVector::iterator it = tile->items.begin(); it != tile->items.end(); ++it) {
+			Item* item = *it;
+			if (item->isWall() || item->isDoor() || item->isBlocking()) {
+				is_boundary = true;
+				break;
+			}
+		}
+
+		if (is_boundary) {
+			continue; // Don't expand beyond walls/doors/blocking items
+		}
+
+		// This is an enclosed tile - add it to our house
+		enclosed_tiles.insert(pos);
+
+		// Check for potential exit position (in front of door)
+		// We need to examine adjacent tiles to find doors
+		Position adjacent[4] = {
+			Position(pos.x + 1, pos.y, current_floor),
+			Position(pos.x - 1, pos.y, current_floor),
+			Position(pos.x, pos.y + 1, current_floor),
+			Position(pos.x, pos.y - 1, current_floor)
+		};
+
+		for (int i = 0; i < 4; i++) {
+			// Check for doors in adjacent tiles
+			Tile* adj_tile = editor.map.getTile(adjacent[i]);
+			if (adj_tile) {
+				bool has_door = false;
+				for (ItemVector::iterator it = adj_tile->items.begin(); it != adj_tile->items.end(); ++it) {
+					Item* item = *it;
+					if (item->isDoor()) {
+						has_door = true;
+						
+						// Now check the tile on the other side of the door
+						int dx = adjacent[i].x - pos.x;
+						int dy = adjacent[i].y - pos.y;
+						Position exit_candidate(adjacent[i].x + dx, adjacent[i].y + dy, current_floor);
+						
+						Tile* exit_tile = editor.map.getTile(exit_candidate);
+						if (exit_tile) {
+							bool is_valid_exit = true;
+							for (ItemVector::iterator exit_it = exit_tile->items.begin(); exit_it != exit_tile->items.end(); ++exit_it) {
+								if ((*exit_it)->isWall()) {
+									is_valid_exit = false;
+									break;
+								}
+							}
+							
+							if (is_valid_exit && exit_position == Position(0, 0, 0)) {
+								exit_position = exit_candidate;
+							}
+						}
+						break;
+					}
+				}
+				
+				if (!has_door && !is_boundary) {
+					// Check if we've seen this adjacent tile before
+					if (visited.count(adjacent[i]) == 0) {
+						to_check.push(adjacent[i]);
+					}
+				}
+			} else {
+				// If the adjacent tile doesn't exist yet, we'll include it in our search
+				to_check.push(adjacent[i]);
+			}
+		}
+	}
+
+	// If no tiles were found, try a more aggressive approach
+	if (enclosed_tiles.empty()) {
+		g_gui.PopupDialog("Warning", "No enclosed area detected. Attempting to identify house area using blocking items.", wxOK);
+		
+		// Reset and try with more lenient rules
+		visited.clear();
+		to_check.push(start_pos);
+		int max_distance = 15; // Limit search radius
+		int safety_counter = 0;
+		int max_tiles = 1000;  // Safety limit
+		
+		while (!to_check.empty() && safety_counter < max_tiles) {
+			safety_counter++;
+			Position pos = to_check.front();
+			to_check.pop();
+
+			if (visited.count(pos) > 0) {
+				continue;
+			}
+			visited.insert(pos);
+
+			// Check if we're too far from starting point
+			int distance = std::abs(pos.x - start_map_x) + std::abs(pos.y - start_map_y);
+			if (distance > max_distance) {
+				continue;
+			}
+
+			// Get the tile at this position
+			Tile* tile = editor.map.getTile(pos);
+			if (!tile) {
+				tile = editor.map.createTile(pos.x, pos.y, pos.z);
+				if (!tile) continue;
+			}
+
+			// Skip if this is already part of a house
+			if (tile->isHouseTile()) {
+				continue;
+			}
+
+			// Check for walls, doors, or blocking items
+			bool has_blocking = false;
+			for (ItemVector::iterator it = tile->items.begin(); it != tile->items.end(); ++it) {
+				Item* item = *it;
+				if (item->isWall() || item->isDoor() || item->isBlocking()) {
+					has_blocking = true;
+					break;
+				}
+			}
+			
+			if (!has_blocking) {
+				// This tile could be part of the house
+				enclosed_tiles.insert(pos);
+				
+				// Check adjacent tiles
+				Position adjacent[4] = {
+					Position(pos.x + 1, pos.y, current_floor),
+					Position(pos.x - 1, pos.y, current_floor),
+					Position(pos.x, pos.y + 1, current_floor),
+					Position(pos.x, pos.y - 1, current_floor)
+				};
+				
+				for (int i = 0; i < 4; i++) {
+					if (visited.count(adjacent[i]) == 0) {
+						to_check.push(adjacent[i]);
+					}
+				}
+			} else {
+				// Check if it's a door - doors might indicate an exit point
+				for (ItemVector::iterator it = tile->items.begin(); it != tile->items.end(); ++it) {
+					Item* item = *it;
+					if (item->isDoor() && exit_position == Position(0, 0, 0)) {
+						exit_position = pos;
+						break;
+					}
+				}
+			}
+		}
+		
+		// If we still didn't find any tiles, abort
+		if (enclosed_tiles.empty()) {
+			g_gui.PopupDialog("Error", "Could not detect any valid house area. Please try selecting a different starting position.", wxOK);
+			return;
+		}
+	}
+
+	// Check if we found an exit
+	if (exit_position == Position(0, 0, 0)) {
+		// First, scan all tiles adjacent to enclosed_tiles for doors
+		for (const Position& pos : enclosed_tiles) {
+			Position adjacent[8] = {
+				Position(pos.x + 1, pos.y, current_floor),     // East
+				Position(pos.x - 1, pos.y, current_floor),     // West
+				Position(pos.x, pos.y + 1, current_floor),     // South
+				Position(pos.x, pos.y - 1, current_floor),     // North
+				Position(pos.x + 1, pos.y + 1, current_floor), // Southeast
+				Position(pos.x - 1, pos.y - 1, current_floor), // Northwest
+				Position(pos.x - 1, pos.y + 1, current_floor), // Southwest
+				Position(pos.x + 1, pos.y - 1, current_floor)  // Northeast
+			};
+			
+			for (int i = 0; i < 8; i++) {
+				if (enclosed_tiles.count(adjacent[i]) == 0) {
+					Tile* adj_tile = editor.map.getTile(adjacent[i]);
+					if (adj_tile) {
+						// Check if this tile has a door
+						for (ItemVector::iterator it = adj_tile->items.begin(); it != adj_tile->items.end(); ++it) {
+							Item* item = *it;
+							if (item->isDoor()) {
+								exit_position = adjacent[i];
+								break;
+							}
+						}
+						
+						// If we found a door, stop looking
+						if (exit_position != Position(0, 0, 0)) {
+							break;
+						}
+						
+						// Check if this tile is blocking - might be a non-traditional "door"
+						for (ItemVector::iterator it = adj_tile->items.begin(); it != adj_tile->items.end(); ++it) {
+							Item* item = *it;
+							if (item->isBlocking() && exit_position == Position(0, 0, 0)) {
+								// Use this as a potential exit if we don't find a real door
+								exit_position = adjacent[i];
+							}
+						}
+					}
+				}
+			}
+			
+			if (exit_position != Position(0, 0, 0)) {
+				break;
+			}
+		}
+	}
+	
+	// If we still don't have an exit, use the closest edge position
+	if (exit_position == Position(0, 0, 0)) {
+		// Find the closest tile to an edge
+		int min_dist = 9999;
+		for (const Position& pos : enclosed_tiles) {
+			Position adjacent[4] = {
+				Position(pos.x + 1, pos.y, current_floor),
+				Position(pos.x - 1, pos.y, current_floor),
+				Position(pos.x, pos.y + 1, current_floor),
+				Position(pos.x, pos.y - 1, current_floor)
+			};
+			
+			for (int i = 0; i < 4; i++) {
+				if (enclosed_tiles.count(adjacent[i]) == 0) {
+					// This is an edge tile
+					int dist = std::abs(adjacent[i].x - start_map_x) + std::abs(adjacent[i].y - start_map_y);
+					if (dist < min_dist) {
+						min_dist = dist;
+						exit_position = adjacent[i];
+					}
+				}
+			}
+		}
+	}
+
+	// Create a dialog to get house information
+	wxDialog* dialog = new wxDialog(this, wxID_ANY, "Create House", wxDefaultPosition, wxSize(300, 200));
+	wxBoxSizer* topsizer = new wxBoxSizer(wxVERTICAL);
+	
+	// House name
+	wxBoxSizer* name_sizer = new wxBoxSizer(wxHORIZONTAL);
+	name_sizer->Add(new wxStaticText(dialog, wxID_ANY, "Name:"), 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 5);
+	wxTextCtrl* name_field = new wxTextCtrl(dialog, wxID_ANY, "New House");
+	name_sizer->Add(name_field, 1, wxEXPAND);
+	topsizer->Add(name_sizer, 0, wxEXPAND | wxALL, 5);
+	
+	// Town ID
+	wxBoxSizer* town_sizer = new wxBoxSizer(wxHORIZONTAL);
+	town_sizer->Add(new wxStaticText(dialog, wxID_ANY, "Town:"), 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 5);
+	wxChoice* town_field = new wxChoice(dialog, wxID_ANY);
+	
+	// Populate town choices
+	const Towns& towns = editor.map.towns;
+	std::vector<uint32_t> town_ids;
+	
+	if (towns.count() > 0) {
+		town_ids.reserve(towns.count());
+		int idx = 0;
+		for (TownMap::const_iterator town_iter = towns.begin(); town_iter != towns.end(); ++town_iter) {
+			town_ids.push_back(town_iter->second->getID());
+			town_field->Append(wxstr(town_iter->second->getName()), (void*)(intptr_t)town_ids[idx]);
+			idx++;
+		}
+		town_field->SetSelection(0);
+	} else {
+		town_field->Append("No towns available");
+		town_field->SetSelection(0);
+		town_field->Enable(false);
+	}
+	
+	town_sizer->Add(town_field, 1, wxEXPAND);
+	topsizer->Add(town_sizer, 0, wxEXPAND | wxALL, 5);
+	
+	// Rent
+	wxBoxSizer* rent_sizer = new wxBoxSizer(wxHORIZONTAL);
+	rent_sizer->Add(new wxStaticText(dialog, wxID_ANY, "Rent:"), 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 5);
+	wxSpinCtrl* rent_field = new wxSpinCtrl(dialog, wxID_ANY, "0", wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS, 0, 100000, 0);
+	rent_sizer->Add(rent_field, 1, wxEXPAND);
+	topsizer->Add(rent_sizer, 0, wxEXPAND | wxALL, 5);
+	
+	// Guildhall
+	wxBoxSizer* guild_sizer = new wxBoxSizer(wxHORIZONTAL);
+	wxCheckBox* guildhall_field = new wxCheckBox(dialog, wxID_ANY, "Guildhall");
+	guild_sizer->Add(guildhall_field, 1, wxEXPAND);
+	topsizer->Add(guild_sizer, 0, wxEXPAND | wxALL, 5);
+	
+	// Size display
+	wxBoxSizer* size_sizer = new wxBoxSizer(wxHORIZONTAL);
+	size_sizer->Add(new wxStaticText(dialog, wxID_ANY, "House size:"), 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 5);
+	wxStaticText* size_field = new wxStaticText(dialog, wxID_ANY, wxString::Format("%d tiles", enclosed_tiles.size()));
+	size_sizer->Add(size_field, 1, wxEXPAND);
+	topsizer->Add(size_sizer, 0, wxEXPAND | wxALL, 5);
+	
+	// Buttons
+	wxStdDialogButtonSizer* buttons = new wxStdDialogButtonSizer();
+	buttons->AddButton(new wxButton(dialog, wxID_OK, "OK"));
+	buttons->AddButton(new wxButton(dialog, wxID_CANCEL, "Cancel"));
+	buttons->Realize();
+	topsizer->Add(buttons, 0, wxALIGN_CENTER | wxALL, 5);
+	
+	dialog->SetSizer(topsizer);
+	topsizer->Fit(dialog);
+	
+	// Show dialog and process results
+	if (dialog->ShowModal() == wxID_OK) {
+		// Create new house
+		House* house = new House(editor.map);
+		house->name = nstr(name_field->GetValue());
+		
+		// Set town ID
+		if (towns.count() > 0) {
+			int sel = town_field->GetSelection();
+			if (sel != wxNOT_FOUND) {
+				house->townid = (uint32_t)(intptr_t)town_field->GetClientData(sel);
+			}
+		}
+		
+		// Remove incorrect cleanup code that causes memory corruption
+		// town_ids is on the stack and will be automatically cleaned up
+		
+		house->rent = rent_field->GetValue();
+		house->guildhall = guildhall_field->GetValue();
+		
+		// Add house to the map
+		uint32_t new_id = editor.map.houses.getEmptyID();
+		house->setID(new_id);
+		editor.map.houses.addHouse(house);
+		
+		// Add all enclosed tiles to the house
+		for (const Position& pos : enclosed_tiles) {
+			Tile* tile = editor.map.getTile(pos);
+			if (!tile) {
+				tile = editor.map.createTile(pos.x, pos.y, pos.z);
+			}
+			house->addTile(tile);
+		}
+		
+		// Check for multi-floor house (look for stairs, ladders, or trapdoors)
+		bool has_multiple_floors = false;
+		std::set<Position> stairs_positions;
+		
+		for (const Position& pos : enclosed_tiles) {
+			Tile* tile = editor.map.getTile(pos);
+			if (!tile) continue;
+			
+			// Check for items that indicate connections to other floors
+			for (ItemVector::iterator iter = tile->items.begin(); iter != tile->items.end(); ++iter) {
+				Item* item = *iter;
+				uint16_t id = item->getID();
+				
+				// Check for floor change property
+				bool is_stair = false;
+				ItemType& itemType = g_items[id];
+				if (itemType.isFloorChange()) {
+					is_stair = true;
+					
+					has_multiple_floors = true;
+					stairs_positions.insert(pos);
+					
+					g_gui.PopupDialog("Multi-floor house", "Detected stairs/ladders. Adding tiles on other floors to this house.", wxOK);
+					break;
+				}
+				
+				// These item IDs are common stairs/ladders/trapdoors as fallback
+				// Adapt this based on your specific items
+				if (is_stair || 
+					(id >= 1386 && id <= 1396) ||    // Staircases
+					(id >= 369 && id <= 376) ||      // Ladders
+					(id >= 1421 && id <= 1425) ||    // Trapdoors
+					(id >= 1367 && id <= 1370)) {    // Ramps
+					
+					has_multiple_floors = true;
+					stairs_positions.insert(pos);
+					
+					g_gui.PopupDialog("Multi-floor house", "Detected stairs/ladders. Adding tiles on other floors to this house.", wxOK);
+					break;
+				}
+			}
+			
+			if (has_multiple_floors) {
+				break;
+			}
+		}
+		
+		// If we found stairs, check adjacent floors
+		if (has_multiple_floors) {
+			// Check one floor up and one floor down
+			for (int floor_offset = -1; floor_offset <= 1; floor_offset += 2) {
+				int target_floor = current_floor + floor_offset;
+				if (target_floor < 0 || target_floor >= 16) {
+					continue; // Skip invalid floors
+				}
+				
+				std::set<Position> other_floor_tiles;
+				std::set<Position> other_floor_visited;
+				std::queue<Position> other_floor_to_check;
+				
+				// Start from positions with stairs/ladders
+				for (const Position& stair_pos : stairs_positions) {
+					Position start_pos_other_floor(stair_pos.x, stair_pos.y, target_floor);
+					other_floor_to_check.push(start_pos_other_floor);
+				}
+				
+				// Use BFS to find enclosed tiles on the other floor
+				int safety_counter = 0;
+				int max_tiles_per_floor = 1000; // Safety limit for number of tiles
+				
+				while (!other_floor_to_check.empty() && safety_counter < max_tiles_per_floor) {
+					safety_counter++;
+					Position pos = other_floor_to_check.front();
+					other_floor_to_check.pop();
+					
+					if (other_floor_visited.count(pos) > 0) {
+						continue;
+					}
+					other_floor_visited.insert(pos);
+					
+					// Get the tile at this position
+					Tile* tile = editor.map.getTile(pos);
+					if (!tile) {
+						// Make sure to use the correct position when creating
+						tile = editor.map.createTile(pos.x, pos.y, target_floor);
+						if (!tile) continue;
+					}
+					
+					// Skip if this is already part of a house
+					if (tile->isHouseTile()) {
+						continue;
+					}
+					
+					// Check if we hit a wall, door, or window
+					bool is_boundary = false;
+					for (ItemVector::iterator it = tile->items.begin(); it != tile->items.end(); ++it) {
+						Item* item = *it;
+						if (item->isWall() || item->isDoor() || item->isBlocking()) {
+							is_boundary = true;
+							break;
+						}
+					}
+					
+					if (is_boundary) {
+						continue; // Don't expand beyond walls/doors
+					}
+					
+					// This is an enclosed tile on the other floor - add it to our house
+					other_floor_tiles.insert(pos);
+					
+					// Check adjacent tiles
+					Position adjacent[4] = {
+						Position(pos.x + 1, pos.y, target_floor),
+						Position(pos.x - 1, pos.y, target_floor),
+						Position(pos.x, pos.y + 1, target_floor),
+						Position(pos.x, pos.y - 1, target_floor)
+					};
+					
+					for (int i = 0; i < 4; i++) {
+						if (other_floor_visited.count(adjacent[i]) == 0) {
+							other_floor_to_check.push(adjacent[i]);
+						}
+					}
+				}
+				
+				// Add tiles from the other floor to the house
+				for (const Position& pos : other_floor_tiles) {
+					Tile* tile = editor.map.getTile(pos);
+					if (!tile) {
+						// Make sure we create the tile with proper floor value
+						tile = editor.map.createTile(pos.x, pos.y, target_floor);
+						if (!tile) continue;
+					}
+					house->addTile(tile);
+				}
+				
+				if (!other_floor_tiles.empty()) {
+					g_gui.PopupDialog("Multi-floor house", wxString::Format("Added %d tiles from floor %d to the house.", 
+						other_floor_tiles.size(), target_floor), wxOK);
+				}
+			}
+		}
+		
+		// Set house exit
+		if (exit_position != Position(0, 0, 0)) {
+			house->setExit(exit_position);
+		}
+		
+		g_gui.PopupDialog("Success", wxString::Format("Created house '%s' with %d tiles.", wxstr(house->name).c_str(), enclosed_tiles.size()), wxOK);
+		
+		editor.map.doChange();
+	}
+	
+	dialog->Destroy();
+	Refresh();
+}

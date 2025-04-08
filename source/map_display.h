@@ -92,6 +92,7 @@ public:
 
 	void OnFindSimilarItems(wxCommandEvent& event);
 	void OnGenerateIsland(wxCommandEvent& event);
+	void OnCreateHouse(wxCommandEvent& event);
 
 	void OnSelectionToDoodad(wxCommandEvent& event);
 	// ---

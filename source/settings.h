@@ -200,6 +200,11 @@ namespace Config {
 		DARK_MODE_GREEN,
 		DARK_MODE_BLUE,
 
+		// House creation settings
+		MAX_HOUSE_TILES,
+		HOUSE_FLOOR_SCAN,
+		AUTO_DETECT_HOUSE_EXIT,
+
 		LAST,
 	};
 
