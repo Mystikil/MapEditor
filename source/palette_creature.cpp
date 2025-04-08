@@ -26,11 +26,14 @@
 #include "materials.h"
 #include <wx/dir.h>
 #include <wx/filefn.h>
+#include <wx/textdlg.h>
 
 // Define the new event ID for the Load NPCs button
 #define PALETTE_LOAD_NPCS_BUTTON 1952
 #define PALETTE_LOAD_MONSTERS_BUTTON 1953
 #define PALETTE_PURGE_CREATURES_BUTTON 1954
+#define PALETTE_SEARCH_BUTTON 1955
+#define PALETTE_SEARCH_FIELD 1956
 
 // ============================================================================
 // Creature palette
@@ -45,6 +48,8 @@ EVT_TOGGLEBUTTON(PALETTE_SPAWN_BRUSH_BUTTON, CreaturePalettePanel::OnClickSpawnB
 EVT_BUTTON(PALETTE_LOAD_NPCS_BUTTON, CreaturePalettePanel::OnClickLoadNPCsButton)
 EVT_BUTTON(PALETTE_LOAD_MONSTERS_BUTTON, CreaturePalettePanel::OnClickLoadMonstersButton)
 EVT_BUTTON(PALETTE_PURGE_CREATURES_BUTTON, CreaturePalettePanel::OnClickPurgeCreaturesButton)
+EVT_BUTTON(PALETTE_SEARCH_BUTTON, CreaturePalettePanel::OnClickSearchButton)
+EVT_TEXT(PALETTE_SEARCH_FIELD, CreaturePalettePanel::OnSearchFieldText)
 
 EVT_SPINCTRL(PALETTE_CREATURE_SPAWN_TIME, CreaturePalettePanel::OnChangeSpawnTime)
 EVT_SPINCTRL(PALETTE_CREATURE_SPAWN_SIZE, CreaturePalettePanel::OnChangeSpawnSize)
@@ -59,8 +64,23 @@ CreaturePalettePanel::CreaturePalettePanel(wxWindow* parent, wxWindowID id) :
 	tileset_choice = newd wxChoice(this, PALETTE_CREATURE_TILESET_CHOICE, wxDefaultPosition, wxDefaultSize, (int)0, (const wxString*)nullptr);
 	sidesizer->Add(tileset_choice, 0, wxEXPAND);
 
+	// Add search field and button
+	wxSizer* searchSizer = newd wxBoxSizer(wxHORIZONTAL);
+	searchSizer->Add(newd wxStaticText(this, wxID_ANY, "Search:"), 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 5);
+	search_field = newd wxTextCtrl(this, PALETTE_SEARCH_FIELD, wxEmptyString, wxDefaultPosition, wxDefaultSize, wxTE_PROCESS_ENTER);
+	searchSizer->Add(search_field, 1, wxEXPAND);
+	search_button = newd wxButton(this, PALETTE_SEARCH_BUTTON, "Go", wxDefaultPosition, wxDefaultSize, wxBU_EXACTFIT);
+	searchSizer->Add(search_button, 0, wxLEFT, 5);
+	sidesizer->Add(searchSizer, 0, wxEXPAND | wxTOP, 5);
+	
+	// Connect the focus events to disable hotkeys during typing
+	search_field->Connect(wxEVT_SET_FOCUS, wxFocusEventHandler(CreaturePalettePanel::OnSearchFieldFocus), nullptr, this);
+	search_field->Connect(wxEVT_KILL_FOCUS, wxFocusEventHandler(CreaturePalettePanel::OnSearchFieldKillFocus), nullptr, this);
+	// Connect key down event to handle key presses in the search field
+	search_field->Connect(wxEVT_KEY_DOWN, wxKeyEventHandler(CreaturePalettePanel::OnSearchFieldKeyDown), nullptr, this);
+
 	creature_list = newd SortableListBox(this, PALETTE_CREATURE_LISTBOX);
-	sidesizer->Add(creature_list, 1, wxEXPAND);
+	sidesizer->Add(creature_list, 1, wxEXPAND | wxTOP, 5);
 	
 	// Add buttons for loading NPCs, monsters, and purging creatures
 	wxSizer* buttonSizer = newd wxBoxSizer(wxHORIZONTAL);
@@ -220,7 +240,13 @@ void CreaturePalettePanel::SelectTileset(size_t index) {
 			creature_list->Append(wxstr((*iter)->getName()), *iter);
 		}
 		creature_list->Sort();
-		SelectCreature(0);
+		
+		// Apply filter if search field has text
+		if (!search_field->IsEmpty()) {
+			FilterCreatures(search_field->GetValue());
+		} else {
+			SelectCreature(0);
+		}
 
 		tileset_choice->SetSelection(index);
 	}
@@ -485,5 +511,88 @@ void CreaturePalettePanel::OnChangeSpawnSize(wxSpinEvent& event) {
 		g_gui.ActivatePalette(GetParentPalette());
 		g_gui.SetBrushSize(event.GetPosition());
 		handling_event = false;
+	}
+}
+
+void CreaturePalettePanel::OnClickSearchButton(wxCommandEvent& event) {
+	// Get the text from the search field and filter
+	wxString searchText = search_field->GetValue();
+	FilterCreatures(searchText);
+}
+
+void CreaturePalettePanel::OnSearchFieldText(wxCommandEvent& event) {
+	// Filter as user types
+	FilterCreatures(search_field->GetValue());
+}
+
+void CreaturePalettePanel::OnSearchFieldFocus(wxFocusEvent& event) {
+	// Disable hotkeys when search field receives focus
+	g_gui.DisableHotkeys();
+	event.Skip();
+}
+
+void CreaturePalettePanel::OnSearchFieldKillFocus(wxFocusEvent& event) {
+	// Re-enable hotkeys when search field loses focus
+	g_gui.EnableHotkeys();
+	event.Skip();
+}
+
+void CreaturePalettePanel::OnSearchFieldKeyDown(wxKeyEvent& event) {
+	// Handle Enter key specially
+	if (event.GetKeyCode() == WXK_RETURN) {
+		FilterCreatures(search_field->GetValue());
+	} else if (event.GetKeyCode() == WXK_ESCAPE) {
+		// Clear search field and reset the list on Escape
+		search_field->Clear();
+		FilterCreatures(wxEmptyString);
+		// Set focus back to the map
+		wxWindow* mapCanvas = g_gui.root->FindWindowByName("MapCanvas");
+		if (mapCanvas) {
+			mapCanvas->SetFocus();
+		}
+	} else {
+		// Process the event normally for all other keys
+		event.Skip();
+	}
+}
+
+void CreaturePalettePanel::FilterCreatures(const wxString& search_text) {
+	if (search_text.IsEmpty()) {
+		// Reset to show all creatures
+		int currentSelection = tileset_choice->GetSelection();
+		if (currentSelection != wxNOT_FOUND) {
+			SelectTileset(currentSelection);
+		}
+		return;
+	}
+	
+	// Remember the current selection
+	int index = tileset_choice->GetSelection();
+	if (index == wxNOT_FOUND) return;
+	
+	const TilesetCategory* tsc = reinterpret_cast<const TilesetCategory*>(tileset_choice->GetClientData(index));
+	
+	// Clear the list
+	creature_list->Clear();
+	
+	// Add only creatures that match the search
+	wxString searchLower = search_text.Lower();
+	
+	for (BrushVector::const_iterator iter = tsc->brushlist.begin(); iter != tsc->brushlist.end(); ++iter) {
+		wxString name = wxstr((*iter)->getName()).Lower();
+		if (name.Find(searchLower) != wxNOT_FOUND) {
+			creature_list->Append(wxstr((*iter)->getName()), *iter);
+		}
+	}
+	
+	// Sort the filtered list
+	creature_list->Sort();
+	
+	// Select first result if any
+	if (creature_list->GetCount() > 0) {
+		SelectCreature(0);
+		creature_brush_button->Enable(true);
+	} else {
+		creature_brush_button->Enable(false);
 	}
 }

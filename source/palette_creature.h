@@ -60,6 +60,11 @@ public:
 	void OnClickLoadNPCsButton(wxCommandEvent& event);
 	void OnClickLoadMonstersButton(wxCommandEvent& event);
 	void OnClickPurgeCreaturesButton(wxCommandEvent& event);
+	void OnClickSearchButton(wxCommandEvent& event);
+	void OnSearchFieldText(wxCommandEvent& event);
+	void OnSearchFieldFocus(wxFocusEvent& event);
+	void OnSearchFieldKillFocus(wxFocusEvent& event);
+	void OnSearchFieldKeyDown(wxKeyEvent& event);
 
 protected:
 	void SelectCreatureBrush();
@@ -77,8 +82,12 @@ protected:
 	wxButton* purge_creatures_button;
 	wxSpinCtrl* creature_spawntime_spin;
 	wxSpinCtrl* spawn_size_spin;
+	wxTextCtrl* search_field;
+	wxButton* search_button;
 
 	bool handling_event;
+
+	void FilterCreatures(const wxString& search_text);
 
 	DECLARE_EVENT_TABLE();
 };
