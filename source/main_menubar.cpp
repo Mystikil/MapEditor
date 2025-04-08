@@ -1372,15 +1372,6 @@ void MainMenuBar::OnPaste(wxCommandEvent& WXUNUSED(event)) {
 	g_gui.PreparePaste();
 }
 
-// OnToggleAutomagic method removed - automagic is now controlled by 'A' hotkey
-	g_settings.setInteger(Config::USE_AUTOMAGIC, IsItemChecked(MenuBar::AUTOMAGIC));
-	g_settings.setInteger(Config::BORDER_IS_GROUND, IsItemChecked(MenuBar::AUTOMAGIC));
-	if (g_settings.getInteger(Config::USE_AUTOMAGIC)) {
-		g_gui.SetStatusText("Automagic enabled.");
-	} else {
-		g_gui.SetStatusText("Automagic disabled.");
-	}
-}
 
 void MainMenuBar::OnBorderizeSelection(wxCommandEvent& WXUNUSED(event)) {
 	if (!g_gui.IsEditorOpen()) {
