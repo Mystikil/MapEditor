@@ -249,6 +249,36 @@ wxNotebookPage* PreferencesWindow::CreateGraphicsPage() {
 	dark_mode_chkbox->SetToolTip("Enable dark mode for the application interface.");
 	sizer->Add(dark_mode_chkbox, 0, wxLEFT | wxTOP, 5);
 
+	// Add dark mode color picker
+	wxBoxSizer* dark_mode_color_sizer = newd wxBoxSizer(wxHORIZONTAL);
+	dark_mode_color_sizer->Add(newd wxStaticText(graphics_page, wxID_ANY, "Custom dark mode color: "), 0, wxALIGN_CENTER_VERTICAL);
+	dark_mode_color_enabled_chkbox = newd wxCheckBox(graphics_page, wxID_ANY, "Enable");
+	dark_mode_color_enabled_chkbox->SetValue(g_settings.getBoolean(Config::DARK_MODE_CUSTOM_COLOR));
+	dark_mode_color_enabled_chkbox->SetToolTip("Use a custom color for dark mode instead of the default dark color.");
+	dark_mode_color_sizer->Add(dark_mode_color_enabled_chkbox, 0, wxLEFT | wxALIGN_CENTER_VERTICAL, 5);
+	
+	wxColor current_dark_color = wxColor(
+		g_settings.getInteger(Config::DARK_MODE_RED),
+		g_settings.getInteger(Config::DARK_MODE_GREEN),
+		g_settings.getInteger(Config::DARK_MODE_BLUE)
+	);
+	dark_mode_color_pick = newd wxColourPickerCtrl(graphics_page, wxID_ANY, current_dark_color);
+	dark_mode_color_pick->SetToolTip("Select custom color for dark mode. This will be used when both dark mode and custom color are enabled.");
+	dark_mode_color_sizer->Add(dark_mode_color_pick, 0, wxLEFT | wxALIGN_CENTER_VERTICAL, 5);
+	sizer->Add(dark_mode_color_sizer, 0, wxLEFT | wxTOP, 5);
+
+	// Connect events to update UI state
+	dark_mode_chkbox->Bind(wxEVT_CHECKBOX, [this](wxCommandEvent&) {
+		UpdateDarkModeUI();
+	});
+	
+	dark_mode_color_enabled_chkbox->Bind(wxEVT_CHECKBOX, [this](wxCommandEvent&) {
+		UpdateDarkModeUI();
+	});
+	
+	// Initial update of UI state
+	UpdateDarkModeUI();
+
 	sizer->AddSpacer(10);
 
 	auto* subsizer = newd wxFlexGridSizer(2, 10, 10);
@@ -788,6 +818,24 @@ void PreferencesWindow::Apply() {
 		dark_mode_changed = true;
 	}
 
+	// Dark mode custom color settings
+	bool new_custom_color_value = dark_mode_color_enabled_chkbox->GetValue();
+	if (g_settings.getBoolean(Config::DARK_MODE_CUSTOM_COLOR) != new_custom_color_value) {
+		g_settings.setInteger(Config::DARK_MODE_CUSTOM_COLOR, new_custom_color_value ? 1 : 0);
+		dark_mode_changed = true;
+	}
+
+	wxColor dark_mode_clr = dark_mode_color_pick->GetColour();
+	if (g_settings.getInteger(Config::DARK_MODE_RED) != dark_mode_clr.Red() ||
+		g_settings.getInteger(Config::DARK_MODE_GREEN) != dark_mode_clr.Green() ||
+		g_settings.getInteger(Config::DARK_MODE_BLUE) != dark_mode_clr.Blue()) {
+		
+		g_settings.setInteger(Config::DARK_MODE_RED, dark_mode_clr.Red());
+		g_settings.setInteger(Config::DARK_MODE_GREEN, dark_mode_clr.Green());
+		g_settings.setInteger(Config::DARK_MODE_BLUE, dark_mode_clr.Blue());
+		dark_mode_changed = true;
+	}
+
 	// Screenshots
 	g_settings.setString(Config::SCREENSHOT_DIRECTORY, nstr(screenshot_directory_picker->GetPath()));
 
@@ -907,4 +955,10 @@ void PreferencesWindow::Apply() {
 	g_settings.setInteger(Config::BORDERIZE_PASTE_THRESHOLD, borderize_paste_threshold_spin->GetValue());
 	g_settings.setInteger(Config::BORDERIZE_DRAG, borderize_drag_chkbox->GetValue());
 	g_settings.setInteger(Config::BORDERIZE_DRAG_THRESHOLD, borderize_drag_threshold_spin->GetValue());
+}
+
+void PreferencesWindow::UpdateDarkModeUI() {
+	bool enabled = dark_mode_chkbox->GetValue();
+	dark_mode_color_enabled_chkbox->Enable(enabled);
+	dark_mode_color_pick->Enable(enabled && dark_mode_color_enabled_chkbox->GetValue());
 }

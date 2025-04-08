@@ -78,6 +78,8 @@ protected:
 	wxColourPickerCtrl* cursor_color_pick;
 	wxColourPickerCtrl* cursor_alt_color_pick;
 	wxCheckBox* dark_mode_chkbox;
+	wxCheckBox* dark_mode_color_enabled_chkbox;
+	wxColourPickerCtrl* dark_mode_color_pick;
 	/*
 	wxCheckBox* texture_managment_chkbox;
 	wxSpinCtrl* clean_interval_spin;
@@ -136,6 +138,9 @@ protected:
 	wxNotebookPage* CreateEditorPage();
 	wxNotebookPage* CreateClientPage();
 	wxNotebookPage* CreateAutomagicPage();
+
+	// Helper method to update the UI state of dark mode controls
+	void UpdateDarkModeUI();
 
 	// Add with other checkbox declarations
 	wxCheckBox* auto_select_raw_chkbox;

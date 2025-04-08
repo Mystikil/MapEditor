@@ -203,14 +203,46 @@ bool DarkModeManager::IsDarkModeEnabled() const {
 void DarkModeManager::UpdateColors() {
     if (isDarkModeEnabled) {
         // Dark mode colors
-        backgroundColor = wxColour(40, 40, 40);
-        foregroundColor = wxColour(230, 230, 230);
-        menuBackgroundColor = wxColour(50, 50, 50);
-        menuForegroundColor = wxColour(230, 230, 230);
-        selectionBackgroundColor = wxColour(65, 105, 225);
-        selectionForegroundColor = wxColour(255, 255, 255);
-        panelBackgroundColor = wxColour(45, 45, 45);
-        borderColor = wxColour(70, 70, 70);
+        if (g_settings.getBoolean(Config::DARK_MODE_CUSTOM_COLOR)) {
+            // Use custom dark mode colors from settings
+            wxColour customColor(
+                g_settings.getInteger(Config::DARK_MODE_RED),
+                g_settings.getInteger(Config::DARK_MODE_GREEN),
+                g_settings.getInteger(Config::DARK_MODE_BLUE)
+            );
+            
+            backgroundColor = customColor;
+            // Adjust other colors based on the custom color
+            foregroundColor = wxColour(230, 230, 230);
+            menuBackgroundColor = wxColour(
+                wxMin(customColor.Red() + 10, 255),
+                wxMin(customColor.Green() + 10, 255),
+                wxMin(customColor.Blue() + 10, 255)
+            );
+            menuForegroundColor = wxColour(230, 230, 230);
+            selectionBackgroundColor = wxColour(65, 105, 225);
+            selectionForegroundColor = wxColour(255, 255, 255);
+            panelBackgroundColor = wxColour(
+                wxMin(customColor.Red() + 5, 255),
+                wxMin(customColor.Green() + 5, 255),
+                wxMin(customColor.Blue() + 5, 255)
+            );
+            borderColor = wxColour(
+                wxMin(customColor.Red() + 30, 255),
+                wxMin(customColor.Green() + 30, 255),
+                wxMin(customColor.Blue() + 30, 255)
+            );
+        } else {
+            // Default dark mode colors
+            backgroundColor = wxColour(45, 45, 48);
+            foregroundColor = wxColour(230, 230, 230);
+            menuBackgroundColor = wxColour(50, 50, 55);
+            menuForegroundColor = wxColour(230, 230, 230);
+            selectionBackgroundColor = wxColour(65, 105, 225);
+            selectionForegroundColor = wxColour(255, 255, 255);
+            panelBackgroundColor = wxColour(45, 45, 48);
+            borderColor = wxColour(70, 70, 75);
+        }
     } else {
         // Light mode colors (default wxWidgets colors)
         backgroundColor = wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOW);

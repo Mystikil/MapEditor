@@ -380,6 +380,10 @@ void Settings::IO(IOMode mode) {
 	// Dark Mode
 	section("Interface");
 	Int(DARK_MODE, 0);
+	Int(DARK_MODE_CUSTOM_COLOR, 0);
+	Int(DARK_MODE_RED, 45);
+	Int(DARK_MODE_GREEN, 45);
+	Int(DARK_MODE_BLUE, 48);
 
 #undef section
 #undef Int
