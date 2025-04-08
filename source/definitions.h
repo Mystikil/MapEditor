@@ -38,7 +38,7 @@
 	__RME_SUBVERSION__                      \
 )
 
-#define __SITE_URL__ "https://github.com/OTAcademy/RME"
+#define __SITE_URL__ "https://github.com/wirless/OTARMEIE"
 
 // #define __PRERELEASE__ 1
 

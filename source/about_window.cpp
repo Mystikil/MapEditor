@@ -175,10 +175,10 @@ AboutWindow::AboutWindow(wxWindow* parent) :
 	game_panel(nullptr) {
 	wxString about;
 
-	about << "RME-S\n";
-	about << "(based on OTA Remere's Map Editor)\n\n";
+	about << "Idler Map Editor\n";
+	about << "(OTARMEIE)\n\n";
 	about << "This program is a map editor for game servers\nthat derivied from OpenTibia project.\n\n";
-	about << "Brought to you by OTAcademy enhanced by Idler using Cursor.ai \n\n";
+	about << "By Idler and other RME developers. \n\n";
 
 	about << "Version " << __W_RME_VERSION__ << " for ";
 	about <<

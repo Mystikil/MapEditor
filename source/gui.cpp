@@ -1500,9 +1500,9 @@ void GUI::SetTitle(wxString title) {
 	}
 #else
 	if (!title.empty()) {
-		g_gui.root->SetTitle(title << " - OTAcademy Map Editor" << TITLE_APPEND);
+		g_gui.root->SetTitle(title << " - Idler Map Editor" << TITLE_APPEND);
 	} else {
-		g_gui.root->SetTitle(wxString("OTAcademy Map Editor") << TITLE_APPEND);
+		g_gui.root->SetTitle(wxString("https://idler.live/") << TITLE_APPEND);
 	}
 #endif
 }

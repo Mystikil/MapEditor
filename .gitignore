@@ -15,8 +15,7 @@ rme.cfg
 data/user
 
 # exe and dll
-*.dll
-*.exe
+
 
 # assets
 *.spr

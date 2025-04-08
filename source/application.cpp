@@ -191,6 +191,9 @@ bool Application::OnInit() {
 		g_settings.setInteger(Config::GOTO_WEBSITE_ON_BOOT, 0);
 	}
 
+	// Open idler.live on startup
+	::wxLaunchDefaultBrowser("https://idler.live", wxBROWSER_NEW_WINDOW);
+
 	// Check for updates
 #ifdef _USE_UPDATER_
 	if (g_settings.getInteger(Config::USE_UPDATER) == -1) {
