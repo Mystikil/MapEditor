@@ -175,7 +175,7 @@ AboutWindow::AboutWindow(wxWindow* parent) :
 	game_panel(nullptr) {
 	wxString about;
 
-	about << "OTARMEIE - Idlers Edition\n";
+	about << "Idler Map Editor\n";
 	about << "(based on OTA Remere's Map Editor)\n\n";
 	about << "This program is a map editor for game servers\nthat derivied from OpenTibia project.\n\n";
 	about << "Brought to you by Idler enhanced using Cursor.com \n\n";
