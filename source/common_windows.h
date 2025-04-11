@@ -56,7 +56,7 @@ public:
 	virtual ~MapPropertiesWindow();
 
 	void OnChangeVersion(wxCommandEvent&);
-
+	void OnClientVersionChange(wxCommandEvent&);
 	void OnClickOK(wxCommandEvent&);
 	void OnClickCancel(wxCommandEvent&);
 
@@ -72,6 +72,7 @@ protected:
 	wxTextCtrl* description_ctrl;
 	wxTextCtrl* house_filename_ctrl;
 	wxTextCtrl* spawn_filename_ctrl;
+	wxCheckBox* auto_update_checkbox;
 
 	DECLARE_EVENT_TABLE();
 };

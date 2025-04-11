@@ -100,6 +100,12 @@ MapPropertiesWindow::MapPropertiesWindow(wxWindow* parent, MapTab* view, Editor&
 
 	grid_sizer->Add(protocol_choice, wxSizerFlags(1).Expand());
 
+	// Auto update checkbox
+	grid_sizer->Add(newd wxStaticText(this, wxID_ANY, "Auto Update OTBM"));
+	auto_update_checkbox = newd wxCheckBox(this, wxID_ANY, "");
+	auto_update_checkbox->SetValue(true); // Default to enabled
+	grid_sizer->Add(auto_update_checkbox, wxSizerFlags(0).Left());
+
 	// Dimensions
 	grid_sizer->Add(newd wxStaticText(this, wxID_ANY, "Map Dimensions"));
 	{
@@ -143,6 +149,9 @@ MapPropertiesWindow::MapPropertiesWindow(wxWindow* parent, MapTab* view, Editor&
 
 	ClientVersion* current_version = ClientVersion::get(map.getVersion().client);
 	protocol_choice->SetStringSelection(wxstr(current_version->getName()));
+
+	// Bind the protocol choice event
+	protocol_choice->Bind(wxEVT_CHOICE, &MapPropertiesWindow::OnChangeVersion, this);
 }
 
 void MapPropertiesWindow::UpdateProtocolList() {
@@ -166,22 +175,32 @@ void MapPropertiesWindow::OnChangeVersion(wxCommandEvent& event) {
     wxString client = protocol_choice->GetStringSelection();
     ClientVersion* version = ClientVersion::get(nstr(client));
     
-    // Get selected map version
-    wxString map_ver = version_choice->GetStringSelection();
-    
     // If client version changed, update map version
     if(version) {
         // Set map version based on client version
-        if(version->getID() <= CLIENT_VERSION_790) {
-            version_choice->SetSelection(0); // OTBM 1 - 0.5.0
-        } else if(version->getID() <= CLIENT_VERSION_800) {
-            version_choice->SetSelection(1); // OTBM 2 - 0.6.0
-        } else if(version->getID() <= CLIENT_VERSION_854) {
-            version_choice->SetSelection(2); // OTBM 3 - 0.6.1
-        } else {
-            version_choice->SetSelection(3); // OTBM 4 - 0.7.0
+        MapVersionID preferred_version = version->getPrefferedMapVersionID();
+        switch(preferred_version) {
+            case MAP_OTBM_1:
+                version_choice->SetSelection(0); // OTBM 1 - 0.5.0
+                break;
+            case MAP_OTBM_2:
+                version_choice->SetSelection(1); // OTBM 2 - 0.6.0
+                break;
+            case MAP_OTBM_3:
+                version_choice->SetSelection(2); // OTBM 3 - 0.6.1
+                break;
+            case MAP_OTBM_4:
+                version_choice->SetSelection(3); // OTBM 4 - 0.7.0
+                break;
+            default:
+                version_choice->SetSelection(0); // Default to OTBM 1
+                break;
         }
+        version_choice->Refresh(); // Force visual refresh
     }
+    
+    // Get selected map version
+    wxString map_ver = version_choice->GetStringSelection();
     
     // If map version changed, update client version list
     if(map_ver.Contains("0.5.0")) {
@@ -201,6 +220,38 @@ void MapPropertiesWindow::OnChangeVersion(wxCommandEvent& event) {
         UpdateProtocolList();
         protocol_choice->SetStringSelection(client);
     }
+}
+
+void MapPropertiesWindow::OnClientVersionChange(wxCommandEvent& event) {
+    // Get selected client version
+    wxString client = protocol_choice->GetStringSelection();
+    ClientVersion* version = ClientVersion::get(nstr(client));
+    
+    // Only update OTBM version if auto-update is enabled
+    if(version && auto_update_checkbox->GetValue()) {
+        // Set map version based on client version
+        MapVersionID preferred_version = version->getPrefferedMapVersionID();
+        switch(preferred_version) {
+            case MAP_OTBM_1:
+                version_choice->SetSelection(0); // OTBM 1 - 0.5.0
+                break;
+            case MAP_OTBM_2:
+                version_choice->SetSelection(1); // OTBM 2 - 0.6.0
+                break;
+            case MAP_OTBM_3:
+                version_choice->SetSelection(2); // OTBM 3 - 0.6.1
+                break;
+            case MAP_OTBM_4:
+                version_choice->SetSelection(3); // OTBM 4 - 0.7.0
+                break;
+            default:
+                version_choice->SetSelection(0); // Default to OTBM 1
+                break;
+        }
+        version_choice->Refresh();
+    }
+    
+    event.Skip();
 }
 
 struct MapConversionContext {
