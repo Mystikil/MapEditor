@@ -1,6 +1,8 @@
 What is this? Idler Map Editor
 =============
 
+I often work till late I do not have the time to make commits im the guy that does the job since its open source you guys go fix commits atleast it will show anybody proofread it before running this spaghetti code that been fueled by pure hatred.
+
 
 ![image](https://github.com/user-attachments/assets/fa261227-5d88-4d00-9c60-0f48e393adc5)
 
