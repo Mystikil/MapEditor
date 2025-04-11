@@ -628,14 +628,22 @@ void BrushPanel::OnClickListBoxRow(wxCommandEvent& event) {
 	size_t n = event.GetSelection();
 
 	wxWindow* w = this;
-	while ((w = w->GetParent()) && dynamic_cast<PaletteWindow*>(w) == nullptr)
-		;
+	while ((w = w->GetParent()) && dynamic_cast<PaletteWindow*>(w) == nullptr);
 
 	if (w) {
 		g_gui.ActivatePalette(static_cast<PaletteWindow*>(w));
 	}
 
-	g_gui.SelectBrush(tileset->brushlist[n], tileset->getType());
+	// Get the brush that was clicked
+	Brush* clicked_brush = tileset->brushlist[n];
+	
+	// If this brush is already selected, deselect it first
+	if(clicked_brush == g_gui.GetCurrentBrush()) {
+		g_gui.SelectBrush(nullptr, tileset->getType());
+	}
+	
+	// Now select the brush (either for the first time or re-selecting)
+	g_gui.SelectBrush(clicked_brush, tileset->getType());
 }
 
 void BrushPanel::OnViewModeToggle(wxCommandEvent& event) {
@@ -786,11 +794,17 @@ void BrushIconBox::OnClickBrushButton(wxCommandEvent& event) {
 	BrushButton* btn = dynamic_cast<BrushButton*>(obj);
 	if (btn) {
 		wxWindow* w = this;
-		while ((w = w->GetParent()) && dynamic_cast<PaletteWindow*>(w) == nullptr)
-			;
+		while ((w = w->GetParent()) && dynamic_cast<PaletteWindow*>(w) == nullptr);
 		if (w) {
 			g_gui.ActivatePalette(static_cast<PaletteWindow*>(w));
 		}
+
+		// If this brush is already selected, deselect it first
+		if(btn->brush == g_gui.GetCurrentBrush()) {
+			g_gui.SelectBrush(nullptr, tileset->getType());
+		}
+
+		// Now select the brush (either for the first time or re-selecting)
 		g_gui.SelectBrush(btn->brush, tileset->getType());
 	}
 }
@@ -1229,7 +1243,7 @@ void DirectDrawBrushPanel::DrawItemsToPanel(wxDC& dc) {
 				int index = row * columns + col;
 				if(index >= static_cast<int>(tileset->size()) || index >= maxItemsToDraw) break;
 				
-				int x = col * item_width;
+				int x = col * item_width; 
 				int y = row * item_height;
 				
 				// Skip items that would appear where our progress bar is
@@ -1395,6 +1409,13 @@ void DirectDrawBrushPanel::OnMouseClick(wxMouseEvent& event) {
 			if(w) {
 				g_gui.ActivatePalette(static_cast<PaletteWindow*>(w));
 			}
+
+			// If this brush is already selected, deselect it first
+			if(tileset->brushlist[index] == g_gui.GetCurrentBrush()) {
+				g_gui.SelectBrush(nullptr, tileset->getType());
+			}
+
+			// Now select the brush (either for the first time or re-selecting)
 			g_gui.SelectBrush(tileset->brushlist[index], tileset->getType());
 		}
 	}

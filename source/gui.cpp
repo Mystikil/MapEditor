@@ -1805,11 +1805,8 @@ bool GUI::SelectBrush(const Brush* whatbrush, PaletteType primary) {
 }
 
 void GUI::SelectBrushInternal(Brush* brush) {
-	// Fear no evil don't you say no evil
-	if (current_brush != brush && brush) {
-		previous_brush = current_brush;
-	}
-
+	// Store previous brush before changing current brush
+	previous_brush = current_brush;
 	current_brush = brush;
 	if (!current_brush) {
 		return;

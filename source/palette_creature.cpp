@@ -297,8 +297,22 @@ void CreaturePalettePanel::OnTilesetChange(wxCommandEvent& event) {
 }
 
 void CreaturePalettePanel::OnListBoxChange(wxCommandEvent& event) {
+	// Get the selected brush before updating
+	Brush* old_brush = g_gui.GetCurrentBrush();
+	
+	// Update selection
 	SelectCreature(event.GetSelection());
 	g_gui.ActivatePalette(GetParentPalette());
+	
+	// Get the newly selected brush
+	Brush* new_brush = g_gui.GetCurrentBrush();
+	
+	// If we selected the same brush, first set to nullptr then reselect
+	if(old_brush && new_brush && old_brush == new_brush) {
+		g_gui.SelectBrush(nullptr, TILESET_CREATURE);
+	}
+	
+	// Now select the brush (either for the first time or re-selecting)
 	g_gui.SelectBrush();
 }
 
