@@ -1177,25 +1177,6 @@ void DirectDrawBrushPanel::UpdateViewableItems() {
 	}
 }
 
-void DirectDrawBrushPanel::RecalculateGrid() {
-	// Calculate columns based on client width
-	int width;
-	GetClientSize(&width, nullptr);
-	columns = std::max(1, width / item_width);
-	
-	// Calculate total rows needed
-	total_rows = (tileset->size() + columns - 1) / columns;  // Ceiling division
-	int virtual_height = total_rows * item_height;
-	
-	// Set virtual size for scrolling
-	SetVirtualSize(width, virtual_height);
-	
-	// Update which items are currently visible
-	UpdateViewableItems();
-	
-	need_full_redraw = true;
-}
-
 void DirectDrawBrushPanel::DrawItemsToPanel(wxDC& dc) {
 	if(!tileset || tileset->size() == 0) return;
 	
@@ -1421,6 +1402,25 @@ void DirectDrawBrushPanel::OnMouseClick(wxMouseEvent& event) {
 	event.Skip();
 }
 
+void DirectDrawBrushPanel::RecalculateGrid() {
+	// Calculate columns based on client width
+	int width;
+	GetClientSize(&width, nullptr);
+	columns = std::max(1, width / item_width);
+	
+	// Calculate total rows needed
+	total_rows = (tileset->size() + columns - 1) / columns;  // Ceiling division
+	int virtual_height = total_rows * item_height;
+	
+	// Set virtual size for scrolling
+	SetVirtualSize(width, virtual_height);
+	
+	// Update which items are currently visible
+	UpdateViewableItems();
+	
+	need_full_redraw = true;
+}
+
 // ============================================================================
 // SeamlessGridPanel
 // A direct rendering class for dense sprite grid with zero margins
@@ -1432,10 +1432,11 @@ EVT_PAINT(SeamlessGridPanel::OnPaint)
 EVT_SIZE(SeamlessGridPanel::OnSize)
 EVT_SCROLLWIN(SeamlessGridPanel::OnScroll)
 EVT_TIMER(wxID_ANY, SeamlessGridPanel::OnTimer)
+EVT_KEY_DOWN(SeamlessGridPanel::OnKeyDown)
 END_EVENT_TABLE()
 
 SeamlessGridPanel::SeamlessGridPanel(wxWindow* parent, const TilesetCategory* _tileset) :
-	wxScrolledWindow(parent, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxVSCROLL),
+	wxScrolledWindow(parent, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxVSCROLL | wxWANTS_CHARS),
 	BrushBoxInterface(_tileset),
 	columns(1),
 	sprite_size(32),
@@ -1451,10 +1452,13 @@ SeamlessGridPanel::SeamlessGridPanel(wxWindow* parent, const TilesetCategory* _t
 	use_progressive_loading(true),
 	is_large_tileset(false),
 	loading_step(0),
-	max_loading_steps(10),
+	max_loading_steps(5),
 	loading_timer(nullptr) {
 	
 	SetBackgroundStyle(wxBG_STYLE_PAINT);
+	
+	// Enable keyboard focus
+	SetWindowStyle(GetWindowStyle() | wxWANTS_CHARS);
 	
 	// Check if we're dealing with a large tileset
 	is_large_tileset = tileset && tileset->size() > LARGE_TILESET_THRESHOLD;
@@ -1462,16 +1466,17 @@ SeamlessGridPanel::SeamlessGridPanel(wxWindow* parent, const TilesetCategory* _t
 	// Create loading timer for large tilesets
 	if (is_large_tileset && use_progressive_loading) {
 		loading_timer = new wxTimer(this);
+		max_loading_steps = 10; // Increase steps for smoother progress indication
 	}
+	
+	// Enable scrolling
+	SetScrollRate(sprite_size, sprite_size);
 	
 	// Calculate initial grid layout
 	RecalculateGrid();
 	
-	// Enable scrolling
-	SetScrollRate(5, 5);
-	
-	// Set focus for keyboard interaction
-	SetFocusIgnoringChildren();
+	// Start with first brush selected
+	SelectFirstBrush();
 	
 	// Start progressive loading if needed
 	if (is_large_tileset && use_progressive_loading) {
@@ -1480,10 +1485,6 @@ SeamlessGridPanel::SeamlessGridPanel(wxWindow* parent, const TilesetCategory* _t
 }
 
 SeamlessGridPanel::~SeamlessGridPanel() {
-	if (buffer) {
-		delete buffer;
-	}
-	
 	if (loading_timer) {
 		loading_timer->Stop();
 		delete loading_timer;
@@ -1586,7 +1587,7 @@ void SeamlessGridPanel::DrawItemsToPanel(wxDC& dc) {
 	GetClientSize(&width, &height);
 	
 	// Draw loading progress for large datasets during initial load
-	if (is_large_tileset && loading_step < max_loading_steps) {
+	if (loading_step < max_loading_steps) {
 		// Draw progress bar
 		int progressWidth = width - 40;
 		int progressHeight = 20;
@@ -1717,29 +1718,21 @@ void SeamlessGridPanel::OnScroll(wxScrollWinEvent& event) {
 	UpdateViewableItems();
 	
 	// Reset progressive loading on scroll for large tilesets
-	if (is_large_tileset && use_progressive_loading) {
-		// Stop any existing timer
-		if (loading_timer && loading_timer->IsRunning()) {
-			loading_timer->Stop();
-		}
+	if (loading_step < max_loading_steps) {
+		// Temporarily use small margin for immediate response
+		visible_rows_margin = 3;
+		UpdateViewableItems();
 		
-		// If we haven't completed loading yet
-		if (loading_step < max_loading_steps) {
-			// Temporarily use small margin for immediate response
-			visible_rows_margin = 3;
-			UpdateViewableItems();
-			
-			// Show loading message in the area being scrolled to
-			Refresh();
-			
-			// Restart progressive loading
-			StartProgressiveLoading();
-		} else {
-			// If loading was already complete, just continue with full view
-			visible_rows_margin = 30;
-			UpdateViewableItems();
-			Refresh();
-		}
+		// Show loading message in the area being scrolled to
+		Refresh();
+		
+		// Restart progressive loading
+		StartProgressiveLoading();
+	} else {
+		// If loading was already complete, just continue with full view
+		visible_rows_margin = 30;
+		UpdateViewableItems();
+		Refresh();
 	}
 	
 	event.Skip();
@@ -1847,4 +1840,117 @@ bool SeamlessGridPanel::SelectBrush(const Brush* whatbrush) {
 		}
 	}
 	return false;
+}
+
+void SeamlessGridPanel::SelectIndex(int index) {
+	if (!tileset || index < 0 || index >= static_cast<int>(tileset->size())) {
+		return;
+	}
+
+	selected_index = index;
+	hover_index = -1;
+	Refresh();
+
+	// Ensure the selected item is visible
+	int row = selected_index / columns;
+	int yPos = row * sprite_size;
+
+	// Get the visible area
+	int xStart, yStart;
+	GetViewStart(&xStart, &yStart);
+	int ppuX, ppuY;
+	GetScrollPixelsPerUnit(&ppuX, &ppuY);
+	yStart *= ppuY;
+
+	int clientHeight;
+	GetClientSize(nullptr, &clientHeight);
+
+	// Scroll if necessary
+	if (yPos < yStart) {
+		Scroll(-1, yPos / ppuY);
+		UpdateViewableItems();
+	} else if (yPos + sprite_size > yStart + clientHeight) {
+		Scroll(-1, (yPos + sprite_size - clientHeight) / ppuY + 1);
+		UpdateViewableItems();
+	}
+
+	// Notify parent about the selection
+	wxWindow* w = this;
+	while((w = w->GetParent()) && dynamic_cast<PaletteWindow*>(w) == nullptr);
+	if(w) {
+		g_gui.ActivatePalette(static_cast<PaletteWindow*>(w));
+	}
+	g_gui.SelectBrush(tileset->brushlist[index], tileset->getType());
+}
+
+void SeamlessGridPanel::OnKeyDown(wxKeyEvent& event) {
+	if (!tileset || tileset->size() == 0) {
+		event.Skip();
+		return;
+	}
+
+	int newIndex = selected_index;
+	bool handled = true;
+
+	switch (event.GetKeyCode()) {
+		case WXK_LEFT:
+			if (selected_index > 0) {
+				newIndex--;
+			}
+			break;
+
+		case WXK_RIGHT:
+			if (selected_index < static_cast<int>(tileset->size()) - 1) {
+				newIndex++;
+			}
+			break;
+
+		case WXK_UP:
+			if (selected_index >= columns) {
+				newIndex -= columns;
+			}
+			break;
+
+		case WXK_DOWN:
+			if (selected_index + columns < static_cast<int>(tileset->size())) {
+				newIndex += columns;
+			}
+			break;
+
+		case WXK_HOME:
+			newIndex = 0;
+			break;
+
+		case WXK_END:
+			newIndex = tileset->size() - 1;
+			break;
+
+		case WXK_PAGEUP: {
+			int clientHeight;
+			GetClientSize(nullptr, &clientHeight);
+			int rowsPerPage = clientHeight / sprite_size;
+			newIndex = std::max(0, selected_index - (rowsPerPage * columns));
+			break;
+		}
+
+		case WXK_PAGEDOWN: {
+			int clientHeight;
+			GetClientSize(nullptr, &clientHeight);
+			int rowsPerPage = clientHeight / sprite_size;
+			newIndex = std::min(static_cast<int>(tileset->size()) - 1, 
+							  selected_index + (rowsPerPage * columns));
+			break;
+		}
+
+		default:
+			handled = false;
+			break;
+	}
+
+	if (handled && newIndex != selected_index) {
+		SelectIndex(newIndex);
+		SetFocus(); // Keep focus for more keyboard input
+	} else {
+		event.Skip(); // Allow other handlers to process the event
+	}
 }

@@ -3743,48 +3743,259 @@ void MapCanvas::OnCreateHouse(wxCommandEvent& event) {
     auto floodFillInside = [&](const std::vector<Position>& wall_loop, FloorData& floor_data) {
         if (wall_loop.empty()) return;
 
-        // Create a set of wall positions for quick lookup
-        std::set<Position> wall_positions(wall_loop.begin(), wall_loop.end());
-        
-        // Find a starting point inside the walls
-        Position start = wall_loop[0];
-        start.x++; // Try one tile to the right of first wall
-        
-        std::queue<Position> to_fill;
-        std::set<Position> filled;
-        
-        // Only start flood fill if this position isn't a wall
-        Tile* check_tile = editor.map.getTile(start);
-        if (!check_tile || !hasHouseWall(check_tile)) {
-            to_fill.push(start);
+        // Find the boundary rectangle
+        int min_x = wall_loop[0].x;
+        int max_x = wall_loop[0].x;
+        int min_y = wall_loop[0].y;
+        int max_y = wall_loop[0].y;
+        int z = wall_loop[0].z;
+
+        for (const Position& pos : wall_loop) {
+            min_x = std::min(min_x, pos.x);
+            max_x = std::max(max_x, pos.x);
+            min_y = std::min(min_y, pos.y);
+            max_y = std::max(max_y, pos.y);
         }
 
-        while (!to_fill.empty()) {
-            Position current = to_fill.front();
-            to_fill.pop();
+        // First pass - collect all walls in the area
+        std::set<Position> all_walls;
+        for (int y = min_y - 1; y <= max_y + 1; y++) {
+            for (int x = min_x - 1; x <= max_x + 1; x++) {
+                Position pos(x, y, z);
+                Tile* tile = editor.map.getTile(pos);
+                if (tile && hasHouseWall(tile)) {
+                    all_walls.insert(pos);
+                }
+            }
+        }
 
-            if (filled.count(current) > 0) continue;
-            
-            // Skip if this is a wall position
-            if (wall_positions.count(current) > 0) continue;
-            
-            filled.insert(current);
-            floor_data.ground_tiles.insert(current);
-
-            // Try all 4 directions
+        // Function to check if a wall is connected to others
+        auto isConnectedWall = [&](const Position& pos) -> bool {
             Position adjacent[4] = {
-                Position(current.x, current.y - 1, current.z), // North
-                Position(current.x + 1, current.y, current.z), // East
-                Position(current.x, current.y + 1, current.z), // South
-                Position(current.x - 1, current.y, current.z)  // West
+                Position(pos.x, pos.y - 1, z),
+                Position(pos.x + 1, pos.y, z),
+                Position(pos.x, pos.y + 1, z),
+                Position(pos.x - 1, pos.y, z)
             };
+            
+            int connected_count = 0;
+            for (const Position& adj : adjacent) {
+                if (all_walls.count(adj) > 0) {
+                    connected_count++;
+                }
+            }
+            return connected_count >= 2; // Need at least 2 connections for a proper wall
+        };
 
-            for (const Position& next : adjacent) {
-                if (filled.count(next) == 0 && wall_positions.count(next) == 0) {
-                    Tile* tile = editor.map.getTile(next);
-                    if (!tile || !hasHouseWall(tile)) {
-                        to_fill.push(next);
+        // Check for disconnected walls and gaps
+        std::vector<Position> disconnected_walls;
+        std::vector<std::pair<Position, Position>> gaps;
+        
+        for (const Position& wall_pos : all_walls) {
+            if (!isConnectedWall(wall_pos)) {
+                disconnected_walls.push_back(wall_pos);
+                
+                // Look for nearest wall to potentially connect to
+                Position nearest_wall;
+                double min_distance = 999999.0;
+                
+                for (const Position& other_wall : all_walls) {
+                    if (other_wall == wall_pos) continue;
+                    if (!isConnectedWall(other_wall)) continue;
+                    
+                    double dx = other_wall.x - wall_pos.x;
+                    double dy = other_wall.y - wall_pos.y;
+                    double distance = sqrt(dx * dx + dy * dy);
+                    
+                    if (distance < min_distance) {
+                        min_distance = distance;
+                        nearest_wall = other_wall;
                     }
+                }
+                
+                if (min_distance < 5.0) { // Only suggest connections within reasonable distance
+                    gaps.push_back(std::make_pair(wall_pos, nearest_wall));
+                }
+            }
+        }
+
+        // If we found disconnected walls, show dialog with options
+        if (!disconnected_walls.empty()) {
+            wxDialog* dialog = new wxDialog(g_gui.root, wxID_ANY, "Disconnected Walls Detected", 
+                wxDefaultPosition, wxSize(400, 300));
+            
+            wxBoxSizer* sizer = new wxBoxSizer(wxVERTICAL);
+            
+            sizer->Add(new wxStaticText(dialog, wxID_ANY, 
+                wxString::Format("Found %zu disconnected wall segments.", disconnected_walls.size())), 
+                0, wxALL, 5);
+            
+            if (!gaps.empty()) {
+                sizer->Add(new wxStaticText(dialog, wxID_ANY, 
+                    "Suggested wall connections:"), 0, wxALL, 5);
+                
+                wxListBox* gapList = new wxListBox(dialog, wxID_ANY);
+                for (const auto& gap : gaps) {
+                    gapList->Append(wxString::Format("Connect (%d,%d) to (%d,%d)", 
+                        gap.first.x, gap.first.y,
+                        gap.second.x, gap.second.y));
+                }
+                sizer->Add(gapList, 1, wxEXPAND | wxALL, 5);
+            }
+            
+            wxBoxSizer* btnSizer = new wxBoxSizer(wxHORIZONTAL);
+            wxButton* connectBtn = new wxButton(dialog, wxID_OK, "Auto-Connect Walls");
+            wxButton* cancelBtn = new wxButton(dialog, wxID_CANCEL, "Cancel House Creation");
+            wxButton* ignoreBtn = new wxButton(dialog, wxID_IGNORE, "Continue Anyway");
+            
+            btnSizer->Add(connectBtn, 0, wxALL, 5);
+            btnSizer->Add(cancelBtn, 0, wxALL, 5);
+            btnSizer->Add(ignoreBtn, 0, wxALL, 5);
+            
+            sizer->Add(btnSizer, 0, wxALIGN_CENTER | wxALL, 5);
+            
+            dialog->SetSizer(sizer);
+            
+            int result = dialog->ShowModal();
+            
+            if (result == wxID_OK) {
+                // Auto-connect walls
+                Action* action = editor.actionQueue->createAction(ACTION_DRAW);
+                
+                for (const auto& gap : gaps) {
+                    // Create walls along the path between disconnected segments
+                    int dx = gap.second.x - gap.first.x;
+                    int dy = gap.second.y - gap.first.y;
+                    
+                    int steps = std::max(std::abs(dx), std::abs(dy));
+                    if (steps == 0) continue;
+                    
+                    for (int i = 1; i < steps; i++) {
+                        Position new_wall_pos(
+                            gap.first.x + (dx * i) / steps,
+                            gap.first.y + (dy * i) / steps,
+                            z
+                        );
+                        
+                        Tile* tile = editor.map.getTile(new_wall_pos);
+                        if (!tile) {
+                            tile = editor.map.createTile(new_wall_pos.x, new_wall_pos.y, new_wall_pos.z);
+                        }
+                        
+                        // Use the same wall type as nearby walls if possible
+                        Item* wall_item = nullptr;
+                        Tile* ref_tile = editor.map.getTile(gap.first);
+                        if (ref_tile) {
+                            for (Item* item : ref_tile->items) {
+                                if (item && item->isWall()) {
+                                    wall_item = item->deepCopy();
+                                    break;
+                                }
+                            }
+                        }
+                        
+                        if (wall_item) {
+                            tile->addItem(wall_item);
+                            action->addChange(newd Change(tile));
+                            all_walls.insert(new_wall_pos);
+                        }
+                    }
+                }
+                
+                editor.addAction(action);
+                
+            } else if (result == wxID_CANCEL) {
+                dialog->Destroy();
+                return;
+            }
+            // wxID_IGNORE will continue with house creation
+            
+            dialog->Destroy();
+        }
+
+        // Create final boundary wall set
+        std::set<Position> boundary_walls;
+        for (const Position& wall : all_walls) {
+            boundary_walls.insert(wall);
+        }
+
+        // Check for valid door in the boundary
+        bool found_valid_door = false;
+        Position door_pos(0, 0, 0);
+        Position exit_pos(0, 0, 0);
+
+        for (const Position& wall_pos : boundary_walls) {
+            Tile* tile = editor.map.getTile(wall_pos);
+            if (!tile) continue;
+
+            for (Item* item : tile->items) {
+                if (item && item->isDoor()) {
+                    // Check all adjacent positions for non-house tiles
+            Position adjacent[4] = {
+                        Position(wall_pos.x, wall_pos.y - 1, z),
+                        Position(wall_pos.x + 1, wall_pos.y, z),
+                        Position(wall_pos.x, wall_pos.y + 1, z),
+                        Position(wall_pos.x - 1, wall_pos.y, z)
+                    };
+
+                    for (const Position& adj : adjacent) {
+                        // Skip if adjacent position is a boundary wall
+                        if (boundary_walls.count(adj) > 0) continue;
+
+                        // Check if this position is outside the boundary
+                        bool is_outside = true;
+                        for (const Position& wall : boundary_walls) {
+                            if (wall == adj) {
+                                is_outside = false;
+                                break;
+                            }
+                        }
+
+                        if (is_outside) {
+                            found_valid_door = true;
+                            door_pos = wall_pos;
+                            exit_pos = adj;
+                            floor_data.exit_pos = adj;
+                            break;
+                        }
+                    }
+                    if (found_valid_door) break;
+                }
+            }
+            if (found_valid_door) break;
+        }
+
+        if (!found_valid_door) {
+            OutputDebugStringA("WARNING: No valid door found in house boundary!\n");
+        }
+
+        // Add all boundary walls to house tiles
+        for (const Position& wall : boundary_walls) {
+            floor_data.ground_tiles.insert(wall);
+        }
+
+        // Fill all tiles within the boundary
+        for (int y = min_y; y <= max_y; y++) {
+            for (int x = min_x; x <= max_x; x++) {
+                Position pos(x, y, z);
+                
+                // Skip if it's already added as a wall
+                if (boundary_walls.count(pos) > 0) continue;
+
+                // Use ray casting to determine if the point is inside
+                int intersections = 0;
+                
+                // Cast ray to the right
+                for (int test_x = x + 1; test_x <= max_x; test_x++) {
+                    Position test_pos(test_x, y, z);
+                    if (boundary_walls.count(test_pos) > 0) {
+                        intersections++;
+                    }
+                }
+                
+                // Odd number of intersections means we're inside
+                if (intersections % 2 == 1) {
+                    floor_data.ground_tiles.insert(pos);
                 }
             }
         }
