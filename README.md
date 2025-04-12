@@ -1,4 +1,4 @@
-What is this? Idler Map Editor
+What is this? Idler Map Editor Based on OTACADEMY fork of Remeres map editor
 =============
 
 I often work till late I do not have the time to make commits im the guy that does the job since its open source you guys go fix commits atleast it will show anybody proofread it before running this spaghetti code that been fueled by pure hatred.
