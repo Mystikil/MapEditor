@@ -338,6 +338,7 @@ public:
 	bool CloseLiveEditors(LiveSocket* sock);
 	bool CloseAllEditors();
 	void NewMapView();
+	void NewDetachedMapView();
 
 	// Map
 	Map& GetCurrentMap();

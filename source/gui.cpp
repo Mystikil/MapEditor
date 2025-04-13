@@ -872,6 +872,52 @@ void GUI::NewMapView() {
 	}
 }
 
+void GUI::NewDetachedMapView() {
+	MapTab* mapTab = GetCurrentMapTab();
+	if (mapTab) {
+		// Create a standalone top-level window
+		wxFrame* detachedFrame = newd wxFrame(root, wxID_ANY, "Detached Map View", 
+			wxDefaultPosition, wxSize(800, 600), 
+			wxDEFAULT_FRAME_STYLE | wxRESIZE_BORDER | wxMAXIMIZE_BOX | wxMINIMIZE_BOX);
+			
+		// Create a map window in the new frame
+		MapWindow* newMapWindow = newd MapWindow(detachedFrame, *mapTab->GetEditor());
+		
+		// Set up a basic sizer for the frame
+		wxSizer* sizer = newd wxBoxSizer(wxVERTICAL);
+		sizer->Add(newMapWindow, 1, wxEXPAND);
+		detachedFrame->SetSizer(sizer);
+		
+		// Initialize the map window to match current map view
+		newMapWindow->FitToMap();
+		
+		// Set the center position to match the current view
+		Position pos = mapTab->GetScreenCenterPosition();
+		newMapWindow->SetScreenCenterPosition(pos);
+		
+		// Configure the map window based on current editor mode
+		if (mode == SELECTION_MODE) {
+			newMapWindow->GetCanvas()->EnterSelectionMode();
+		} else {
+			newMapWindow->GetCanvas()->EnterDrawingMode();
+		}
+		
+		// Handle frame close event to clean up properly
+		detachedFrame->Bind(wxEVT_CLOSE_WINDOW, [=](wxCloseEvent& event) {
+			// Clean up resources when the frame is closed
+			detachedFrame->Destroy();
+		});
+		
+		// Title should include map name
+		detachedFrame->SetTitle(wxString::Format("Detached View: %s", wxstr(mapTab->GetEditor()->map.getName())));
+		
+		// Show the window
+		detachedFrame->Show();
+		
+		SetStatusText("Created new detached view");
+	}
+}
+
 void GUI::LoadPerspective() {
 	if (!IsVersionLoaded()) {
 		if (g_settings.getInteger(Config::WINDOW_MAXIMIZED)) {

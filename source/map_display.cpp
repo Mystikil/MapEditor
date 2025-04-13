@@ -4156,7 +4156,7 @@ void MapCanvas::OnCreateHouse(wxCommandEvent& event) {
     int total_floors = 0;
     int total_tiles = 0;
     Position exit_position(0, 0, 0);
-    
+
     // Add a second pass of aggressive fill for enclosed rooms
     for (auto& [floor_z, floor_data] : house_floors) {
         if (!floor_data.wall_positions.empty()) {
@@ -4431,12 +4431,12 @@ bool MapCanvas::hasStairsOrLadder(Tile* tile) {
     // Check if the tile is null
     if (!tile) return false;
     
-    // Iterate through each item in the tile
+    // First pass: check for obviously visible stairs/ladders
     for (Item* item : tile->items) {
         if (!item) continue;
         
         // Check special types of stairs and ladders
-        if (item->isStair() || item->isLadder()) {
+        if (item->isStairs() || item->isLadder()) {
             return true;
         }
         
@@ -4451,6 +4451,50 @@ bool MapCanvas::hasStairsOrLadder(Tile* tile) {
             lowerName.find("escalator") != std::string::npos) {
             return true;
         }
+    }
+    
+    // Second pass: check for railings that might be on top of stairs
+    bool has_railing = false;
+    for (Item* item : tile->items) {
+        if (!item) continue;
+        
+        std::string lowerName = item->getName();
+        std::transform(lowerName.begin(), lowerName.end(), lowerName.begin(), ::tolower);
+        
+        if (lowerName.find("rail") != std::string::npos) {
+            has_railing = true;
+            break;
+        }
+    }
+    
+    // If we found a railing, we need to check the floor below for stairs
+    if (has_railing && tile->getPosition().z > 0) {
+        Position pos_below(tile->getPosition().x, tile->getPosition().y, tile->getPosition().z - 1);
+        Tile* tile_below = editor.map.getTile(pos_below);
+        
+        if (tile_below) {
+            for (Item* item : tile_below->items) {
+                if (!item) continue;
+                
+                if (item->isStairs() || item->isLadder()) {
+                    return true;
+                }
+                
+                std::string lowerName = item->getName();
+                std::transform(lowerName.begin(), lowerName.end(), lowerName.begin(), ::tolower);
+                
+                if (lowerName.find("stair") != std::string::npos ||
+                    lowerName.find("ladder") != std::string::npos ||
+                    lowerName.find("ramp") != std::string::npos) {
+                    return true;
+                }
+            }
+        }
+    }
+    
+    // Check for possible floor transition items underneath
+    if (tile->ground && (tile->ground->isStairs() || tile->ground->isLadder())) {
+        return true;
     }
     
     return false;
