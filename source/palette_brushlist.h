@@ -224,6 +224,7 @@ public:
 	void OnSize(wxSizeEvent& event);
 	void OnScroll(wxScrollWinEvent& event);
 	void OnTimer(wxTimerEvent& event);
+	void OnKeyDown(wxKeyEvent& event); // New keyboard handler
 
 protected:
 	void RecalculateGrid();
@@ -232,6 +233,7 @@ protected:
 	void StartProgressiveLoading();
 	int GetSpriteIndexAt(int x, int y) const; // Returns sprite index at screen position
 	void DrawSpriteAt(wxDC& dc, int x, int y, int index); // Helper to draw a sprite at the specified position
+	void SelectIndex(int index); // Helper to select and ensure visibility of an index
 
 protected:
 	int columns;

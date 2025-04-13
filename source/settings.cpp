@@ -385,6 +385,12 @@ void Settings::IO(IOMode mode) {
 	Int(DARK_MODE_GREEN, 45);
 	Int(DARK_MODE_BLUE, 48);
 
+	// House creation settings
+	section("HouseCreation");
+	Int(MAX_HOUSE_TILES, 5000);
+	Int(HOUSE_FLOOR_SCAN, 1);
+	Int(AUTO_DETECT_HOUSE_EXIT, 1);
+
 #undef section
 #undef Int
 #undef IntToSave
@@ -402,7 +408,7 @@ void Settings::load() {
 		use_file_cfg = true;
 		g_settings.setInteger(Config::INDIRECTORY_INSTALLATION, 1);
 	} else { // Use registry
-		conf = newd wxConfig("Mapeditor", "OTARMEIE - Idler Map Editor", "", "", wxCONFIG_USE_GLOBAL_FILE);
+		conf = newd wxConfig("Mapeditor", "IdlerMapEditor", "", "", wxCONFIG_USE_GLOBAL_FILE);
 		g_settings.setInteger(Config::INDIRECTORY_INSTALLATION, 0);
 	}
 #else

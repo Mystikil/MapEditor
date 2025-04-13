@@ -175,6 +175,7 @@ MainMenuBar::MainMenuBar(MainFrame* frame) :
 	MAKE_ACTION(VIEW_TOOLBARS_SIZES, wxITEM_CHECK, OnToolbars);
 	MAKE_ACTION(VIEW_TOOLBARS_STANDARD, wxITEM_CHECK, OnToolbars);
 	MAKE_ACTION(NEW_VIEW, wxITEM_NORMAL, OnNewView);
+	MAKE_ACTION(NEW_DETACHED_VIEW, wxITEM_NORMAL, OnNewDetachedView);
 	MAKE_ACTION(TOGGLE_FULLSCREEN, wxITEM_NORMAL, OnToggleFullscreen);
 
 	MAKE_ACTION(ZOOM_IN, wxITEM_NORMAL, OnZoomIn);
@@ -435,6 +436,7 @@ void MainMenuBar::Update() {
 	EnableItem(MAP_STATISTICS, is_local);
 
 	EnableItem(NEW_VIEW, has_map);
+	EnableItem(NEW_DETACHED_VIEW, has_map);
 	EnableItem(ZOOM_IN, has_map);
 	EnableItem(ZOOM_OUT, has_map);
 	EnableItem(ZOOM_NORMAL, has_map);
@@ -2267,6 +2269,10 @@ void MainMenuBar::OnToolbars(wxCommandEvent& event) {
 
 void MainMenuBar::OnNewView(wxCommandEvent& WXUNUSED(event)) {
 	g_gui.NewMapView();
+}
+
+void MainMenuBar::OnNewDetachedView(wxCommandEvent& WXUNUSED(event)) {
+	g_gui.NewDetachedMapView();
 }
 
 void MainMenuBar::OnToggleFullscreen(wxCommandEvent& WXUNUSED(event)) {

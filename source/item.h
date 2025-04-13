@@ -415,6 +415,58 @@ public:
 	bool isBlockingCreature() const {
 		return g_items[id].unpassable;
 	}
+	
+	// Check if item is a stair based on name
+	bool isStairs() const {
+		// Check by ID first - specific known floor transition tiles
+		if (id == 459 || // Classic floor change
+		    id == 924 || // Ramp-style stair
+		    id == 1364 || // Northern wooden stairs
+		    id == 1369 || // Southern wooden stairs
+		    id == 1386) { // Wooden ladder/stair
+			return true;
+		}
+		
+		// Then check by ItemType property (if available)
+		if (g_items[id].floorChangeDown || 
+		    g_items[id].floorChangeNorth || 
+		    g_items[id].floorChangeSouth || 
+		    g_items[id].floorChangeEast || 
+		    g_items[id].floorChangeWest) {
+			return true;
+		}
+		
+		// Finally check by name
+		const std::string& name = getName();
+		std::string lowerName = name;
+		std::transform(lowerName.begin(), lowerName.end(), lowerName.begin(), ::tolower);
+		return lowerName.find("stair") != std::string::npos || 
+		       lowerName.find("spiral") != std::string::npos ||
+		       lowerName.find("ramp") != std::string::npos ||
+		       lowerName.find("floor change") != std::string::npos ||
+		       lowerName.find("level change") != std::string::npos;
+	}
+	
+	// Check if item is a ladder based on name
+	bool isLadder() const {
+		// Check for known ladder IDs
+		if (id == 1386 || // Wooden ladder/stair
+		    id == 3687 || // Wooden ladder
+		    id == 5543) { // Ship ladder
+			return true;
+		}
+		
+		// Check by floor change properties
+		if (g_items[id].floorChangeDown || g_items[id].floorChange) {
+			return true;
+		}
+		
+		// Check by name
+		const std::string& name = getName();
+		std::string lowerName = name;
+		std::transform(lowerName.begin(), lowerName.end(), lowerName.begin(), ::tolower);
+		return lowerName.find("ladder") != std::string::npos;
+	}
 
 protected:
 	uint16_t id; // the same id as in ItemType

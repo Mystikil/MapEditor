@@ -100,6 +100,12 @@ MapPropertiesWindow::MapPropertiesWindow(wxWindow* parent, MapTab* view, Editor&
 
 	grid_sizer->Add(protocol_choice, wxSizerFlags(1).Expand());
 
+	// Auto update checkbox
+	grid_sizer->Add(newd wxStaticText(this, wxID_ANY, "Auto Update OTBM"));
+	auto_update_checkbox = newd wxCheckBox(this, wxID_ANY, "");
+	auto_update_checkbox->SetValue(true); // Default to enabled
+	grid_sizer->Add(auto_update_checkbox, wxSizerFlags(0).Left());
+
 	// Dimensions
 	grid_sizer->Add(newd wxStaticText(this, wxID_ANY, "Map Dimensions"));
 	{
@@ -143,40 +149,110 @@ MapPropertiesWindow::MapPropertiesWindow(wxWindow* parent, MapTab* view, Editor&
 
 	ClientVersion* current_version = ClientVersion::get(map.getVersion().client);
 	protocol_choice->SetStringSelection(wxstr(current_version->getName()));
+
+	// Bind the protocol choice event
+	protocol_choice->Bind(wxEVT_CHOICE, &MapPropertiesWindow::OnChangeVersion, this);
+	//protocol_choice->Bind(wxEVT_CHOICE, &MapPropertiesWindow::OnClientVersionChange, this);
 }
 
 void MapPropertiesWindow::UpdateProtocolList() {
-	wxString ver = version_choice->GetStringSelection();
-	wxString client = protocol_choice->GetStringSelection();
+    wxString ver = version_choice->GetStringSelection();
+    wxString client = protocol_choice->GetStringSelection();
 
-	protocol_choice->Clear();
+    protocol_choice->Clear();
 
-	ClientVersionList versions;
-	if (g_settings.getInteger(Config::USE_OTBM_4_FOR_ALL_MAPS)) {
-		versions = ClientVersion::getAllVisible();
-	} else {
-		MapVersionID map_version = MAP_OTBM_1;
-		if (ver.Contains("0.5.0")) {
-			map_version = MAP_OTBM_1;
-		} else if (ver.Contains("0.6.0")) {
-			map_version = MAP_OTBM_2;
-		} else if (ver.Contains("0.6.1")) {
-			map_version = MAP_OTBM_3;
-		} else if (ver.Contains("0.7.0")) {
-			map_version = MAP_OTBM_4;
-		}
+    // Always show all visible versions
+    ClientVersionList versions = ClientVersion::getAllVisible();
+    for(ClientVersionList::const_iterator p = versions.begin(); p != versions.end(); ++p) {
+        protocol_choice->Append(wxstr((*p)->getName()));
+    }
 
-		ClientVersionList protocols = ClientVersion::getAllForOTBMVersion(map_version);
-		for (ClientVersionList::const_iterator p = protocols.begin(); p != protocols.end(); ++p) {
-			protocol_choice->Append(wxstr((*p)->getName()));
-		}
-	}
-	protocol_choice->SetSelection(0);
-	protocol_choice->SetStringSelection(client);
+    protocol_choice->SetSelection(0);
+    protocol_choice->SetStringSelection(client);
 }
 
-void MapPropertiesWindow::OnChangeVersion(wxCommandEvent&) {
-	UpdateProtocolList();
+void MapPropertiesWindow::OnChangeVersion(wxCommandEvent& event) {
+    // Get selected client version
+    wxString client = protocol_choice->GetStringSelection();
+    ClientVersion* version = ClientVersion::get(nstr(client));
+    
+    // If client version changed, update map version
+    if(version) {
+        // Set map version based on client version
+        MapVersionID preferred_version = version->getPrefferedMapVersionID();
+        switch(preferred_version) {
+            case MAP_OTBM_1:
+                version_choice->SetSelection(0); // OTBM 1 - 0.5.0
+                break;
+            case MAP_OTBM_2:
+                version_choice->SetSelection(1); // OTBM 2 - 0.6.0
+                break;
+            case MAP_OTBM_3:
+                version_choice->SetSelection(2); // OTBM 3 - 0.6.1
+                break;
+            case MAP_OTBM_4:
+                version_choice->SetSelection(3); // OTBM 4 - 0.7.0
+                break;
+            default:
+                version_choice->SetSelection(0); // Default to OTBM 1
+                break;
+        }
+        version_choice->Refresh(); // Force visual refresh
+    }
+    
+    // Get selected map version
+    wxString map_ver = version_choice->GetStringSelection();
+    
+    // If map version changed, update client version list
+    if(map_ver.Contains("0.5.0")) {
+        // Filter client versions for OTBM 1
+        UpdateProtocolList();
+        protocol_choice->SetStringSelection(client);
+    } else if(map_ver.Contains("0.6.0")) {
+        // Filter client versions for OTBM 2
+        UpdateProtocolList();
+        protocol_choice->SetStringSelection(client);
+    } else if(map_ver.Contains("0.6.1")) {
+        // Filter client versions for OTBM 3
+        UpdateProtocolList();
+        protocol_choice->SetStringSelection(client);
+    } else if(map_ver.Contains("0.7.0")) {
+        // Filter client versions for OTBM 4
+        UpdateProtocolList();
+        protocol_choice->SetStringSelection(client);
+    }
+}
+
+void MapPropertiesWindow::OnClientVersionChange(wxCommandEvent& event) {
+    // Get selected client version
+    wxString client = protocol_choice->GetStringSelection();
+    ClientVersion* version = ClientVersion::get(nstr(client));
+    
+    // Only update OTBM version if auto-update is enabled
+    if(version && auto_update_checkbox->GetValue()) {
+        // Set map version based on client version
+        MapVersionID preferred_version = version->getPrefferedMapVersionID();
+        switch(preferred_version) {
+            case MAP_OTBM_1:
+                version_choice->SetSelection(0); // OTBM 1 - 0.5.0
+                break;
+            case MAP_OTBM_2:
+                version_choice->SetSelection(1); // OTBM 2 - 0.6.0
+                break;
+            case MAP_OTBM_3:
+                version_choice->SetSelection(2); // OTBM 3 - 0.6.1
+                break;
+            case MAP_OTBM_4:
+                version_choice->SetSelection(3); // OTBM 4 - 0.7.0
+                break;
+            default:
+                version_choice->SetSelection(0); // Default to OTBM 1
+                break;
+        }
+        version_choice->Refresh();
+    }
+    
+    event.Skip();
 }
 
 struct MapConversionContext {
@@ -204,111 +280,63 @@ struct MapConversionContext {
 };
 
 void MapPropertiesWindow::OnClickOK(wxCommandEvent& WXUNUSED(event)) {
-	Map& map = editor.map;
+    Map& map = editor.map;
 
-	MapVersion old_ver = map.getVersion();
-	MapVersion new_ver;
+    MapVersion old_ver = map.getVersion();
+    MapVersion new_ver;
 
-	wxString ver = version_choice->GetStringSelection();
+    wxString ver = version_choice->GetStringSelection();
 
-	new_ver.client = ClientVersion::get(nstr(protocol_choice->GetStringSelection()))->getID();
-	if (ver.Contains("0.5.0")) {
-		new_ver.otbm = MAP_OTBM_1;
-	} else if (ver.Contains("0.6.0")) {
-		new_ver.otbm = MAP_OTBM_2;
-	} else if (ver.Contains("0.6.1")) {
-		new_ver.otbm = MAP_OTBM_3;
-	} else if (ver.Contains("0.7.0")) {
-		new_ver.otbm = MAP_OTBM_4;
-	}
+    new_ver.client = ClientVersion::get(nstr(protocol_choice->GetStringSelection()))->getID();
+    if (ver.Contains("0.5.0")) {
+        new_ver.otbm = MAP_OTBM_1;
+    } else if (ver.Contains("0.6.0")) {
+        new_ver.otbm = MAP_OTBM_2;
+    } else if (ver.Contains("0.6.1")) {
+        new_ver.otbm = MAP_OTBM_3;
+    } else if (ver.Contains("0.7.0")) {
+        new_ver.otbm = MAP_OTBM_4;
+    }
 
-	if (new_ver.client != old_ver.client) {
-		if (g_gui.GetOpenMapCount() > 1) {
-			g_gui.PopupDialog(this, "Error", "You can not change editor version with multiple maps open", wxOK);
-			return;
-		}
-		wxString error;
-		wxArrayString warnings;
+    if (new_ver.client != old_ver.client) {
+        if (g_gui.GetOpenMapCount() > 1) {
+            g_gui.PopupDialog(this, "Error", "You can not change editor version with multiple maps open", wxOK);
+            return;
+        }
+        wxString error;
+        wxArrayString warnings;
 
-		// Switch version
-		g_gui.GetCurrentEditor()->selection.clear();
-		g_gui.GetCurrentEditor()->actionQueue->clear();
+        // Switch version
+        g_gui.GetCurrentEditor()->selection.clear();
+        g_gui.GetCurrentEditor()->actionQueue->clear();
 
-		if (new_ver.client < old_ver.client) {
-			int ret = g_gui.PopupDialog(this, "Notice", "Converting to a previous version may have serious side-effects, are you sure you want to do this?", wxYES | wxNO);
-			if (ret != wxID_YES) {
-				return;
-			}
-			UnnamedRenderingLock();
+        if (!g_gui.LoadVersion(new_ver.client, error, warnings)) {
+            g_gui.PopupDialog(this, "Error", error, wxOK);
+            g_gui.ListDialog(this, "Warnings", warnings);
+            return;
+        }
 
-			// Remember all creatures types on the map
-			MapConversionContext conversion_context;
-			foreach_TileOnMap(map, conversion_context);
+        if (!warnings.empty()) {
+            g_gui.ListDialog(this, "Warnings", warnings);
+        }
+    }
 
-			// Perform the conversion
-			map.convert(new_ver, true);
+    map.convert(new_ver, true);
+    map.setMapDescription(nstr(description_ctrl->GetValue()));
+    map.setHouseFilename(nstr(house_filename_ctrl->GetValue()));
+    map.setSpawnFilename(nstr(spawn_filename_ctrl->GetValue()));
 
-			// Load the new version
-			if (!g_gui.LoadVersion(new_ver.client, error, warnings)) {
-				g_gui.ListDialog(this, "Warnings", warnings);
-				g_gui.PopupDialog(this, "Map Loader Error", error, wxOK);
-				g_gui.PopupDialog(this, "Conversion Error", "Could not convert map. The map will now be closed.", wxOK);
+    // Only resize if we have to
+    int new_map_width = width_spin->GetValue();
+    int new_map_height = height_spin->GetValue();
+    if(new_map_width != map.getWidth() || new_map_height != map.getHeight()) {
+        map.setWidth(new_map_width);
+        map.setHeight(new_map_height);
+        g_gui.FitViewToMap(view);
+    }
+    g_gui.RefreshPalettes();
 
-				EndModal(0);
-				return;
-			}
-
-			// Remove all creatures that were present are present in the new version
-			for (MapConversionContext::CreatureMap::iterator cs = conversion_context.creature_types.begin(); cs != conversion_context.creature_types.end();) {
-				if (g_creatures[cs->first]) {
-					cs = conversion_context.creature_types.erase(cs);
-				} else {
-					++cs;
-				}
-			}
-
-			if (conversion_context.creature_types.size() > 0) {
-				int add = g_gui.PopupDialog(this, "Unrecognized creatures", "There were creatures on the old version that are not present in this and were on the map, do you want to add them to this version as well?", wxYES | wxNO);
-				if (add == wxID_YES) {
-					for (MapConversionContext::CreatureMap::iterator cs = conversion_context.creature_types.begin(); cs != conversion_context.creature_types.end(); ++cs) {
-						MapConversionContext::CreatureInfo info = cs->second;
-						g_creatures.addCreatureType(info.name, info.is_npc, info.outfit);
-					}
-				}
-			}
-
-			map.cleanInvalidTiles(true);
-		} else {
-			UnnamedRenderingLock();
-			if (!g_gui.LoadVersion(new_ver.client, error, warnings)) {
-				g_gui.ListDialog(this, "Warnings", warnings);
-				g_gui.PopupDialog(this, "Map Loader Error", error, wxOK);
-				g_gui.PopupDialog(this, "Conversion Error", "Could not convert map. The map will now be closed.", wxOK);
-
-				EndModal(0);
-				return;
-			}
-			map.convert(new_ver, true);
-		}
-	} else {
-		map.convert(new_ver, true);
-	}
-
-	map.setMapDescription(nstr(description_ctrl->GetValue()));
-	map.setHouseFilename(nstr(house_filename_ctrl->GetValue()));
-	map.setSpawnFilename(nstr(spawn_filename_ctrl->GetValue()));
-
-	// Only resize if we have to
-	int new_map_width = width_spin->GetValue();
-	int new_map_height = height_spin->GetValue();
-	if (new_map_width != map.getWidth() || new_map_height != map.getHeight()) {
-		map.setWidth(new_map_width);
-		map.setHeight(new_map_height);
-		g_gui.FitViewToMap(view);
-	}
-	g_gui.RefreshPalettes();
-
-	EndModal(1);
+    EndModal(1);
 }
 
 void MapPropertiesWindow::OnClickCancel(wxCommandEvent& WXUNUSED(event)) {

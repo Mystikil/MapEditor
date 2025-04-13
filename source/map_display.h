@@ -54,6 +54,7 @@ public:
 	void OnGainMouse(wxMouseEvent& event);
 	void OnLoseMouse(wxMouseEvent& event);
 
+
 	// Mouse events handlers (called by the above)
 	void OnMouseActionRelease(wxMouseEvent& event);
 	void OnMouseActionClick(wxMouseEvent& event);
@@ -92,6 +93,7 @@ public:
 
 	void OnFindSimilarItems(wxCommandEvent& event);
 	void OnGenerateIsland(wxCommandEvent& event);
+	void OnCreateHouse(wxCommandEvent& event);
 
 	void OnSelectionToDoodad(wxCommandEvent& event);
 	// ---
@@ -132,6 +134,9 @@ public:
 protected:
 	void getTilesToDraw(int mouse_map_x, int mouse_map_y, int floor, PositionVector* tilestodraw, PositionVector* tilestoborder, bool fill = false);
 	bool floodFill(Map* map, const Position& center, int x, int y, GroundBrush* brush, PositionVector* positions);
+	bool hasHouseWall(Tile* tile);
+	bool hasDoor(Tile* tile);
+	bool hasStairsOrLadder(Tile* tile);
 
 private:
 	enum {
