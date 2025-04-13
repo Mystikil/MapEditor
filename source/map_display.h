@@ -136,6 +136,7 @@ protected:
 	bool floodFill(Map* map, const Position& center, int x, int y, GroundBrush* brush, PositionVector* positions);
 	bool hasHouseWall(Tile* tile);
 	bool hasDoor(Tile* tile);
+	bool hasStairsOrLadder(Tile* tile);
 
 private:
 	enum {

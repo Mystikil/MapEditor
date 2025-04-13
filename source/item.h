@@ -415,6 +415,24 @@ public:
 	bool isBlockingCreature() const {
 		return g_items[id].unpassable;
 	}
+	
+	// Check if item is a stair based on name
+	bool isStair() const {
+		const std::string& name = getName();
+		std::string lowerName = name;
+		std::transform(lowerName.begin(), lowerName.end(), lowerName.begin(), ::tolower);
+		return lowerName.find("stair") != std::string::npos || 
+		       lowerName.find("spiral") != std::string::npos ||
+		       lowerName.find("ramp") != std::string::npos;
+	}
+	
+	// Check if item is a ladder based on name
+	bool isLadder() const {
+		const std::string& name = getName();
+		std::string lowerName = name;
+		std::transform(lowerName.begin(), lowerName.end(), lowerName.begin(), ::tolower);
+		return lowerName.find("ladder") != std::string::npos;
+	}
 
 protected:
 	uint16_t id; // the same id as in ItemType
