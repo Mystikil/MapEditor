@@ -3611,214 +3611,446 @@ void MapCanvas::OnCreateHouse(wxCommandEvent& event) {
         return;
     }
 
-    // Find a door to start from
+    // Structure to hold detected house data by floor
+    struct HouseFloorData {
+        std::set<Position> wall_positions;
+        std::set<Position> interior_positions;
+        Position exit_pos;
+        bool has_exit = false;
+    };
+    
+    std::map<int, HouseFloorData> house_floors;
+    auto& current_floor_data = house_floors[current_floor];
+    
+    // Step 1: First, detect the house from the clicked position
+    // We'll look for walls in a small radius to determine if we're inside a house
+    const int WALL_SEARCH_RADIUS = 10;
+    bool found_wall = false;
+    
+    for (int r = 1; r <= WALL_SEARCH_RADIUS && !found_wall; r++) {
+        for (int y = -r; y <= r; y++) {
+            for (int x = -r; x <= r; x++) {
+                // Only check perimeter
+                if (std::abs(x) != r && std::abs(y) != r) continue;
+                
+                Position pos(start_map_x + x, start_map_y + y, current_floor);
+                Tile* tile = editor.map.getTile(pos);
+                
+                if (tile && hasHouseWall(tile)) {
+                    found_wall = true;
+                    break;
+                }
+            }
+            if (found_wall) break;
+        }
+    }
+    
+    if (!found_wall) {
+        g_gui.PopupDialog("Error", "Could not find any walls near the selected position. Please click inside a house.", wxOK);
+        return;
+    }
+    
+    // Step 2: Find a door - it's likely that a house has at least one door
     Position door_pos;
     bool found_door = false;
-    int search_radius = 10; // Maximum search radius
-
-    for (int radius = 1; radius <= search_radius && !found_door; radius++) {
-        for (int y = -radius; y <= radius; y++) {
-            for (int x = -radius; x <= radius; x++) {
-                if (std::abs(x) != radius && std::abs(y) != radius) continue; // Only check perimeter
+    const int DOOR_SEARCH_RADIUS = 15;
+    
+    for (int r = 1; r <= DOOR_SEARCH_RADIUS && !found_door; r++) {
+        for (int y = -r; y <= r; y++) {
+            for (int x = -r; x <= r; x++) {
+                // Only check perimeter
+                if (std::abs(x) != r && std::abs(y) != r) continue;
                 
-                Position check_pos(start_map_x + x, start_map_y + y, current_floor);
-                Tile* check_tile = editor.map.getTile(check_pos);
+                Position pos(start_map_x + x, start_map_y + y, current_floor);
+                Tile* tile = editor.map.getTile(pos);
                 
-                if (check_tile) {
-                    for (Item* item : check_tile->items) {
-                    if (item && item->isDoor()) {
-                            door_pos = check_pos;
+                if (tile && hasDoor(tile)) {
+                    door_pos = pos;
                             found_door = true;
                                 break;
-                            }
                         }
-                    }
-                if (found_door) break;
             }
             if (found_door) break;
         }
     }
 
+    // If no door is found, we'll just use the start position
     if (!found_door) {
-        g_gui.PopupDialog("Error", "Could not find any doors near the selected position. Please start from a door.", wxOK);
-        return;
+        door_pos = Position(start_map_x, start_map_y, current_floor);
     }
-
-    struct FloorData {
-        std::set<Position> wall_positions;
-        std::set<Position> ground_tiles;
-        Position exit_pos;
-        bool has_valid_exit;
-    };
-
-    std::map<int, FloorData> floors_data;
-    FloorData& ground_floor = floors_data[current_floor];
-
-    // Function to trace walls and fill interior
-    auto traceAndFillFloor = [&](int floor_z, FloorData& floor_data, const Position& start_pos) {
-        std::queue<Position> to_check;
-        std::set<Position> checked;
-        std::set<Position> walls;
-        
-        // Start from the door position
-        to_check.push(start_pos);
-        
-        while (!to_check.empty()) {
-            Position current = to_check.front();
-            to_check.pop();
+    
+    // Step 3: First pass - identify all walls
+    std::set<Position> all_walls;
+    std::queue<Position> wall_queue;
+    
+    // Begin by finding walls around the start position
+    const int INITIAL_WALL_RADIUS = 3;
+    for (int y = -INITIAL_WALL_RADIUS; y <= INITIAL_WALL_RADIUS; y++) {
+        for (int x = -INITIAL_WALL_RADIUS; x <= INITIAL_WALL_RADIUS; x++) {
+            Position pos(start_map_x + x, start_map_y + y, current_floor);
+            Tile* tile = editor.map.getTile(pos);
             
-            if (checked.count(current) > 0) continue;
-            checked.insert(current);
-            
+            if (tile && hasHouseWall(tile)) {
+                wall_queue.push(pos);
+                all_walls.insert(pos);
+            }
+        }
+    }
+    
+    // BFS to find all connected walls (limited depth to prevent crossing to adjacent houses)
+    const int MAX_WALL_EXPANSION = 25; // Limit how far we expand from start
+    std::set<Position> visited_walls;
+    
+    while (!wall_queue.empty()) {
+        Position current = wall_queue.front();
+        wall_queue.pop();
+        
+        if (visited_walls.count(current) > 0) continue;
+        visited_walls.insert(current);
+        
+        current_floor_data.wall_positions.insert(current);
+        
+        // Check for door exits
             Tile* tile = editor.map.getTile(current);
-            bool is_wall = tile && hasHouseWall(tile);
-            
-            if (is_wall) {
-                walls.insert(current);
+        if (tile && hasDoor(tile)) {
+            // Check outside the door
+            const int dirs[4][2] = {{0,-1}, {1,0}, {0,1}, {-1,0}};
+            for (int d = 0; d < 4; d++) {
+                Position exit_pos(current.x + dirs[d][0], current.y + dirs[d][1], current.z);
+                Tile* exit_tile = editor.map.getTile(exit_pos);
                 
-                // Check for doors and potential exits
-                for (Item* item : tile->items) {
-                    if (item && item->isDoor()) {
-                        // Check adjacent tiles for non-wall areas
-                        Position adjacent[4] = {
-                            Position(current.x, current.y - 1, floor_z),
-                            Position(current.x + 1, current.y, floor_z),
-                            Position(current.x, current.y + 1, floor_z),
-                            Position(current.x - 1, current.y, floor_z)
-                        };
-                        
-                        for (const Position& adj : adjacent) {
-                            Tile* adj_tile = editor.map.getTile(adj);
-                            if (!adj_tile || !hasHouseWall(adj_tile)) {
-                                floor_data.exit_pos = adj;
-                                floor_data.has_valid_exit = true;
+                // Skip walls and existing house tiles
+                if (!exit_tile || hasHouseWall(exit_tile) || exit_tile->isHouseTile()) continue;
+                
+                // Found a potential exit
+                current_floor_data.exit_pos = exit_pos;
+                current_floor_data.has_exit = true;
                                     break;
-                                }
-                        }
-                    }
-                }
-                
-                // Add adjacent positions to check
-            Position adjacent[4] = {
-                    Position(current.x, current.y - 1, floor_z),
-                    Position(current.x + 1, current.y, floor_z),
-                    Position(current.x, current.y + 1, floor_z),
-                    Position(current.x - 1, current.y, floor_z)
-                    };
-
-                    for (const Position& adj : adjacent) {
-                    if (checked.count(adj) == 0) {
-                        to_check.push(adj);
+            }
+        }
+        
+        // Only expand to nearby walls
+        if (std::abs(current.x - start_map_x) <= MAX_WALL_EXPANSION && 
+            std::abs(current.y - start_map_y) <= MAX_WALL_EXPANSION) {
+            
+            // Check adjacent positions for more walls (including diagonals for better connectivity)
+            for (int y = -1; y <= 1; y++) {
+                for (int x = -1; x <= 1; x++) {
+                    if (x == 0 && y == 0) continue;
+                    
+                    Position next(current.x + x, current.y + y, current.z);
+                    
+                    // Only visit each wall once
+                    if (visited_walls.count(next) > 0) continue;
+                    
+                    Tile* next_tile = editor.map.getTile(next);
+                    if (next_tile && hasHouseWall(next_tile)) {
+                        wall_queue.push(next);
                     }
                 }
             }
         }
-        
-        // Now fill interior
-        if (!walls.empty()) {
-            // Find bounds
+    }
+    
+    // Step 4: Calculate bounding box of house walls
             int min_x = std::numeric_limits<int>::max();
             int min_y = std::numeric_limits<int>::max();
             int max_x = std::numeric_limits<int>::min();
             int max_y = std::numeric_limits<int>::min();
             
-            for (const Position& wall : walls) {
-                min_x = std::min(min_x, wall.x);
-                min_y = std::min(min_y, wall.y);
-                max_x = std::max(max_x, wall.x);
-                max_y = std::max(max_y, wall.y);
-            }
-            
-            // Flood fill interior
-        for (int y = min_y; y <= max_y; y++) {
-            for (int x = min_x; x <= max_x; x++) {
-                    Position pos(x, y, floor_z);
-                    
-                    // Skip walls
-                    if (walls.count(pos) > 0) {
-                        floor_data.wall_positions.insert(pos);
+    for (const Position& pos : current_floor_data.wall_positions) {
+        min_x = std::min(min_x, pos.x);
+        min_y = std::min(min_y, pos.y);
+        max_x = std::max(max_x, pos.x);
+        max_y = std::max(max_y, pos.y);
+    }
+    
+    // Expand bounds slightly
+    min_x = std::max(0, min_x - 1);
+    min_y = std::max(0, min_y - 1);
+    max_x = std::min(editor.map.getWidth(), max_x + 1);
+    max_y = std::min(editor.map.getHeight(), max_y + 1);
+    
+    // Step 5: Flood fill interior from clicked position
+    std::set<Position> visited_interior;
+    std::queue<Position> interior_queue;
+    
+    // Start from the user's click position
+    Position fill_start(start_map_x, start_map_y, current_floor);
+    interior_queue.push(fill_start);
+    
+    while (!interior_queue.empty()) {
+        Position current = interior_queue.front();
+        interior_queue.pop();
+        
+        // Skip if outside bounds, already visited, or a wall
+        if (current.x < min_x || current.x > max_x || 
+            current.y < min_y || current.y > max_y ||
+            visited_interior.count(current) > 0 ||
+            current_floor_data.wall_positions.count(current) > 0) {
                         continue;
                     }
                     
-                    // Ray casting to check if point is inside
-                int intersections = 0;
-                for (int test_x = x + 1; test_x <= max_x; test_x++) {
-                        Position test_pos(test_x, y, floor_z);
-                        if (walls.count(test_pos) > 0) {
-                        intersections++;
-                    }
+        // Mark as visited
+        visited_interior.insert(current);
+        
+        // For interior, we require being inside the wall boundary
+        // Check if this position is inside using a smarter approach
+        
+        // Use a more reliable method to check if point is inside
+        bool is_inside = true;
+        
+        // Cast rays in 4 directions to check if we hit walls
+        const int directions[4][2] = {
+            {1, 0},   // right
+            {-1, 0},  // left
+            {0, 1},   // down
+            {0, -1}   // up
+        };
+        
+        int wall_hits = 0;
+        for (int d = 0; d < 4; d++) {
+            bool found_wall = false;
+            int ray_dist = 0;
+            int max_ray_dist = std::max(max_x - min_x, max_y - min_y);
+            
+            for (int dist = 1; dist <= max_ray_dist; dist++) {
+                int ray_x = current.x + (directions[d][0] * dist);
+                int ray_y = current.y + (directions[d][1] * dist);
+                
+                // Stop if we're outside the bounding box
+                if (ray_x < min_x || ray_x > max_x || ray_y < min_y || ray_y > max_y) {
+                    found_wall = false;
+                    break;
                 }
                 
-                if (intersections % 2 == 1) {
-                    floor_data.ground_tiles.insert(pos);
-                    }
+                Position ray_pos(ray_x, ray_y, current.z);
+                if (current_floor_data.wall_positions.count(ray_pos) > 0) {
+                    found_wall = true;
+                    ray_dist = dist;
+                    break;
+                }
+            }
+            
+            if (found_wall) {
+                wall_hits++;
+            }
+        }
+        
+        // If we hit walls in at least 3 directions, consider it inside
+        if (wall_hits >= 3) {
+            current_floor_data.interior_positions.insert(current);
+            
+            // Add neighboring tiles
+            for (int d = 0; d < 4; d++) {
+                Position next(current.x + directions[d][0], 
+                             current.y + directions[d][1], 
+                             current.z);
+                
+                // Only queue if we haven't visited and it's not a wall
+                if (visited_interior.count(next) == 0 && 
+                    current_floor_data.wall_positions.count(next) == 0) {
+                    interior_queue.push(next);
                 }
             }
         }
-    };
-
-    // Process ground floor
-    traceAndFillFloor(current_floor, ground_floor, door_pos);
-
-    // Check floors above and below
-    for (int floor_offset = -1; floor_offset <= 1; floor_offset += 2) {
+    }
+    
+    // Step 6: Check for floors above and below
+    for (int floor_offset : {-1, 1}) {
         int check_floor = current_floor + floor_offset;
+        
+        // Skip if outside valid floors
         if (check_floor < 0 || check_floor >= MAP_LAYERS) continue;
 
-        FloorData& floor_data = floors_data[check_floor];
+        auto& floor_data = house_floors[check_floor];
         
-        // Check for matching walls on this floor
-        bool found_matching_wall = false;
-        Position start_wall;
+        // Find a starting point on this floor - look for walls first
+        Position start_point;
+        bool found_start = false;
         
-        for (const Position& ground_wall : ground_floor.wall_positions) {
-            Position check_pos(ground_wall.x, ground_wall.y, check_floor);
-            Tile* check_tile = editor.map.getTile(check_pos);
+        // Look for walls that match current floor walls
+        for (const Position& wall_pos : current_floor_data.wall_positions) {
+            Position check_pos(wall_pos.x, wall_pos.y, check_floor);
+            Tile* tile = editor.map.getTile(check_pos);
             
-            if (check_tile && hasHouseWall(check_tile)) {
-                found_matching_wall = true;
-                start_wall = check_pos;
+            if (tile && hasHouseWall(tile)) {
+                start_point = check_pos;
+                found_start = true;
                 break;
             }
         }
         
-        if (found_matching_wall) {
-            traceAndFillFloor(check_floor, floor_data, start_wall);
+        // If we found a starting point, repeat wall detection and filling
+        if (found_start) {
+            // Find walls
+            std::set<Position> floor_visited_walls;
+            std::queue<Position> floor_wall_queue;
+            floor_wall_queue.push(start_point);
+            
+            while (!floor_wall_queue.empty()) {
+                Position current = floor_wall_queue.front();
+                floor_wall_queue.pop();
+                
+                if (floor_visited_walls.count(current) > 0) continue;
+                floor_visited_walls.insert(current);
+                
+                floor_data.wall_positions.insert(current);
+                
+                // Check for door exits
+                Tile* tile = editor.map.getTile(current);
+                if (tile && hasDoor(tile)) {
+                    // Check outside the door
+                    const int dirs[4][2] = {{0,-1}, {1,0}, {0,1}, {-1,0}};
+                    for (int d = 0; d < 4; d++) {
+                        Position exit_pos(current.x + dirs[d][0], current.y + dirs[d][1], current.z);
+                        Tile* exit_tile = editor.map.getTile(exit_pos);
+                        
+                        if (!exit_tile || hasHouseWall(exit_tile) || exit_tile->isHouseTile()) continue;
+                        
+                        floor_data.exit_pos = exit_pos;
+                        floor_data.has_exit = true;
+                        break;
+                    }
+                }
+                
+                // Only expand within the same bounds as the current floor
+                if (current.x >= min_x && current.x <= max_x && 
+                    current.y >= min_y && current.y <= max_y) {
+                    
+                    for (int y = -1; y <= 1; y++) {
+                        for (int x = -1; x <= 1; x++) {
+                            if (x == 0 && y == 0) continue;
+                            
+                            Position next(current.x + x, current.y + y, current.z);
+                            
+                            if (floor_visited_walls.count(next) > 0) continue;
+                            
+                            Tile* next_tile = editor.map.getTile(next);
+                            if (next_tile && hasHouseWall(next_tile)) {
+                                floor_wall_queue.push(next);
+                            }
+                        }
+                    }
+                }
+            }
+            
+            // Find interior using same bounds
+            std::set<Position> floor_visited_interior;
+            std::queue<Position> floor_interior_queue;
+            
+            // Start from same x,y as current floor's click, but on this floor
+            Position floor_fill_start(start_map_x, start_map_y, check_floor);
+            
+            // Make sure starting point exists and isn't a wall
+            Tile* start_floor_tile = editor.map.getTile(floor_fill_start);
+            if (start_floor_tile && !hasHouseWall(start_floor_tile)) {
+                floor_interior_queue.push(floor_fill_start);
+                
+                while (!floor_interior_queue.empty()) {
+                    Position current = floor_interior_queue.front();
+                    floor_interior_queue.pop();
+                    
+                    if (current.x < min_x || current.x > max_x || 
+                        current.y < min_y || current.y > max_y ||
+                        floor_visited_interior.count(current) > 0 ||
+                        floor_data.wall_positions.count(current) > 0) {
+                        continue;
+                    }
+                    
+                    floor_visited_interior.insert(current);
+                    
+                    // Cast rays to check if inside
+                    int wall_hits = 0;
+                    const int directions[4][2] = {
+                        {1, 0},   // right
+                        {-1, 0},  // left
+                        {0, 1},   // down
+                        {0, -1}   // up
+                    };
+                    for (int d = 0; d < 4; d++) {
+                        bool found_wall = false;
+                        int max_ray_dist = std::max(max_x - min_x, max_y - min_y);
+                        
+                        for (int dist = 1; dist <= max_ray_dist; dist++) {
+                            int ray_x = current.x + (directions[d][0] * dist);
+                            int ray_y = current.y + (directions[d][1] * dist);
+                            
+                            if (ray_x < min_x || ray_x > max_x || ray_y < min_y || ray_y > max_y) {
+                                found_wall = false;
+                                break;
+                            }
+                            
+                            Position ray_pos(ray_x, ray_y, current.z);
+                            if (floor_data.wall_positions.count(ray_pos) > 0) {
+                                found_wall = true;
+                                break;
+                            }
+                        }
+                        
+                        if (found_wall) {
+                            wall_hits++;
+                        }
+                    }
+                    
+                    if (wall_hits >= 3) {
+                        floor_data.interior_positions.insert(current);
+                        
+                        // Define directions array for neighbors
+                        const int directions[4][2] = {
+                            {1, 0},   // right
+                            {-1, 0},  // left
+                            {0, 1},   // down
+                            {0, -1}   // up
+                        };
+                        
+                        for (int d = 0; d < 4; d++) {
+                            Position next(current.x + directions[d][0], 
+                                         current.y + directions[d][1], 
+                                         current.z);
+                            
+                            if (floor_visited_interior.count(next) == 0 && 
+                                floor_data.wall_positions.count(next) == 0) {
+                                floor_interior_queue.push(next);
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
-
-    // Combine all found tiles
+    
+    // Step 7: Create the house
     std::set<Position> all_house_tiles;
     int total_floors = 0;
     int total_tiles = 0;
     Position exit_position(0, 0, 0);
 
-    for (const auto& floor_pair : floors_data) {
-        const FloorData& floor = floor_pair.second;
-        if (!floor.wall_positions.empty() || !floor.ground_tiles.empty()) {
+    for (const auto& [floor_z, floor_data] : house_floors) {
+        if (!floor_data.wall_positions.empty() || !floor_data.interior_positions.empty()) {
             total_floors++;
             
             // Add walls
-            all_house_tiles.insert(floor.wall_positions.begin(), floor.wall_positions.end());
-            total_tiles += floor.wall_positions.size();
+            all_house_tiles.insert(floor_data.wall_positions.begin(), floor_data.wall_positions.end());
+            total_tiles += floor_data.wall_positions.size();
             
-            // Add ground tiles
-            all_house_tiles.insert(floor.ground_tiles.begin(), floor.ground_tiles.end());
-            total_tiles += floor.ground_tiles.size();
-
-            // Store exit position if found
-            if (floor.has_valid_exit) {
-                exit_position = floor.exit_pos;
+            // Add interior
+            all_house_tiles.insert(floor_data.interior_positions.begin(), floor_data.interior_positions.end());
+            total_tiles += floor_data.interior_positions.size();
+            
+            // Store exit if found
+            if (floor_data.has_exit) {
+                exit_position = floor_data.exit_pos;
             }
         }
     }
-
-    if (all_house_tiles.empty()) {
-        g_gui.PopupDialog("Error", "Could not detect any valid house area. Please try selecting a different starting position.", wxOK);
+    
+    if (all_house_tiles.empty() || total_tiles < 4) {
+        g_gui.PopupDialog("Error", "Could not detect any valid house area. Please ensure you clicked inside a house with proper walls.", wxOK);
         return;
     }
 
-    // Create house dialog and process results
+    // Create house dialog
     wxDialog* dialog = new wxDialog(this, wxID_ANY, "Create House", wxDefaultPosition, wxSize(300, 200));
     wxBoxSizer* topsizer = new wxBoxSizer(wxVERTICAL);
 
@@ -3930,10 +4162,52 @@ bool MapCanvas::hasHouseWall(Tile* tile) {
     for (Item* item : tile->items) {
         if (!item) continue;
         
-        // Check for any blocking items (walls, windows, closed doors) crucial to check for blocking on its own because connecting walls sometimes are not defined as walls but they BLOCK!!!
-        if (item->isBlocking() || item->getWallBrush() || item->isDoor()) {
+        // Direct checks for brush properties - most reliable
+        if (item->getWallBrush() || item->isDoor() || item->isBrushDoor()) {
+            return true;
+        }
+        
+        // Name-based identification for common boundary elements
+        const std::string& name = item->getName();
+        std::string lowerName = name;
+        std::transform(lowerName.begin(), lowerName.end(), lowerName.begin(), ::tolower);
+        
+        // Only use specific wall-related terms
+        if (lowerName.find("wall") != std::string::npos ||
+            lowerName.find("door") != std::string::npos ||
+            lowerName.find("window") != std::string::npos ||
+            lowerName.find("fence") != std::string::npos ||
+            lowerName.find("gate") != std::string::npos ||
+            lowerName.find("rail") != std::string::npos ||
+			lowerName.find("pillar") != std::string::npos ||
+            lowerName.find("archway") != std::string::npos) {
             return true;
         }
     }
+    
+    return false;
+}
+
+// Check if tile has a door
+bool MapCanvas::hasDoor(Tile* tile) {
+    if (!tile) return false;
+    
+    for (Item* item : tile->items) {
+        if (!item) continue;
+        
+        if (item->isDoor() || item->isBrushDoor()) {
+            return true;
+        }
+        
+        const std::string& name = item->getName();
+        std::string lowerName = name;
+        std::transform(lowerName.begin(), lowerName.end(), lowerName.begin(), ::tolower);
+        
+        if (lowerName.find("door") != std::string::npos ||
+            lowerName.find("gate") != std::string::npos) {
+            return true;
+        }
+    }
+    
     return false;
 }
