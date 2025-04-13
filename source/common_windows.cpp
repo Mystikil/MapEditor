@@ -152,6 +152,7 @@ MapPropertiesWindow::MapPropertiesWindow(wxWindow* parent, MapTab* view, Editor&
 
 	// Bind the protocol choice event
 	protocol_choice->Bind(wxEVT_CHOICE, &MapPropertiesWindow::OnChangeVersion, this);
+	//protocol_choice->Bind(wxEVT_CHOICE, &MapPropertiesWindow::OnClientVersionChange, this);
 }
 
 void MapPropertiesWindow::UpdateProtocolList() {
