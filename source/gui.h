@@ -340,6 +340,13 @@ public:
 	void NewMapView();
 	void NewDetachedMapView();
 
+	// Detached views management
+	void RegisterDetachedView(Editor* editor, wxFrame* frame);
+	void UnregisterDetachedView(Editor* editor, wxFrame* frame);
+	bool HasDetachedViews(Editor* editor) const;
+	bool CloseDetachedViews(Editor* editor);
+	void UpdateDetachedViewsTitle(Editor* editor);
+
 	// Map
 	Map& GetCurrentMap();
 	int GetOpenMapCount();
@@ -483,6 +490,9 @@ public:
 
 	// Add after line 395 (public members section)
 	bool minimap_enabled;
+
+	// Map to track detached views for each editor
+	std::map<Editor*, std::list<wxFrame*>> detached_views;
 
 	void CheckAutoSave();
 	uint32_t last_autosave;

@@ -109,7 +109,7 @@ bool Application::OnInit() {
 
 	// Tell that we are the real thing
 	wxAppConsole::SetInstance(this);
-	wxArtProvider::Push(new ArtProvider());
+	wxArtProvider::Push(newd ArtProvider());
 
 #if defined(__LINUX__) || defined(__WINDOWS__)
 	int argc = 1;
@@ -525,12 +525,31 @@ bool MainFrame::DoQuerySave(bool doclose) {
 		return true;
 	}
 
+	Editor* editor = g_gui.GetCurrentEditor();
+	if (g_gui.HasDetachedViews(editor)) {
+		wxString message = "This map has one or more detached views open.\n";
+		message += "You must close all detached views before closing the map.";
+		
+		int choice = wxMessageBox(
+			message,
+			"Detached Views Open",
+			wxOK | wxCANCEL | wxICON_EXCLAMATION
+		);
+		
+		if (choice == wxOK) {
+			// User chose to close detached views
+			g_gui.CloseDetachedViews(editor);
+		} else {
+			// User canceled operation
+			return false;
+		}
+	}
+
 	if (!DoQuerySaveTileset()) {
 		return false;
 	}
 
-	Editor& editor = *g_gui.GetCurrentEditor();
-	if (editor.IsLiveClient()) {
+	if (editor->IsLiveClient()) {
 		long ret = g_gui.PopupDialog(
 			"Disconnect",
 			"Do you want to disconnect?",
@@ -541,9 +560,9 @@ bool MainFrame::DoQuerySave(bool doclose) {
 			return false;
 		}
 
-		editor.CloseLiveServer();
+		editor->CloseLiveServer();
 		return DoQuerySave(doclose);
-	} else if (editor.IsLiveServer()) {
+	} else if (editor->IsLiveServer()) {
 		long ret = g_gui.PopupDialog(
 			"Shutdown",
 			"Do you want to shut down the server? (any clients will be disconnected)",
@@ -554,7 +573,7 @@ bool MainFrame::DoQuerySave(bool doclose) {
 			return false;
 		}
 
-		editor.CloseLiveServer();
+		editor->CloseLiveServer();
 		return DoQuerySave(doclose);
 	} else if (g_gui.ShouldSave()) {
 		long ret = g_gui.PopupDialog(

@@ -67,23 +67,48 @@ void MapTabbook::OnNotebookPageClose(wxAuiNotebookEvent& evt) {
 	EditorTab* editorTab = GetTab(evt.GetInt());
 
 	MapTab* mapTab = dynamic_cast<MapTab*>(editorTab);
-	if (mapTab && mapTab->IsUniqueReference() && mapTab->GetMap()) {
-		bool needRefresh = true;
-		if (mapTab->GetEditor()->IsLive()) {
-			if (mapTab->GetMap()->hasChanged()) {
-				SetFocusedTab(evt.GetInt());
-				if (!g_gui.root->DoQuerySave(false)) {
-					needRefresh = false;
-					evt.Veto();
-				}
+	if (mapTab) {
+		// Check for detached views first
+		if (g_gui.HasDetachedViews(mapTab->GetEditor())) {
+			SetFocusedTab(evt.GetInt());
+			
+			wxString message = "This map has one or more detached views open.\n";
+			message += "You must close all detached views before closing the map.";
+			
+			int choice = wxMessageBox(
+				message,
+				"Detached Views Open",
+				wxOK | wxCANCEL | wxICON_EXCLAMATION
+			);
+			
+			if (choice == wxOK) {
+				// User chose to close detached views
+				g_gui.CloseDetachedViews(mapTab->GetEditor());
+			} else {
+				// User canceled operation
+				evt.Veto();
+				return;
 			}
 		}
+		
+		if (mapTab->IsUniqueReference() && mapTab->GetMap()) {
+			bool needRefresh = true;
+			if (mapTab->GetEditor()->IsLive()) {
+				if (mapTab->GetMap()->hasChanged()) {
+					SetFocusedTab(evt.GetInt());
+					if (!g_gui.root->DoQuerySave(false)) {
+						needRefresh = false;
+						evt.Veto();
+					}
+				}
+			}
 
-		if (needRefresh) {
-			g_gui.RefreshPalettes(nullptr, false);
-			g_gui.UpdateMenus();
+			if (needRefresh) {
+				g_gui.RefreshPalettes(nullptr, false);
+				g_gui.UpdateMenus();
+			}
+			return;
 		}
-		return;
 	}
 
 	LiveLogTab* lt = dynamic_cast<LiveLogTab*>(editorTab);
