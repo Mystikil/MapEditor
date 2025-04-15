@@ -84,6 +84,21 @@ void MapTabbook::OnNotebookPageClose(wxAuiNotebookEvent& evt) {
 			if (choice == wxOK) {
 				// User chose to close detached views
 				g_gui.CloseDetachedViews(mapTab->GetEditor());
+				
+				// Process any remaining events and check again
+				wxYield();
+				
+				// Verify that all detached views are actually closed
+				if (g_gui.HasDetachedViews(mapTab->GetEditor())) {
+					// Some views may still be open, prevent map from closing
+					wxMessageBox(
+						"Could not close all detached views. Please close them manually before closing the map.",
+						"Detached Views Still Open",
+						wxOK | wxICON_ERROR
+					);
+					evt.Veto();
+					return;
+				}
 			} else {
 				// User canceled operation
 				evt.Veto();

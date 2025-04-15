@@ -342,7 +342,9 @@ public:
 
 	// Detached views management
 	void RegisterDetachedView(Editor* editor, wxFrame* frame);
+	void RegisterDockableView(Editor* editor, MapWindow* window);
 	void UnregisterDetachedView(Editor* editor, wxFrame* frame);
+	void UnregisterDockableView(Editor* editor, MapWindow* window);
 	bool HasDetachedViews(Editor* editor) const;
 	bool CloseDetachedViews(Editor* editor);
 	void UpdateDetachedViewsTitle(Editor* editor);
@@ -493,6 +495,7 @@ public:
 
 	// Map to track detached views for each editor
 	std::map<Editor*, std::list<wxFrame*>> detached_views;
+	std::map<Editor*, std::list<MapWindow*>> dockable_views;
 
 	void CheckAutoSave();
 	uint32_t last_autosave;

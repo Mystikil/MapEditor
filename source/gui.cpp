@@ -1093,6 +1093,15 @@ void GUI::NewDetachedMapView() {
                     newMapWindow->GetCanvas()->EnterDrawingMode();
                 }
                 
+                // Register the dockable view
+                RegisterDockableView(mapTab->GetEditor(), newMapWindow);
+                
+                // Bind cleanup event to remove the window from our registry when destroyed
+                newMapWindow->Bind(wxEVT_DESTROY, [=](wxWindowDestroyEvent& event) {
+                    UnregisterDockableView(mapTab->GetEditor(), newMapWindow);
+                    event.Skip();
+                });
+                
                 SetStatusText("Created new dockable map view");
             }
         }
@@ -2548,6 +2557,14 @@ void GUI::RegisterDetachedView(Editor* editor, wxFrame* frame) {
 	});
 }
 
+void GUI::RegisterDockableView(Editor* editor, MapWindow* window) {
+	// Add the dockable window to the list for this editor
+	dockable_views[editor].push_back(window);
+	
+	// We don't need to add an idle event handler here as the window will be
+	// managed by the AUI manager and destroyed when the application exits
+}
+
 void GUI::UnregisterDetachedView(Editor* editor, wxFrame* frame) {
 	// Remove the frame from the list of detached views for this editor
 	if (detached_views.find(editor) != detached_views.end()) {
@@ -2560,29 +2577,73 @@ void GUI::UnregisterDetachedView(Editor* editor, wxFrame* frame) {
 	}
 }
 
+void GUI::UnregisterDockableView(Editor* editor, MapWindow* window) {
+	// Remove the window from the list of dockable views for this editor
+	if (dockable_views.find(editor) != dockable_views.end()) {
+		dockable_views[editor].remove(window);
+		
+		// If the list is now empty, remove the editor from the map
+		if (dockable_views[editor].empty()) {
+			dockable_views.erase(editor);
+		}
+	}
+}
+
 bool GUI::HasDetachedViews(Editor* editor) const {
-	// Check if the editor has any detached views
-	auto it = detached_views.find(editor);
-	return (it != detached_views.end() && !it->second.empty());
+	// Check if the editor has any detached views or dockable panels
+	auto detached_it = detached_views.find(editor);
+	auto dockable_it = dockable_views.find(editor);
+	
+	return (detached_it != detached_views.end() && !detached_it->second.empty()) || 
+	       (dockable_it != dockable_views.end() && !dockable_it->second.empty());
 }
 
 bool GUI::CloseDetachedViews(Editor* editor) {
-	// Close all detached views for the given editor
-	auto it = detached_views.find(editor);
-	if (it != detached_views.end()) {
+	bool had_views = false;
+
+	// Close all detached frame views for the given editor
+	auto frame_it = detached_views.find(editor);
+	if (frame_it != detached_views.end()) {
 		// Make a copy of the list since closing frames will modify the original
-		std::list<wxFrame*> frames_to_close = it->second;
+		std::list<wxFrame*> frames_to_close = frame_it->second;
 		
 		for (wxFrame* frame : frames_to_close) {
-			// Destroy the frame, which will trigger its close handler
-			frame->Destroy();
+			// Force close the frame immediately instead of destroy
+			// This ensures synchronous closing rather than asynchronous destruction
+			frame->Close(true);
 		}
 		
 		// Clear the list
 		detached_views.erase(editor);
-		return true;
+		had_views = true;
 	}
-	return false;
+	
+	// Close all dockable panel views for the given editor
+	auto dock_it = dockable_views.find(editor);
+	if (dock_it != dockable_views.end()) {
+		// Make a copy of the list since closing windows will modify the original
+		std::list<MapWindow*> windows_to_close = dock_it->second;
+		
+		for (MapWindow* window : windows_to_close) {
+			// For dockable panels, we need to remove them from the AUI manager
+			if (aui_manager->GetPane(window).IsOk()) {
+				aui_manager->DetachPane(window);
+				window->Destroy();
+			}
+		}
+		
+		// Clear the list
+		dockable_views.erase(editor);
+		had_views = true;
+		
+		// Update the AUI manager to reflect the changes
+		aui_manager->Update();
+	}
+	
+	// Process any pending events to ensure everything is closed
+	wxTheApp->ProcessPendingEvents();
+	
+	return had_views;
 }
 
 void GUI::UpdateDetachedViewsTitle(Editor* editor) {
