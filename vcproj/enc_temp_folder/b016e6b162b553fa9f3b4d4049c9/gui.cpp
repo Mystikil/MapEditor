@@ -2284,7 +2284,7 @@ void GUI::FillDoodadPreviewBuffer() {
 		} else if (brush->hasSingleObjects(GetBrushVariation())) {
 			Tile* tile = doodad_buffer_map->allocator(doodad_buffer_map->createTileL(center_pos));
 			int variation = GetBrushVariation();
-			brush->draw(doodad_buffer_map, tile, &variation);
+			brush->draw(doodad_buffer_map.get(), tile, &variation);
 			doodad_buffer_map->setTile(center_pos, tile);
 		}
 	}

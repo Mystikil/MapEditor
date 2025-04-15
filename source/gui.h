@@ -29,6 +29,7 @@
 #include "map_tab.h"
 #include "palette_window.h"
 #include "client_version.h"
+#include <memory> // For smart pointers
 
 class BaseMap;
 class Map;
@@ -417,8 +418,8 @@ public:
 	SearchResultWindow* search_result_window;
 	GraphicManager gfx;
 
-	BaseMap* secondary_map; // A buffer map
-	BaseMap* doodad_buffer_map; // The map in which doodads are temporarily stored
+	BaseMap* secondary_map; // A non-owning pointer to doodad_buffer_map when needed
+	std::unique_ptr<BaseMap> doodad_buffer_map; // The map in which doodads are temporarily stored
 
 	//=========================================================================
 	// Brush references
@@ -450,7 +451,7 @@ protected:
 	typedef std::list<PaletteWindow*> PaletteList;
 	PaletteList palettes;
 
-	wxGLContext* OGLContext;
+	std::unique_ptr<wxGLContext> OGLContext;
 
 	ClientVersionID loaded_version;
 	EditorMode mode;
