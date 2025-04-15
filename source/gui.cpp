@@ -2143,7 +2143,7 @@ void GUI::FillDoodadPreviewBuffer() {
 		return;
 	}
 
-	doodad_buffer_map->clear();
+	doodad_buffer_map.get()->clear();
 
 	DoodadBrush* brush = current_brush->asDoodad();
 	if (brush->isEmpty(GetBrushVariation())) {
@@ -2166,6 +2166,7 @@ void GUI::FillDoodadPreviewBuffer() {
 	const int object_range = (use_custom_thickness ? int(area * custom_thickness_mod) : brush->getThickness() * area / max(1, brush->getThicknessCeiling()));
 	const int final_object_count = max(1, object_range + random(object_range));
 
+	// Starting position for the center of the preview
 	Position center_pos(0x8000, 0x8000, 0x8);
 
 	if (brush_size > 0 && !brush->oneSizeFitsAll()) {
@@ -2209,8 +2210,9 @@ void GUI::FillDoodadPreviewBuffer() {
 
 					// Figure out if the placement is valid
 					for (const auto& composite : composites) {
-						Position pos = center_pos + composite.first + Position(xpos, ypos, 0);
-						if (Tile* tile = doodad_buffer_map->getTile(pos)) {
+						// Include the z offset in the position calculation
+						Position pos = center_pos + Position(composite.first.x + xpos, composite.first.y + ypos, composite.first.z);
+						if (Tile* tile = doodad_buffer_map.get()->getTile(pos)) {
 							if (!tile->empty()) {
 								fail = true;
 								break;
@@ -2224,35 +2226,36 @@ void GUI::FillDoodadPreviewBuffer() {
 
 					// Transfer items to the stack
 					for (const auto& composite : composites) {
-						Position pos = center_pos + composite.first + Position(xpos, ypos, 0);
+						// Include the z offset in the position calculation
+						Position pos = center_pos + Position(composite.first.x + xpos, composite.first.y + ypos, composite.first.z);
 						const ItemVector& items = composite.second;
-						Tile* tile = doodad_buffer_map->getTile(pos);
+						Tile* tile = doodad_buffer_map.get()->getTile(pos);
 
 						if (!tile) {
-							tile = doodad_buffer_map->allocator(doodad_buffer_map->createTileL(pos));
+							tile = doodad_buffer_map.get()->allocator(doodad_buffer_map.get()->createTileL(pos));
 						}
 
 						for (auto item : items) {
 							tile->addItem(item->deepCopy());
 						}
-						doodad_buffer_map->setTile(tile->getPosition(), tile);
+						doodad_buffer_map.get()->setTile(tile->getPosition(), tile);
 					}
 					exit = true;
 				} else if (brush->hasSingleObjects(GetBrushVariation())) {
 					Position pos = center_pos + Position(xpos, ypos, 0);
-					Tile* tile = doodad_buffer_map->getTile(pos);
+					Tile* tile = doodad_buffer_map.get()->getTile(pos);
 					if (tile) {
 						if (!tile->empty()) {
 							fail = true;
 							break;
 						}
 					} else {
-						tile = doodad_buffer_map->allocator(doodad_buffer_map->createTileL(pos));
+						tile = doodad_buffer_map.get()->allocator(doodad_buffer_map.get()->createTileL(pos));
 					}
 					int variation = GetBrushVariation();
 					brush->draw(doodad_buffer_map.get(), tile, &variation);
 					// std::cout << "\tpos: " << tile->getPosition() << std::endl;
-					doodad_buffer_map->setTile(tile->getPosition(), tile);
+					doodad_buffer_map.get()->setTile(tile->getPosition(), tile);
 					exit = true;
 				}
 				if (fail) {
@@ -2271,21 +2274,22 @@ void GUI::FillDoodadPreviewBuffer() {
 
 			// Transfer items to the buffer
 			for (const auto& composite : composites) {
+				// Include the z offset in the position calculation 
 				Position pos = center_pos + composite.first;
 				const ItemVector& items = composite.second;
-				Tile* tile = doodad_buffer_map->allocator(doodad_buffer_map->createTileL(pos));
+				Tile* tile = doodad_buffer_map.get()->allocator(doodad_buffer_map.get()->createTileL(pos));
 				// std::cout << pos << " = " << center_pos << " + " << buffer_tile->getPosition() << std::endl;
 
 				for (auto item : items) {
 					tile->addItem(item->deepCopy());
 				}
-				doodad_buffer_map->setTile(tile->getPosition(), tile);
+				doodad_buffer_map.get()->setTile(tile->getPosition(), tile);
 			}
 		} else if (brush->hasSingleObjects(GetBrushVariation())) {
-			Tile* tile = doodad_buffer_map->allocator(doodad_buffer_map->createTileL(center_pos));
+			Tile* tile = doodad_buffer_map.get()->allocator(doodad_buffer_map.get()->createTileL(center_pos));
 			int variation = GetBrushVariation();
-			brush->draw(doodad_buffer_map, tile, &variation);
-			doodad_buffer_map->setTile(center_pos, tile);
+			brush->draw(doodad_buffer_map.get(), tile, &variation);
+			doodad_buffer_map.get()->setTile(center_pos, tile);
 		}
 	}
 }

@@ -3108,6 +3108,7 @@ void MapCanvas::OnSelectionToDoodad(wxCommandEvent& WXUNUSED(event)) {
     
     int tileCount = 0;
     int totalItems = 0;
+    // Use a map with Position as key to store items by their 3D coordinates
     std::map<Position, std::vector<Item*>> tileItems;
     
     OutputDebugStringA("COMMENCING TILE INSPECTION! RESISTANCE IS FUTILE!\n");
@@ -3130,16 +3131,16 @@ void MapCanvas::OnSelectionToDoodad(wxCommandEvent& WXUNUSED(event)) {
             if(tile->ground) {
                 tileItems[tilePos].push_back(tile->ground);
                 totalItems++;
-                OutputDebugStringA(wxString::Format("Adding ground %d from full tile\n", 
-                    tile->ground->getID()));
+                OutputDebugStringA(wxString::Format("Adding ground %d from full tile at %d,%d,%d\n", 
+                    tile->ground->getID(), tilePos.x, tilePos.y, tilePos.z).c_str());
             }
             
             for(Item* item : tile->items) {
                 if(!item) continue;
                 tileItems[tilePos].push_back(item);
                 totalItems++;
-                OutputDebugStringA(wxString::Format("Adding item %d from full tile\n", 
-                    item->getID()));
+                OutputDebugStringA(wxString::Format("Adding item %d from full tile at %d,%d,%d\n", 
+                    item->getID(), tilePos.x, tilePos.y, tilePos.z).c_str());
             }
         }
         // Otherwise only add specifically selected items (borders)
@@ -3148,8 +3149,8 @@ void MapCanvas::OnSelectionToDoodad(wxCommandEvent& WXUNUSED(event)) {
                 if(item && item->isSelected()) {
                     tileItems[tilePos].push_back(item);
                     totalItems++;
-                    OutputDebugStringA(wxString::Format("Adding selected border item %d\n", 
-                        item->getID()));
+                    OutputDebugStringA(wxString::Format("Adding selected border item %d at %d,%d,%d\n", 
+                        item->getID(), tilePos.x, tilePos.y, tilePos.z).c_str());
                 }
             }
         }
@@ -3167,6 +3168,12 @@ void MapCanvas::OnSelectionToDoodad(wxCommandEvent& WXUNUSED(event)) {
 
     OutputDebugStringA(wxString::Format("MWAHAHAHA! ACQUIRED %d ITEMS FROM %d TILES! THE COLLECTION GROWS!\n", 
         totalItems, tileCount).c_str());
+
+    // Display multi-floor information
+    if (minPos.z != maxPos.z) {
+        OutputDebugStringA(wxString::Format("MULTI-FLOOR SELECTION DETECTED! FROM FLOOR %d TO %d\n", 
+            minPos.z, maxPos.z).c_str());
+    }
 
     if(totalItems == 0) {
         OutputDebugStringA("WHAT IS THIS MADNESS?! NO ITEMS TO STEAL?! INCONCEIVABLE!\n");
@@ -3328,6 +3335,11 @@ void MapCanvas::OnSelectionToDoodad(wxCommandEvent& WXUNUSED(event)) {
     newBrushNode->AddAttribute("draggable", "true");
     newBrushNode->AddAttribute("on_blocking", "true");
     newBrushNode->AddAttribute("thickness", "100/100");
+    
+    // Add multi-floor support attribute if this is a multi-floor doodad
+    if (minPos.z != maxPos.z) {
+        newBrushNode->AddAttribute("multi_floor", "true");
+    }
 
     // Create the alternate/composite structure
     wxXmlNode* alternateNode = new wxXmlNode(wxXML_ELEMENT_NODE, "alternate");
@@ -3341,13 +3353,16 @@ void MapCanvas::OnSelectionToDoodad(wxCommandEvent& WXUNUSED(event)) {
         const Position& pos = tilePair.first;
         int relX = pos.x - minPos.x;
         int relY = pos.y - minPos.y;
+        int relZ = pos.z - minPos.z;  // Calculate relative Z
         
         // Create tile node once per position
         wxXmlNode* tileNode = new wxXmlNode(wxXML_ELEMENT_NODE, "tile");
         tileNode->AddAttribute("x", wxString::Format("%d", relX));
         tileNode->AddAttribute("y", wxString::Format("%d", relY));
+        tileNode->AddAttribute("z", wxString::Format("%d", relZ));  // Add Z coordinate
         
-        OutputDebugStringA(wxString::Format("Creating tile node at x=%d y=%d\n", relX, relY).c_str());
+        OutputDebugStringA(wxString::Format("Creating tile node at x=%d y=%d z=%d\n", 
+            relX, relY, relZ).c_str());
         
         // Only add selected items to XML
         for(Item* item : tilePair.second) {
