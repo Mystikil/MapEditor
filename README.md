@@ -1,5 +1,86 @@
 What is this? Idler Map Editor Based on OTACADEMY fork of Remeres map editor
 =============
+[Features]
+
+Find Item Window
+[added various flags such as isHelmet hasLight]
+[search by Item range]
+[ignore range]
+
+Replace Items / Replace Selection
+Massive overhaul adding whole border and wall lists!
+Allow brush input
+
+Minimap 
+various performance optimizations
+LOD optimization ZOOM x8+ renders only ground floor
+Export optmization ignore empty tiles
+
+Collections
+copy selected part of map and add to doodads via right click allows for speedmapping corridors and islands borders etc
+
+Fill
+fill empty space
+fill connected borders ( empty borders that have no water tile under them or ground tile it will search all connected borders)
+
+Remove duplicates
+
+Browse field 
+added browsefield expansion allowing to move items on stackpos
+
+Remove unreachable Tiles
+expanded for custom clients
+
+Find Item Action / Unique Id 
+find range or specific item action unique ID
+
+goto position
+take various formats of the position xyz style
+
+Hotkey Configuration
+added hotkey config menu
+
+Right click select raw brush instantly
+option in preferences
+
+Borderize batching
+if u borderized large maps the editor would crash it now does it by batches of 500 tiles
+
+Town index
+change selected town index id
+
+
+Automagic
+layer carpet brushes
+same ground type border
+
+
+Dark mode
+& colored mode
+
+
+Live Server(Experimental only works in debug mode after ignoring first breakpoint 3-4times then u can draw fine
+lack of synchronization
+lack of map chunk batching
+
+Autosave option feature
+u can save map x seconds e.g 300 seconds in /data/autosave will save your backup maps!
+
+
+Validate grounds
+validate all ground tiles on map remove duplicates and wrongly stacked ground tiles
+
+
+version 6.0.0 - 6.1.0 [not public]
+Grid view final
+allows for displaying raw palette in grid style with resizable palette window
+Added a "Load NPCs Folder" button to the CreaturePalettePanel
+Added a Load Monsters Npc folder to Creaturepalette panel
+Generate House - Creates house
+Map properties fetch otbm verison based on client verison
+Detached view - ever wanted to edit 5 different parts of map on same time? 
+And many more.
+
 
 I often work till late I do not have the time to make commits im the guy that does the job since its open source you guys go fix commits atleast it will show anybody proofread it before running this spaghetti code that been fueled by pure hatred.
 
