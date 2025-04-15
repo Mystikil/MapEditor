@@ -232,9 +232,65 @@ GUI::GUI() :
 }
 
 GUI::~GUI() {
-	delete doodad_buffer_map;
-	delete g_gui.aui_manager;
-	delete OGLContext;
+    // Close all editors before deleting other resources
+    if (tabbook) {
+        CloseAllEditors();
+    }
+    
+    // Clean up brushes
+    CleanupBrushes();
+    
+    // Close any remaining detached/dockable views
+    for (auto& view_pair : detached_views) {
+        for (wxFrame* frame : view_pair.second) {
+            frame->Close(true);
+        }
+    }
+    detached_views.clear();
+    
+    for (auto& view_pair : dockable_views) {
+        for (MapWindow* window : view_pair.second) {
+            if (aui_manager && aui_manager->GetPane(window).IsOk()) {
+                aui_manager->DetachPane(window);
+                window->Destroy();
+            }
+        }
+    }
+    dockable_views.clear();
+    
+    // Clean up allocated resources
+    delete doodad_buffer_map;
+    delete OGLContext;
+    
+    // NOTE: aui_manager is deleted by MainFrame's destructor
+    // The g_gui.aui_manager deletion below is incorrect and causes double deletion
+    // delete g_gui.aui_manager;
+}
+
+void GUI::CleanupBrushes() {
+    // The GUI doesn't own the brushes, they're owned by g_brushes
+    // Just nullify the pointers to avoid dangling references
+    house_brush = nullptr;
+    house_exit_brush = nullptr;
+    waypoint_brush = nullptr;
+    optional_brush = nullptr;
+    eraser = nullptr;
+    spawn_brush = nullptr;
+    normal_door_brush = nullptr;
+    locked_door_brush = nullptr;
+    magic_door_brush = nullptr;
+    quest_door_brush = nullptr;
+    hatch_door_brush = nullptr;
+    normal_door_alt_brush = nullptr;
+    archway_door_brush = nullptr;
+    window_door_brush = nullptr;
+    pz_brush = nullptr;
+    rook_brush = nullptr;
+    nolog_brush = nullptr;
+    pvp_brush = nullptr;
+    
+    current_brush = nullptr;
+    previous_brush = nullptr;
 }
 
 wxGLContext* GUI::GetGLContext(wxGLCanvas* win) {
@@ -560,6 +616,15 @@ void GUI::UnloadVersion() {
 	window_door_brush = nullptr;
 
 	if (loaded_version != CLIENT_VERSION_NONE) {
+		// Close all detached and dockable views
+		for (auto it = detached_views.begin(); it != detached_views.end();) {
+			auto editor_it = it;
+			++it; // Advance iterator before we potentially erase elements
+			
+			// Close all views for this editor
+			CloseDetachedViews(editor_it->first);
+		}
+		
 		// g_gui.UnloadVersion();
 		g_materials.clear();
 		g_brushes.clear();
@@ -997,26 +1062,34 @@ void GUI::NewDetachedMapView() {
                     detachedFrame->Refresh();
                 });
                 
-                // Create a flag variable to control close behavior
-                bool* keepWindowOpen = new bool(false);
+                // Create a client data object to store the keep-open flag
+                // This avoids a memory leak from the heap-allocated bool
+                struct WindowData : public wxClientData {
+                    bool keepOpen = false;
+                };
+                WindowData* windowData = new WindowData();
+                detachedFrame->SetClientObject(windowData);
                 
                 // Default close behavior with flag check
-                detachedFrame->Bind(wxEVT_CLOSE_WINDOW, [detachedFrame, keepWindowOpen](wxCloseEvent& event) {
-                    if (*keepWindowOpen && event.CanVeto()) {
+                detachedFrame->Bind(wxEVT_CLOSE_WINDOW, [detachedFrame](wxCloseEvent& event) {
+                    WindowData* data = static_cast<WindowData*>(detachedFrame->GetClientObject());
+                    if (data && data->keepOpen && event.CanVeto()) {
                         // Minimize instead of closing
                         event.Veto();
                         detachedFrame->Iconize(true);
                     } else {
-                        // Regular close - clean up our flag first
-                        delete keepWindowOpen;
+                        // Regular close
                         detachedFrame->Destroy();
                     }
                 });
                 
-                // Keep Open checkbox handler - simply updates the flag
-                keepOpenCheckbox->Bind(wxEVT_CHECKBOX, [keepWindowOpen](wxCommandEvent& event) {
+                // Keep Open checkbox handler - updates the flag in client data
+                keepOpenCheckbox->Bind(wxEVT_CHECKBOX, [detachedFrame](wxCommandEvent& event) {
                     wxCheckBox* cb = static_cast<wxCheckBox*>(event.GetEventObject());
-                    *keepWindowOpen = cb->GetValue();
+                    WindowData* data = static_cast<WindowData*>(detachedFrame->GetClientObject());
+                    if (data) {
+                        data->keepOpen = cb->GetValue();
+                    }
                 });
                 
                 // Add context menu for quick floor navigation
@@ -2558,11 +2631,36 @@ void GUI::RegisterDetachedView(Editor* editor, wxFrame* frame) {
 }
 
 void GUI::RegisterDockableView(Editor* editor, MapWindow* window) {
-	// Add the dockable window to the list for this editor
-	dockable_views[editor].push_back(window);
-	
-	// We don't need to add an idle event handler here as the window will be
-	// managed by the AUI manager and destroyed when the application exits
+    // Skip registration if editor or window is null
+    if (!editor || !window)
+        return;
+        
+    // Add the dockable window to the list for this editor
+    dockable_views[editor].push_back(window);
+    
+    // Add a handler to check for editor validity periodically
+    window->Bind(wxEVT_IDLE, [this, editor, window](wxIdleEvent& event) {
+        // Check if the editor is still valid (might have been deleted)
+        bool editorExists = false;
+        for (int i = 0; i < tabbook->GetTabCount(); ++i) {
+            auto* mapTab = dynamic_cast<MapTab*>(tabbook->GetTab(i));
+            if (mapTab && mapTab->GetEditor() == editor) {
+                editorExists = true;
+                break;
+            }
+        }
+        
+        // If editor no longer exists, close this window
+        if (!editorExists && dockable_views.find(editor) != dockable_views.end()) {
+            if (aui_manager->GetPane(window).IsOk()) {
+                aui_manager->DetachPane(window);
+                window->Destroy();
+            }
+            // The destroy event will trigger UnregisterDockableView
+        }
+        
+        event.Skip();
+    });
 }
 
 void GUI::UnregisterDetachedView(Editor* editor, wxFrame* frame) {

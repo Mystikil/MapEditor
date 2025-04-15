@@ -369,6 +369,9 @@ protected:
 		return loaded_version == CLIENT_VERSION_NONE ? nullptr : ClientVersion::get(loaded_version);
 	}
 
+	// Method to clean up brush pointers
+	void CleanupBrushes();
+
 	//=========================================================================
 	// Palette Interface
 public:
