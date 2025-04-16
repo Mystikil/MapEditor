@@ -70,6 +70,21 @@ public:
 	//
 	virtual void updateCursor(const Position& position) = 0;
 
+	// Helper method to safely get app directory for logging
+	static wxString GetAppDir() {
+		wxString dir;
+		try {
+			dir = wxStandardPaths::Get().GetUserDataDir();
+			if (!wxDirExists(dir)) {
+				wxMkdir(dir);
+			}
+		}
+		catch (...) {
+			dir = "."; // Fallback to current directory
+		}
+		return dir;
+	}
+
 protected:
 	// receive / send methods
 	void receiveNode(NetworkMessage& message, Editor& editor, Action* action, int32_t ndx, int32_t ndy, bool underground);

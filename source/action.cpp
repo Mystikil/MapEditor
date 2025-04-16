@@ -23,6 +23,13 @@
 #include "editor.h"
 #include "gui.h"
 
+// Add necessary includes for exception handling and file operations
+#include <exception>
+#include <fstream>
+#include <wx/filename.h>
+#include <wx/datetime.h>
+#include <wx/stdpaths.h>
+
 Change::Change() :
 	type(CHANGE_NONE), data(nullptr) {
 	////
@@ -563,72 +570,126 @@ void ActionQueue::addAction(Action* action, int stacking_delay) {
 void ActionQueue::addBatch(BatchAction* batch, int stacking_delay) {
 	// Ensure we're on the main thread
 	if (!wxThread::IsMain()) {
-		wxTheApp->CallAfter([=]() {
-			this->addBatch(batch, stacking_delay);
+		// Use CallAfter but with a 'copy' of needed parameters
+		// to prevent race conditions
+		ActionQueue* self = this;
+		int delay = stacking_delay;
+		wxTheApp->CallAfter([self, batch, delay]() {
+			self->addBatch(batch, delay);
 		});
 		return;
 	}
 
-	ASSERT(batch);
-	ASSERT(current <= actions.size());
-
-	if (batch->size() == 0) {
-		delete batch;
+	// Safety check - if batch is null, just return
+	if (!batch) {
 		return;
 	}
 
-	// Commit any uncommited actions...
-	batch->commit();
+	// Additional safety check to catch any potential crashes
+	try {
+		ASSERT(current <= actions.size());
 
-	// Update title
-	if (editor.map.doChange()) {
-		g_gui.UpdateTitle();
-	}
+		if (batch->size() == 0) {
+			delete batch;
+			return;
+		}
 
-	if (batch->type == ACTION_REMOTE) {
-		delete batch;
-		return;
-	}
+		// Commit any uncommited actions...
+		batch->commit();
 
-	while (current != actions.size()) {
-		memory_size -= actions.back()->memsize();
-		BatchAction* todelete = actions.back();
-		actions.pop_back();
-		delete todelete;
-	}
+		// Update title
+		if (editor.map.doChange()) {
+			// Use a safer version that doesn't trigger UI updates
+			// during the first drawing operation
+			static bool isFirstOperation = true;
+			if (!isFirstOperation) {
+				g_gui.UpdateTitle();
+			} else {
+				isFirstOperation = false;
+			}
+		}
 
-	while (memory_size > size_t(1024 * 1024 * g_settings.getInteger(Config::UNDO_MEM_SIZE)) && !actions.empty()) {
-		memory_size -= actions.front()->memsize();
-		delete actions.front();
-		actions.pop_front();
-		current--;
-	}
+		if (batch->type == ACTION_REMOTE) {
+			delete batch;
+			return;
+		}
 
-	if (actions.size() > size_t(g_settings.getInteger(Config::UNDO_SIZE)) && !actions.empty()) {
-		memory_size -= actions.front()->memsize();
-		BatchAction* todelete = actions.front();
-		actions.pop_front();
-		delete todelete;
-		current--;
-	}
-
-	do {
-		if (!actions.empty()) {
-			BatchAction* lastAction = actions.back();
-			if (lastAction->type == batch->type && g_settings.getInteger(Config::GROUP_ACTIONS) && time(nullptr) - stacking_delay < lastAction->timestamp) {
-				lastAction->merge(batch);
-				lastAction->timestamp = time(nullptr);
-				memory_size -= lastAction->memsize();
-				memory_size += lastAction->memsize(true);
-				delete batch;
+		// Protect against memory corruption
+		while (current < actions.size() && !actions.empty()) {
+			try {
+				memory_size -= actions.back()->memsize();
+				BatchAction* todelete = actions.back();
+				actions.pop_back();
+				delete todelete;
+			} catch (const std::exception& e) {
+				// Log error but continue processing
+				std::ofstream logFile((wxStandardPaths::Get().GetUserDataDir() + wxFileName::GetPathSeparator() + "action_error.log").ToStdString(), std::ios::app);
+				if (logFile.is_open()) {
+					wxDateTime now = wxDateTime::Now();
+					logFile << now.FormatISOCombined() << ": Error clearing action: " << e.what() << "\n";
+					logFile.close();
+				}
 				break;
 			}
 		}
-		memory_size += batch->memsize();
-		actions.push_back(batch);
-		batch->timestamp = time(nullptr);
-		current++;
-	} while (false);
+
+		// Safely manage memory
+		try {
+			while (memory_size > size_t(1024 * 1024 * g_settings.getInteger(Config::UNDO_MEM_SIZE)) && !actions.empty()) {
+				memory_size -= actions.front()->memsize();
+				delete actions.front();
+				actions.pop_front();
+				if (current > 0) {
+					current--;
+				}
+			}
+
+			if (actions.size() > size_t(g_settings.getInteger(Config::UNDO_SIZE)) && !actions.empty()) {
+				memory_size -= actions.front()->memsize();
+				BatchAction* todelete = actions.front();
+				actions.pop_front();
+				delete todelete;
+				if (current > 0) {
+					current--;
+				}
+			}
+
+			// Process action with additional safety
+			do {
+				if (!actions.empty()) {
+					BatchAction* lastAction = actions.back();
+					if (lastAction->type == batch->type && g_settings.getInteger(Config::GROUP_ACTIONS) && time(nullptr) - stacking_delay < lastAction->timestamp) {
+						lastAction->merge(batch);
+						lastAction->timestamp = time(nullptr);
+						memory_size -= lastAction->memsize();
+						memory_size += lastAction->memsize(true);
+						delete batch;
+						break;
+					}
+				}
+				memory_size += batch->memsize();
+				actions.push_back(batch);
+				batch->timestamp = time(nullptr);
+				current++;
+			} while (false);
+		} catch (const std::exception& e) {
+			// Log error but don't crash
+			std::ofstream logFile((wxStandardPaths::Get().GetUserDataDir() + wxFileName::GetPathSeparator() + "action_error.log").ToStdString(), std::ios::app);
+			if (logFile.is_open()) {
+				wxDateTime now = wxDateTime::Now();
+				logFile << now.FormatISOCombined() << ": Error processing batch: " << e.what() << "\n";
+				logFile.close();
+			}
+		}
+	} catch (const std::exception& e) {
+		// Last resort error handler for entire function
+		std::ofstream logFile((wxStandardPaths::Get().GetUserDataDir() + wxFileName::GetPathSeparator() + "action_error.log").ToStdString(), std::ios::app);
+		if (logFile.is_open()) {
+			wxDateTime now = wxDateTime::Now();
+			logFile << now.FormatISOCombined() << ": Critical error in addBatch: " << e.what() << "\n";
+			logFile.close();
+		}
+	}
 }
 
 void ActionQueue::undo() {

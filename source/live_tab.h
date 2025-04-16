@@ -68,6 +68,9 @@ public:
 	void OnGridCellLeftClick(wxGridEvent& evt);
 	void ChangeUserColor(int row, const wxColor& color);
 
+	// Method to get the log file path
+	wxString GetLogFilePath(const wxString& logType);
+
 protected:
 	MapTabbook* aui;
 	LiveSocket* socket;

@@ -89,7 +89,7 @@ wxNotebookPage* PreferencesWindow::CreateGeneralPage() {
 
 	only_one_instance_chkbox = newd wxCheckBox(general_page, wxID_ANY, "Open all maps in the same instance");
 	only_one_instance_chkbox->SetValue(g_settings.getInteger(Config::ONLY_ONE_INSTANCE) == 1);
-	only_one_instance_chkbox->SetToolTip("When checked, maps opened using the shell will all be opened in the same instance.");
+	only_one_instance_chkbox->SetToolTip("When checked, maps opened using the shell will all be opened in the same instance.\nTo run multiple instances regardless of this setting, use the RunMultipleInstances.bat file or -force-multi-instance parameter.");
 	sizer->Add(only_one_instance_chkbox, 0, wxLEFT | wxTOP, 5);
 
 	enable_tileset_editing_chkbox = newd wxCheckBox(general_page, wxID_ANY, "Enable tileset editing");

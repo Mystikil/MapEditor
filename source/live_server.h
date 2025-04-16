@@ -96,6 +96,7 @@ protected:
 	uint16_t port;
 
 	bool stopped;
+	bool drawingReady;  // Flag indicating server is ready for drawing operations
 
 	wxColor usedColor;
 };

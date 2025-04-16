@@ -23,14 +23,23 @@
 #include "editor.h"
 
 #include <wx/event.h>
+#include <fstream>
 
 LiveClient::LiveClient() :
 	LiveSocket(),
 	readMessage(), queryNodeList(), currentOperation(),
-	resolver(nullptr), socket(nullptr), editor(nullptr), stopped(false) {
+	resolver(nullptr), socket(nullptr), editor(nullptr), stopped(false), isDrawingReady(false) {
 	// Initialize buffer with minimum size to prevent "size 0" errors
 	readMessage.buffer.resize(1024);
 	readMessage.position = 0;
+	
+	// Log initialization to file only to help with debugging
+	std::ofstream logFile((GetAppDir() + wxFileName::GetPathSeparator() + "client_init.log").ToStdString(), std::ios::app);
+	if (logFile.is_open()) {
+		wxDateTime now = wxDateTime::Now();
+		logFile << now.FormatISOCombined() << ": LiveClient initialized\n";
+		logFile.close();
+	}
 }
 
 LiveClient::~LiveClient() {
@@ -69,45 +78,66 @@ bool LiveClient::connect(const std::string& address, uint16_t port) {
 	// Log connection attempt
 	logMessage(wxString::Format("Attempting to connect to %s:%d...", address, port));
 
-	// Modern Boost.Asio API uses direct resolve instead of query
-	resolver->async_resolve(
-		address,
-		std::to_string(port),
-		[this](const boost::system::error_code& error, boost::asio::ip::tcp::resolver::results_type results) -> void {
-			if (error) {
-				wxString errorMsg = wxString::Format("Resolution error: %s", error.message());
-				logMessage(errorMsg);
-			} else {
-				logMessage(wxString::Format("Host resolved. Connecting to endpoint..."));
-				tryConnect(results.begin());
-			}
+	// Try both IP address and hostname when dealing with localhost/0.0.0.0
+	bool isLocalAddress = (address == "localhost" || address == "127.0.0.1" || address == "0.0.0.0");
+	
+	// If it's a local address, try both localhost and 127.0.0.1
+	if (isLocalAddress) {
+		// Create a vector of addresses to try
+		std::vector<std::string> addressesToTry;
+		
+		// Always try the original address first
+		addressesToTry.push_back(address);
+		
+		// Then add alternatives for local addresses
+		if (address == "localhost") {
+			addressesToTry.push_back("127.0.0.1");
+		} else if (address == "127.0.0.1") {
+			addressesToTry.push_back("localhost");
+		} else if (address == "0.0.0.0") {
+			addressesToTry.push_back("localhost");
+			addressesToTry.push_back("127.0.0.1");
 		}
-	);
-
-	/*
-	if(!client->WaitOnConnect(5, 0)) {
-		if(log)
-			log->Disconnect();
-		last_err = "Connection timed out.";
-		client->Destroy();
-		client = nullptr;
-		delete connection;
-		return false;
+		
+		// Try each address
+		for (const auto& addr : addressesToTry) {
+			resolver->async_resolve(
+				addr,
+				std::to_string(port),
+				[this, addr, addressesToTry, port](const boost::system::error_code& error, 
+												  boost::asio::ip::tcp::resolver::results_type results) -> void {
+					if (error) {
+						wxString errorMsg = wxString::Format("Resolution error for %s: %s", addr, error.message());
+						logMessage(errorMsg);
+						
+						// If this is the last address in the list and we failed, log a final error
+						if (addr == addressesToTry.back()) {
+							logMessage("Failed to resolve any local address. Check your network configuration.");
+						}
+					} else {
+						logMessage(wxString::Format("Host %s resolved. Connecting to endpoint...", addr));
+						tryConnect(results.begin());
+					}
+				}
+			);
+		}
+	} else {
+		// For non-local addresses, just try the given address
+		resolver->async_resolve(
+			address,
+			std::to_string(port),
+			[this](const boost::system::error_code& error, boost::asio::ip::tcp::resolver::results_type results) -> void {
+				if (error) {
+					wxString errorMsg = wxString::Format("Resolution error: %s", error.message());
+					logMessage(errorMsg);
+				} else {
+					logMessage(wxString::Format("Host resolved. Connecting to endpoint..."));
+					tryConnect(results.begin());
+				}
+			}
+		);
 	}
 
-	if(!client->IsConnected()) {
-		if(log)
-			log->Disconnect();
-		last_err = "Connection refused by peer.";
-		client->Destroy();
-		client = nullptr;
-		delete connection;
-		return false;
-	}
-
-	if(log)
-		log->Message("Connection established!");
-	*/
 	return true;
 }
 
@@ -181,10 +211,13 @@ void LiveClient::close() {
 		log = nullptr;
 	}
 
+	// Reset drawing ready flag on disconnect
+	isDrawingReady = false;
 	stopped = true;
 }
 
 bool LiveClient::handleError(const boost::system::error_code& error) {
+	// Handle common connection errors with more informative messages
 	if (error == boost::asio::error::eof || error == boost::asio::error::connection_reset) {
 		wxTheApp->CallAfter([this]() {
 			log->Message(wxString() + getHostName() + ": disconnected.");
@@ -193,6 +226,28 @@ bool LiveClient::handleError(const boost::system::error_code& error) {
 		return true;
 	} else if (error == boost::asio::error::connection_aborted) {
 		logMessage("You have left the server.");
+		return true;
+	} else if (error == boost::asio::error::connection_refused) {
+		// Connection refused - server might be using a different port
+		logMessage("Connection refused. The server might be using a different port or not running.");
+		return true;
+	} else if (error == boost::asio::error::address_in_use) {
+		// Address already in use - conflict with another instance
+		logMessage("Network address already in use. Another instance might be using the same port.");
+		return true;
+	} else if (error == boost::asio::error::timed_out) {
+		// Connection timeout
+		logMessage("Connection attempt timed out. Server might be unreachable or blocked by firewall.");
+		return true;
+	} else if (error == boost::asio::error::network_unreachable ||
+		       error == boost::asio::error::host_unreachable) {
+		// Network or host unreachable
+		logMessage("Network or host unreachable. Check your network connection.");
+		return true;
+	} else if (error) {
+		// Handle other errors with the error code
+		logMessage(wxString::Format("Connection error: %s (code: %d)", 
+					   error.message(), error.value()));
 		return true;
 	}
 	return false;
@@ -393,7 +448,36 @@ void LiveClient::updateCursor(const Position& position) {
 	message.write<uint8_t>(PACKET_CLIENT_UPDATE_CURSOR);
 	writeCursor(message, cursor);
 
-	send(message);
+	// Send without logging cursor movements
+	sendWithoutLogging(message);
+}
+
+// Add a new method for sending messages without logging
+void LiveClient::sendWithoutLogging(NetworkMessage& message) {
+	// Validate message size to avoid sending empty messages
+	if (message.size == 0) {
+		return;
+	}
+	
+	// Write size to the first 4 bytes (header)
+	memcpy(&message.buffer[0], &message.size, 4);
+	
+	try {
+		boost::asio::async_write(*socket, 
+			boost::asio::buffer(message.buffer, message.size + 4), 
+			[this, msgSize = message.size](const boost::system::error_code& error, size_t bytesTransferred) -> void {
+				if (error) {
+					logMessage(wxString::Format("[Client]: Error sending packet to server: %s", 
+						error.message()));
+				} else if (bytesTransferred != msgSize + 4) {
+					logMessage(wxString::Format("[Client]: Incomplete packet sent to server [sent: %zu, expected: %zu]", 
+						bytesTransferred, msgSize + 4));
+				}
+			}
+		);
+	} catch (std::exception& e) {
+		logMessage(wxString::Format("[Client]: Exception sending packet to server: %s", e.what()));
+	}
 }
 
 LiveLogTab* LiveClient::createLogWindow(wxWindow* parent) {
@@ -459,6 +543,12 @@ void LiveClient::sendNodeRequests() {
 }
 
 void LiveClient::sendChanges(DirtyList& dirtyList) {
+	// Don't send changes if client is not ready for drawing operations
+	if (!isDrawingReady) {
+		logMessage("[Client]: Cannot send drawing changes, connection not fully established yet");
+		return;
+	}
+
 	ChangeList& changeList = dirtyList.GetChanges();
 	if (changeList.empty()) {
 		return;
@@ -617,14 +707,57 @@ void LiveClient::parseKick(NetworkMessage& message) {
 }
 
 void LiveClient::parseClientAccepted(NetworkMessage& message) {
-	// Initialize the host's cursor when we're accepted
-	LiveCursor hostCursor;
-	hostCursor.id = 0; // Host is always ID 0
-	hostCursor.color = wxColor(255, 0, 0); // Default red color for host
-	hostCursor.pos = Position(); // Default position
-	cursors[0] = hostCursor; // Add host cursor to our list
-	
-	sendReady();
+	try {
+		// Write to a diagnostic file instead of UI logging to prevent crashes
+		std::ofstream logFile((GetAppDir() + wxFileName::GetPathSeparator() + "client_status.log").ToStdString(), std::ios::app);
+		if (logFile.is_open()) {
+			wxDateTime now = wxDateTime::Now();
+			logFile << now.FormatISOCombined() << ": Client accepted, setting up cursor\n";
+		}
+		
+		// Initialize the host's cursor when we're accepted
+		LiveCursor hostCursor;
+		hostCursor.id = 0; // Host is always ID 0
+		hostCursor.color = wxColor(255, 0, 0); // Default red color for host
+		hostCursor.pos = Position(); // Default position
+		cursors[0] = hostCursor; // Add host cursor to our list
+		
+		if (logFile.is_open()) {
+			logFile << "Host cursor initialized\n";
+		}
+		
+		// Set flag indicating we're fully connected and ready to draw - with extra safety
+		wxTheApp->CallAfter([this]() {
+			// Set the ready flag in a deferred way to ensure all initialization is complete
+			if (!stopped) {
+				isDrawingReady = true;
+				
+				// Write to diagnostic file
+				std::ofstream logFile((GetAppDir() + wxFileName::GetPathSeparator() + "client_status.log").ToStdString(), std::ios::app);
+				if (logFile.is_open()) {
+					wxDateTime now = wxDateTime::Now();
+					logFile << now.FormatISOCombined() << ": Drawing ready flag set to true\n";
+					logFile.close();
+				}
+			}
+		});
+		
+		if (logFile.is_open()) {
+			logFile << "Ready flag setup queued\n";
+			logFile.close();
+		}
+		
+		sendReady();
+	}
+	catch (const std::exception& e) {
+		// Log error to file
+		std::ofstream logFile((GetAppDir() + wxFileName::GetPathSeparator() + "client_error.log").ToStdString(), std::ios::app);
+		if (logFile.is_open()) {
+			wxDateTime now = wxDateTime::Now();
+			logFile << now.FormatISOCombined() << ": Error in parseClientAccepted: " << e.what() << "\n";
+			logFile.close();
+		}
+	}
 }
 
 void LiveClient::parseChangeClientVersion(NetworkMessage& message) {
@@ -694,7 +827,25 @@ void LiveClient::parseNode(NetworkMessage& message) {
 
 void LiveClient::parseCursorUpdate(NetworkMessage& message) {
 	LiveCursor cursor = readCursor(message);
+	
+	// Store previous cursor data if it exists
+	LiveCursor prevCursor;
+	bool cursorExisted = false;
+	auto it = cursors.find(cursor.id);
+	if (it != cursors.end()) {
+		prevCursor = it->second;
+		cursorExisted = true;
+	}
+	
+	// Update the cursor
 	cursors[cursor.id] = cursor;
+	
+	// Only log when a new cursor appears or color changes, not for movement
+	if (!cursorExisted) {
+		logMessage(wxString::Format("[Client]: New cursor appeared for client ID %u", cursor.id));
+	} else if (prevCursor.color != cursor.color) {
+		logMessage(wxString::Format("[Client]: Cursor color changed for client ID %u", cursor.id));
+	}
 
 	// Update client list after receiving cursor updates
 	if (log) {

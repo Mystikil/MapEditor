@@ -45,6 +45,7 @@ public:
 	void receiveHeader() override;
 	void receive(uint32_t packetSize) override;
 	void send(NetworkMessage& message) override;
+	void sendWithoutLogging(NetworkMessage& message); // For cursor updates and other high-frequency events
 
 	//
 	void updateCursor(const Position& position) override;
@@ -96,6 +97,7 @@ protected:
 	Editor* editor;
 
 	bool stopped;
+	bool isDrawingReady; // Flag indicating client is ready to handle drawing operations
 };
 
 #endif
