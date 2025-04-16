@@ -174,15 +174,25 @@ bool NetworkConnection::start() {
 
 	stopped = false;
 	if (!service) {
-		service = new boost::asio::io_service;
+		service = new boost::asio::io_context;
 	}
 
 	thread = std::thread([this]() -> void {
-		boost::asio::io_service& serviceRef = *service;
+		boost::asio::io_context& serviceRef = *service;
+		// Create a work guard to keep the context alive even when there are no pending handlers
+		boost::asio::executor_work_guard<boost::asio::io_context::executor_type> work = 
+			boost::asio::make_work_guard(serviceRef);
+		
 		try {
 			while (!stopped) {
+				// Run one handler at a time
 				serviceRef.run_one();
-				serviceRef.reset();
+				
+				// Instead of reset, just check if we should continue
+				if (serviceRef.stopped() && !stopped) {
+					// If the service stopped but we didn't request it, restart it
+					serviceRef.restart();
+				}
 			}
 		} catch (std::exception& e) {
 			std::cout << e.what() << std::endl;
@@ -204,6 +214,6 @@ void NetworkConnection::stop() {
 	service = nullptr;
 }
 
-boost::asio::io_service& NetworkConnection::get_service() {
+boost::asio::io_context& NetworkConnection::get_service() {
 	return *service;
 }

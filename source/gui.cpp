@@ -1731,10 +1731,21 @@ bool GUI::CanRedo() {
 bool GUI::DoUndo() {
 	Editor* editor = GetCurrentEditor();
 	if (editor && editor->actionQueue->canUndo()) {
+		// Store the current mode before undoing
+		EditorMode previous_mode = mode;
+		
+		// Perform the undo operation
 		editor->actionQueue->undo();
+		
+		// Switch to selection mode if there's a selection
 		if (editor->selection.size() > 0) {
 			SetSelectionMode();
+		} 
+		// If we were in drawing mode before and there's no selection now, restore drawing mode
+		else if (previous_mode == DRAWING_MODE && editor->selection.size() == 0) {
+			SetDrawingMode();
 		}
+		
 		SetStatusText("Undo action");
 		UpdateMinimap();
 		root->UpdateMenubar();
@@ -1747,10 +1758,21 @@ bool GUI::DoUndo() {
 bool GUI::DoRedo() {
 	Editor* editor = GetCurrentEditor();
 	if (editor && editor->actionQueue->canRedo()) {
+		// Store the current mode before redoing
+		EditorMode previous_mode = mode;
+		
+		// Perform the redo operation
 		editor->actionQueue->redo();
+		
+		// Switch to selection mode if there's a selection
 		if (editor->selection.size() > 0) {
 			SetSelectionMode();
 		}
+		// If we were in drawing mode before and there's no selection now, restore drawing mode
+		else if (previous_mode == DRAWING_MODE && editor->selection.size() == 0) {
+			SetDrawingMode();
+		}
+		
 		SetStatusText("Redo action");
 		UpdateMinimap();
 		root->UpdateMenubar();
