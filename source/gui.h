@@ -217,6 +217,7 @@ public:
 	// Minimap
 	void CreateMinimap();
 	void HideMinimap();
+	void ShowMinimap();
 	void DestroyMinimap();
 	void UpdateMinimap(bool immediate = false);
 	bool IsMinimapVisible() const;

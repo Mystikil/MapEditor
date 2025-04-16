@@ -1236,12 +1236,18 @@ void GUI::LoadPerspective() {
 				aui_manager->LoadPaneInfo(data, info);
 
 				minimap = newd MinimapWindow(root);
+				// Ensure the minimap is always dockable regardless of saved state
+				info.Dockable(true).Resizable(true).MinSize(300, 200);
+				
 				aui_manager->AddPane(minimap, info);
 			} else {
 				wxAuiPaneInfo& info = aui_manager->GetPane(minimap);
 
 				const wxString& data = wxstr(g_settings.getString(Config::MINIMAP_LAYOUT));
 				aui_manager->LoadPaneInfo(data, info);
+				
+				// Ensure the minimap is always dockable regardless of saved state
+				info.Dockable(true).Resizable(true).MinSize(300, 200);
 			}
 
 			wxAuiPaneInfo& info = aui_manager->GetPane(minimap);
@@ -1435,33 +1441,33 @@ void GUI::CreateMinimap() {
 		return;
 	}
 
-	if (minimap_enabled) {
-		DestroyMinimap();
+	if (minimap && minimap_enabled) {
+		// If minimap exists and is enabled, hide it
+		HideMinimap();
 		minimap_enabled = false;
+	} else if (minimap) {
+		// If minimap exists but is hidden, show it
+		ShowMinimap();
+		minimap_enabled = true;
 	} else {
-		if (minimap) {
-			// If minimap exists but is hidden, show it with saved position
-			aui_manager->GetPane(minimap).Show(true);
-			aui_manager->GetPane(minimap).Float();
-			aui_manager->GetPane(minimap).FloatingSize(wxSize(640, 320));
-		} else {
-			// Create new minimap with default size
-			minimap = newd MinimapWindow(root);
-			minimap->SetSize(wxSize(640, 320));
-			minimap->Show(true);
-			
-			// Add as floating pane with fixed size
-			wxAuiPaneInfo paneInfo;
-			paneInfo.Caption("Minimap")
-					.Float()
-					.FloatingSize(wxSize(640, 320))
-					.Floatable(true)
-					.Movable(true)
-					.Dockable(false)
-					.DestroyOnClose(false);
-					
-			aui_manager->AddPane(minimap, paneInfo);
-		}
+		// Create new minimap
+		minimap = newd MinimapWindow(root);
+		minimap->SetSize(wxSize(640, 320));
+		minimap->Show(true);
+		
+		// Add as dockable pane with configurable size
+		wxAuiPaneInfo paneInfo;
+		paneInfo.Caption("Minimap")
+				.Float()
+				.FloatingSize(wxSize(640, 320))
+				.Floatable(true)
+				.Movable(true)
+				.Dockable(true)  // Allow docking
+				.Resizable(true) // Allow resizing
+				.MinSize(300, 200) // Minimum size
+				.DestroyOnClose(false);
+				
+		aui_manager->AddPane(minimap, paneInfo);
 		minimap_enabled = true;
 		aui_manager->Update();
 	}
@@ -1469,8 +1475,19 @@ void GUI::CreateMinimap() {
 
 void GUI::HideMinimap() {
 	if (minimap) {
+		
 		aui_manager->GetPane(minimap).Show(false);
 		aui_manager->Update();
+	}
+}
+
+void GUI::ShowMinimap() {
+	if (minimap) {
+		aui_manager->GetPane(minimap).Show(true);
+		aui_manager->Update();
+	} else {
+		// Create minimap if it doesn't exist
+		CreateMinimap();
 	}
 }
 

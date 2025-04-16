@@ -213,11 +213,23 @@ void MinimapWindow::RenderThreadFunction() {
 }
 
 void MinimapWindow::OnSize(wxSizeEvent& event) {
+	// Clear the cache on resize to force a redraw
+	std::lock_guard<std::mutex> lock(m_mutex);
+	m_blocks.clear();
+	needs_update = true;
 	Refresh();
+	event.Skip();
 }
 
-void MinimapWindow::OnClose(wxCloseEvent&) {
-	g_gui.DestroyMinimap();
+void MinimapWindow::OnClose(wxCloseEvent& event) {
+	// Hide the window instead of destroying it
+	// This allows the minimap to be reopened in the same position
+	if (wxWindow::GetParent()) {
+		g_gui.HideMinimap();
+		event.Veto(); // Prevent the window from being destroyed
+	} else {
+		event.Skip(); // Allow default handling if no parent
+	}
 }
 
 void MinimapWindow::OnDelayedUpdate(wxTimerEvent& event) {
