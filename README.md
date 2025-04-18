@@ -96,8 +96,6 @@ I often work till late I do not have the time to make commits im the guy that do
 
 Idlers tavern : https://discord.gg/FD2cYKBq5E
 
-OTR
-https://discord.gg/sdxUJJdFzC
 
 Rookgaard Independence
 https://discord.gg/CavZvnvRey
