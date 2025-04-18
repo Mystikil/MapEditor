@@ -2,6 +2,9 @@ What is this? Idler Map Editor Based on OTACADEMY fork of Remeres map editor
 =============
 [Features]
 
+There is EXE FILE ALREADY IN REPOSITORY YOU DO NOT NEED TO DOWNLOAD ANY BUILD JUST OPEN VIA EDITOR_x64 
+to use collections copy collections.xml from 10.98 folder to any other version you are using. ensure the correct menubar.xml file is used! i use the one in vcproj/x64/release/data
+
 Find Item Window
 [added various flags such as isHelmet hasLight]
 [search by Item range]
