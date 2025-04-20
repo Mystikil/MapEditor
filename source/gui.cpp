@@ -788,6 +788,11 @@ bool GUI::LoadMap(const FileName& fileName) {
 	FitViewToMap(mapTab);
 	root->UpdateMenubar();
 
+	// Pre-cache the entire minimap for smooth performance
+	if (minimap && IsMinimapVisible()) {
+		minimap->PreCacheEntireMap();
+	}
+
 	std::string path = g_settings.getString(Config::RECENT_EDITED_MAP_PATH);
 	if (!path.empty()) {
 		FileName file(path);
@@ -1815,6 +1820,11 @@ void GUI::ChangeFloor(int new_floor) {
 
 		if (old_floor != new_floor) {
 			tab->GetCanvas()->ChangeFloor(new_floor);
+			
+			// Force minimap refresh when changing floors to ensure it shows the correct floor
+			if (minimap && IsMinimapVisible()) {
+				minimap->Refresh();
+			}
 		}
 	}
 }

@@ -2334,7 +2334,7 @@ void MapCanvas::ChangeFloor(int new_floor) {
 	int old_floor = floor;
 	floor = new_floor;
 	
-	// Force complete minimap refresh when crossing between underground and ground level
+	// Check if crossing between underground and ground level (but no longer clearing cache)
 	bool crossing_ground_level = (old_floor > GROUND_LAYER && new_floor <= GROUND_LAYER) || 
 							   (old_floor <= GROUND_LAYER && new_floor > GROUND_LAYER);
 	
@@ -2342,15 +2342,9 @@ void MapCanvas::ChangeFloor(int new_floor) {
 		UpdatePositionStatus();
 		g_gui.root->UpdateFloorMenu();
 		
-		if (crossing_ground_level) {
-			// Force complete refresh of minimap when crossing ground level boundary
-			if (g_gui.minimap) {  // Use direct access since it's public
-				g_gui.minimap->ClearCache();
-			}
-			g_gui.UpdateMinimap(true);
-		} else {
-			g_gui.UpdateMinimap(true);
-		}
+		// No longer clearing cache or updating minimap on floor changes
+		// This allows the minimap to maintain its cache across floor changes
+		// for better performance
 	}
 	Refresh();
 }

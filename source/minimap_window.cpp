@@ -66,32 +66,37 @@ RELEVANT CODE SECTIONS:
 #include <atomic>
 
 BEGIN_EVENT_TABLE(MinimapWindow, wxPanel)
-EVT_LEFT_DOWN(MinimapWindow::OnMouseClick)
-EVT_SIZE(MinimapWindow::OnSize)
-EVT_PAINT(MinimapWindow::OnPaint)
-EVT_ERASE_BACKGROUND(MinimapWindow::OnEraseBackground)
-EVT_CLOSE(MinimapWindow::OnClose)
-EVT_TIMER(wxID_ANY, MinimapWindow::OnDelayedUpdate)
-EVT_KEY_DOWN(MinimapWindow::OnKey)
+	EVT_PAINT(MinimapWindow::OnPaint)
+	EVT_ERASE_BACKGROUND(MinimapWindow::OnEraseBackground)
+	EVT_LEFT_DOWN(MinimapWindow::OnMouseClick)
+	EVT_KEY_DOWN(MinimapWindow::OnKey)
+	EVT_SIZE(MinimapWindow::OnSize)
+	EVT_CLOSE(MinimapWindow::OnClose)
+	EVT_TIMER(ID_MINIMAP_UPDATE, MinimapWindow::OnDelayedUpdate)
+	EVT_TIMER(ID_RESIZE_TIMER, MinimapWindow::OnResizeTimer)
 END_EVENT_TABLE()
 
-MinimapWindow::MinimapWindow(wxWindow* parent) :
-	wxPanel(parent, wxID_ANY, wxDefaultPosition, wxSize(205, 130)),
-	update_timer(this) ,
+MinimapWindow::MinimapWindow(wxWindow* parent) : 
+	wxPanel(parent, wxID_ANY, wxDefaultPosition, wxSize(205, 130), wxFULL_REPAINT_ON_RESIZE),
+	update_timer(this),
 	thread_running(false),
 	needs_update(true),
 	last_center_x(0),
 	last_center_y(0),
 	last_floor(0),
 	last_start_x(0),
-	last_start_y(0)
-	{
+	last_start_y(0),
+	is_resizing(false)
+{
 	for (int i = 0; i < 256; ++i) {
 		pens[i] = newd wxPen(wxColor(minimap_color[i].red, minimap_color[i].green, minimap_color[i].blue));
 	}
 	
-	// Bind the timer event
-	Bind(wxEVT_TIMER, &MinimapWindow::OnDelayedUpdate, this);
+	// Initialize the update timer
+	update_timer.SetOwner(this, ID_MINIMAP_UPDATE);
+	
+	// Initialize the resize timer
+	resize_timer.SetOwner(this, ID_RESIZE_TIMER);
 	
 	StartRenderThread();
 }
@@ -213,11 +218,18 @@ void MinimapWindow::RenderThreadFunction() {
 }
 
 void MinimapWindow::OnSize(wxSizeEvent& event) {
-	// Clear the cache on resize to force a redraw
-	std::lock_guard<std::mutex> lock(m_mutex);
-	m_blocks.clear();
-	needs_update = true;
-	Refresh();
+	// Mark that we're resizing
+	is_resizing = true;
+	
+	// Stop any previous resize timer
+	if (resize_timer.IsRunning()) {
+		resize_timer.Stop();
+	}
+	
+	// Start the resize timer (will fire when resize is complete)
+	resize_timer.Start(300, true); // 300ms single-shot timer
+	
+	// Skip the event to allow default handling
 	event.Skip();
 }
 
@@ -240,10 +252,28 @@ void MinimapWindow::DelayedUpdate() {
 	update_timer.Start(100, true);  // 100ms single-shot timer
 }
 
+void MinimapWindow::OnResizeTimer(wxTimerEvent& event) {
+	// Resizing has stopped
+	is_resizing = false;
+	
+	// Clear the cache to adjust to new size
+	std::lock_guard<std::mutex> lock(m_mutex);
+	m_blocks.clear();
+	needs_update = true;
+	
+	// Force a refresh now that we're done resizing
+	Refresh();
+}
+
 void MinimapWindow::OnPaint(wxPaintEvent& event) {
 	wxBufferedPaintDC dc(this);
 	dc.SetBackground(*wxBLACK_BRUSH);
 	dc.Clear();
+	
+	// During resizing, just show black background
+	if (is_resizing) {
+		return;
+	}
 	
 	if (!g_gui.IsEditorOpen()) return;
 	
@@ -254,14 +284,11 @@ void MinimapWindow::OnPaint(wxPaintEvent& event) {
 	canvas->GetScreenCenter(&centerX, &centerY);
 	int floor = g_gui.GetCurrentFloor();
 	
-	// Trigger update if floor changed
+	// Make sure we're always showing the correct floor
 	if (floor != last_floor) {
-		needs_update = true;
+		// Update the floor we're tracking
 		last_floor = floor;
-		
-		// Clear block cache when floor changes
-		std::lock_guard<std::mutex> lock(m_mutex);
-		m_blocks.clear();
+		Refresh(); // Ensure complete redraw with new floor
 	}
 
 	int windowWidth = GetSize().GetWidth();
@@ -277,7 +304,10 @@ void MinimapWindow::OnPaint(wxPaintEvent& event) {
 	for (int by = startBlockY; by <= endBlockY; ++by) {
 		for (int bx = startBlockX; bx <= endBlockX; ++bx) {
 			BlockPtr block = getBlock(bx * BLOCK_SIZE, by * BLOCK_SIZE);
-			if (block->needsUpdate) {
+			// We need to update the block if:
+			// 1. It needs an update OR
+			// 2. It's from a different floor than the current one
+			if (block->needsUpdate || block->floor != floor) {
 				updateBlock(block, bx * BLOCK_SIZE, by * BLOCK_SIZE, floor);
 			}
 			
@@ -409,4 +439,41 @@ void MinimapWindow::UpdateDrawnTiles(const PositionVector& positions) {
 		}
 	}
 	DelayedUpdate();
+}
+
+void MinimapWindow::PreCacheEntireMap() {
+	if (!g_gui.IsEditorOpen()) return;
+	
+	Editor& editor = *g_gui.GetCurrentEditor();
+	
+	// Calculate map bounds
+	int min_x = 0;
+	int min_y = 0;
+	int max_x = editor.getMapWidth();
+	int max_y = editor.getMapHeight();
+	
+	// Add a bit of padding
+	min_x = (min_x / BLOCK_SIZE) * BLOCK_SIZE;
+	min_y = (min_y / BLOCK_SIZE) * BLOCK_SIZE;
+	max_x = ((max_x / BLOCK_SIZE) + 1) * BLOCK_SIZE;
+	max_y = ((max_y / BLOCK_SIZE) + 1) * BLOCK_SIZE;
+	
+	// Create a load bar for the user
+	g_gui.CreateLoadBar("Caching minimap...");
+	
+	// Cache all floors
+	for (int floor = 0; floor <= MAP_MAX_LAYER; ++floor) {
+		int progress = floor * 100 / MAP_MAX_LAYER;
+		g_gui.SetLoadDone(progress, wxString::Format("Caching minimap (floor %d)...", floor));
+		
+		// Cache blocks for this floor
+		for (int y = min_y; y < max_y; y += BLOCK_SIZE) {
+			for (int x = min_x; x < max_x; x += BLOCK_SIZE) {
+				BlockPtr block = getBlock(x, y);
+				updateBlock(block, x, y, floor);
+			}
+		}
+	}
+	
+	g_gui.DestroyLoadBar();
 }

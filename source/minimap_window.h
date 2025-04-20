@@ -31,7 +31,8 @@
 class MinimapWindow : public wxPanel {
 public:
 	enum {
-		ID_MINIMAP_UPDATE = 45000  // Choose a number that won't conflict with other IDs
+		ID_MINIMAP_UPDATE = 45000,  // Choose a number that won't conflict with other IDs
+		ID_RESIZE_TIMER = 45001     // Timer ID for resize completion detection
 	};
 
 	MinimapWindow(wxWindow* parent);
@@ -42,12 +43,16 @@ public:
 	void OnMouseClick(wxMouseEvent&);
 	void OnSize(wxSizeEvent&);
 	void OnClose(wxCloseEvent&);
+	void OnResizeTimer(wxTimerEvent&);
 
 	void DelayedUpdate();
 	void OnDelayedUpdate(wxTimerEvent& event);
 	void OnKey(wxKeyEvent& event);
 
 	void ClearCache();
+	
+	// Pre-cache method for building the entire minimap at load time
+	void PreCacheEntireMap();
 
 	void UpdateDrawnTiles(const PositionVector& positions);
 
@@ -93,7 +98,10 @@ private:
 	std::mutex buffer_mutex;
 	std::thread render_thread;
 	std::atomic<bool> thread_running;
-
+	
+	// Window resizing handling
+	bool is_resizing;
+	wxTimer resize_timer;
 	
 	void RenderThreadFunction();
 	void StartRenderThread();
