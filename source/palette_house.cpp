@@ -42,6 +42,7 @@ EVT_CHOICE(PALETTE_HOUSE_TOWN_CHOICE, HousePalettePanel::OnTownChange)
 
 EVT_LISTBOX(PALETTE_HOUSE_LISTBOX, HousePalettePanel::OnListBoxChange)
 EVT_LISTBOX_DCLICK(PALETTE_HOUSE_LISTBOX, HousePalettePanel::OnListBoxDoubleClick)
+EVT_CONTEXT_MENU(HousePalettePanel::OnListBoxContextMenu)
 
 EVT_BUTTON(PALETTE_HOUSE_ADD_HOUSE, HousePalettePanel::OnClickAddHouse)
 EVT_BUTTON(PALETTE_HOUSE_EDIT_HOUSE, HousePalettePanel::OnClickEditHouse)
@@ -49,6 +50,8 @@ EVT_BUTTON(PALETTE_HOUSE_REMOVE_HOUSE, HousePalettePanel::OnClickRemoveHouse)
 
 EVT_TOGGLEBUTTON(PALETTE_HOUSE_BRUSH_BUTTON, HousePalettePanel::OnClickHouseBrushButton)
 EVT_TOGGLEBUTTON(PALETTE_HOUSE_SELECT_EXIT_BUTTON, HousePalettePanel::OnClickSelectExitButton)
+
+EVT_MENU(PALETTE_HOUSE_CONTEXT_MOVE_TO_TOWN, HousePalettePanel::OnMoveHouseToTown)
 END_EVENT_TABLE()
 
 HousePalettePanel::HousePalettePanel(wxWindow* parent, wxWindowID id) :
@@ -63,11 +66,13 @@ HousePalettePanel::HousePalettePanel(wxWindow* parent, wxWindowID id) :
 	town_choice = newd wxChoice(this, PALETTE_HOUSE_TOWN_CHOICE, wxDefaultPosition, wxDefaultSize, (int)0, (const wxString*)nullptr);
 	sidesizer->Add(town_choice, 0, wxEXPAND);
 
-	house_list = newd SortableListBox(this, PALETTE_HOUSE_LISTBOX);
+	house_list = newd SortableListBox(this, PALETTE_HOUSE_LISTBOX, wxDefaultPosition, wxDefaultSize, 0, nullptr, wxLB_EXTENDED);
 #ifdef __APPLE__
 	// Used for detecting a deselect
 	house_list->Bind(wxEVT_LEFT_UP, &HousePalettePanel::OnListBoxClick, this);
 #endif
+	// Bind context menu event to the list box
+	house_list->Bind(wxEVT_CONTEXT_MENU, &HousePalettePanel::OnListBoxContextMenu, this);
 	sidesizer->Add(house_list, 1, wxEXPAND);
 
 	tmpsizer = newd wxBoxSizer(wxHORIZONTAL);
@@ -97,6 +102,10 @@ HousePalettePanel::HousePalettePanel(wxWindow* parent, wxWindowID id) :
 	topsizer->Add(sidesizer, 0, wxEXPAND);
 
 	SetSizerAndFit(topsizer);
+
+	// Create context menu
+	context_menu = newd wxMenu();
+	context_menu->Append(PALETTE_HOUSE_CONTEXT_MOVE_TO_TOWN, "Move to Town...");
 }
 
 HousePalettePanel::~HousePalettePanel() {
@@ -323,6 +332,138 @@ void HousePalettePanel::OnListBoxDoubleClick(wxCommandEvent& event) {
 	// I find it extremly unlikely that one actually wants the exit at 0,0,0, so just treat it as the null value
 	if (house && house->getExit() != Position(0, 0, 0)) {
 		g_gui.SetScreenCenterPosition(house->getExit());
+	}
+}
+
+void HousePalettePanel::OnListBoxContextMenu(wxContextMenuEvent& event) {
+	if (map == nullptr || house_list->GetCount() == 0) {
+		return;
+	}
+
+	// Only enable the menu if at least one house is selected
+	wxArrayInt selections;
+	if (house_list->GetSelections(selections) > 0) {
+		// Get mouse position in screen coordinates
+		wxPoint position = event.GetPosition();
+		// If position is (-1, -1), this means the event was generated from the keyboard (e.g., Shift+F10)
+		// In this case, get the position of the first selected item
+		if (position == wxPoint(-1, -1)) {
+			// Get the client rect of the first selected item
+			wxRect rect;
+			house_list->GetItemRect(selections[0], rect);
+			// Convert to screen coordinates
+			position = house_list->ClientToScreen(rect.GetPosition());
+		}
+		// Show context menu at the proper position
+		PopupMenu(context_menu, house_list->ScreenToClient(position));
+	}
+}
+
+void HousePalettePanel::OnMoveHouseToTown(wxCommandEvent& event) {
+	if (map == nullptr || map->towns.count() == 0) {
+		return;
+	}
+
+	// Create dialog to select town
+	wxDialog* dialog = newd wxDialog(this, wxID_ANY, "Move Houses to Town", wxDefaultPosition, wxSize(220, 150));
+	wxSizer* sizer = newd wxBoxSizer(wxVERTICAL);
+	
+	// Create choice control with towns
+	wxChoice* town_list = newd wxChoice(dialog, wxID_ANY);
+	for (TownMap::const_iterator town_iter = map->towns.begin(); town_iter != map->towns.end(); ++town_iter) {
+		town_list->Append(wxstr(town_iter->second->getName()), town_iter->second);
+	}
+	
+	if (town_list->GetCount() > 0) {
+		town_list->SetSelection(0);
+	}
+	
+	sizer->Add(newd wxStaticText(dialog, wxID_ANY, "Select destination town:"), 0, wxEXPAND | wxALL, 5);
+	sizer->Add(town_list, 0, wxEXPAND | wxALL, 5);
+	
+	// Add OK/Cancel buttons
+	wxSizer* button_sizer = newd wxBoxSizer(wxHORIZONTAL);
+	button_sizer->Add(newd wxButton(dialog, wxID_OK, "OK"), wxSizerFlags(1).Center());
+	button_sizer->Add(newd wxButton(dialog, wxID_CANCEL, "Cancel"), wxSizerFlags(1).Center());
+	sizer->Add(button_sizer, 0, wxALIGN_CENTER | wxALL, 5);
+	
+	dialog->SetSizer(sizer);
+	
+	// Show dialog
+	if (dialog->ShowModal() == wxID_OK) {
+		if (town_list->GetSelection() != wxNOT_FOUND) {
+			Town* town = reinterpret_cast<Town*>(town_list->GetClientData(town_list->GetSelection()));
+			if (town) {
+				// Get all selected houses
+				wxArrayInt selections;
+				house_list->GetSelections(selections);
+				
+				// Change town for each selected house
+				for (size_t i = 0; i < selections.GetCount(); ++i) {
+					House* house = reinterpret_cast<House*>(house_list->GetClientData(selections[i]));
+					if (house) {
+						house->townid = town->getID();
+					}
+				}
+				
+				// Refresh the house list
+				RefreshHouseList();
+				
+				// Refresh the map
+				g_gui.RefreshView();
+			}
+		}
+	}
+	
+	dialog->Destroy();
+}
+
+void HousePalettePanel::RefreshHouseList() {
+	// Preserve current selections
+	wxArrayInt selections;
+	house_list->GetSelections(selections);
+	std::vector<uint32_t> selected_house_ids;
+	
+	// Store IDs of all selected houses
+	for (size_t i = 0; i < selections.GetCount(); ++i) {
+		House* house = reinterpret_cast<House*>(house_list->GetClientData(selections[i]));
+		if (house) {
+			selected_house_ids.push_back(house->getID());
+		}
+	}
+	
+	// Reload the house list
+	Town* what_town = reinterpret_cast<Town*>(town_choice->GetClientData(town_choice->GetSelection()));
+	
+	// Clear the old houselist
+	house_list->Clear();
+	
+	for (HouseMap::iterator house_iter = map->houses.begin(); house_iter != map->houses.end(); ++house_iter) {
+		if (what_town) {
+			if (house_iter->second->townid == what_town->getID()) {
+				house_list->Append(wxstr(house_iter->second->getDescription()), house_iter->second);
+			}
+		} else {
+			// "No Town" selected!
+			if (map->towns.getTown(house_iter->second->townid) == nullptr) {
+				// The town doesn't exist
+				house_list->Append(wxstr(house_iter->second->getDescription()), house_iter->second);
+			}
+		}
+	}
+	house_list->Sort();
+	
+	// Try to restore previous selections
+	for (unsigned int i = 0; i < house_list->GetCount(); ++i) {
+		House* house = reinterpret_cast<House*>(house_list->GetClientData(i));
+		if (house) {
+			for (uint32_t selected_id : selected_house_ids) {
+				if (house->getID() == selected_id) {
+					house_list->SetSelection(i);
+					break;
+				}
+			}
+		}
 	}
 }
 

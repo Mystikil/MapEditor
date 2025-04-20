@@ -204,6 +204,7 @@ protected:
 class SortableListBox : public wxListBox {
 public:
 	SortableListBox(wxWindow* parent, wxWindowID id, const wxPoint& pos = wxDefaultPosition, const wxSize& size = wxDefaultSize);
+	SortableListBox(wxWindow* parent, wxWindowID id, const wxPoint& pos, const wxSize& size, int n, const wxString choices[], long style);
 	~SortableListBox();
 	void Sort();
 

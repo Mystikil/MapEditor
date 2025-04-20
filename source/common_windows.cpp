@@ -1246,6 +1246,9 @@ wxCoord FindDialogListBox::OnMeasureItem(size_t n) const {
 SortableListBox::SortableListBox(wxWindow* parent, wxWindowID id, const wxPoint& pos, const wxSize& size) :
 	wxListBox(parent, id, pos, size, 0, nullptr, wxLB_SINGLE | wxLB_NEEDED_SB) { }
 
+SortableListBox::SortableListBox(wxWindow* parent, wxWindowID id, const wxPoint& pos, const wxSize& size, int n, const wxString choices[], long style) :
+	wxListBox(parent, id, pos, size, n, choices, style) { }
+
 SortableListBox::~SortableListBox() { }
 
 void SortableListBox::Sort() {
