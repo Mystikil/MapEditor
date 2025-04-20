@@ -501,6 +501,10 @@ void MapDrawer::DrawIngameBox() {
 }
 
 void MapDrawer::DrawGrid() {
+	if (zoom > g_settings.getInteger(Config::GRID_ZOOM_THRESHOLD)) {
+		return;
+	}
+
 	for (int y = start_y; y < end_y; ++y) {
 		glColor4ub(255, 255, 255, 128);
 		glBegin(GL_LINES);
@@ -608,7 +612,7 @@ void MapDrawer::DrawHigherFloors() {
 							BlitItem(draw_x, draw_y, tile, tile->ground, false, 255, 255, 255, 96);
 						}
 					}
-					if (zoom <= 10.0 || !options.hide_items_when_zoomed) {
+					if (zoom <= g_settings.getInteger(Config::ITEM_DISPLAY_ZOOM_THRESHOLD) || !options.hide_items_when_zoomed) {
 						ItemVector::iterator it;
 						for (it = tile->items.begin(); it != tile->items.end(); it++) {
 							BlitItem(draw_x, draw_y, tile, *it, false, 255, 255, 255, 96);
@@ -1536,8 +1540,8 @@ void MapDrawer::DrawTile(TileLocation* location) {
 	int map_y = location->getY();
 	int map_z = location->getZ();
 
-		// Ground-only rendering at high zoom levels
-	bool high_zoom = zoom >= 8.0;
+	// Ground-only rendering at high zoom levels
+	bool high_zoom = zoom >= g_settings.getInteger(Config::GROUND_ONLY_ZOOM_THRESHOLD);
 
 	Waypoint* waypoint = canvas->editor.map.waypoints.getWaypoint(location);
 	if (options.show_tooltips && location->getWaypointCount() > 0) {
@@ -1642,7 +1646,7 @@ void MapDrawer::DrawTile(TileLocation* location) {
 		}
 	} else {
 		if (tile->ground) {
-			if (options.show_preview && zoom <= 2.0) {
+			if (options.show_preview && zoom <= g_settings.getInteger(Config::ANIMATION_ZOOM_THRESHOLD)) {
 				tile->ground->animate();
 			}
 
@@ -1658,7 +1662,7 @@ void MapDrawer::DrawTile(TileLocation* location) {
 	// end filters for ground tile
 
 	if (!only_colors) {
-		if (zoom < 10.0 || !options.hide_items_when_zoomed) {
+		if (zoom < g_settings.getInteger(Config::ITEM_DISPLAY_ZOOM_THRESHOLD) || !options.hide_items_when_zoomed) {
 			// items on tile
 			for (ItemVector::iterator it = tile->items.begin(); it != tile->items.end(); it++) {
 				// item tooltip
@@ -1667,7 +1671,7 @@ void MapDrawer::DrawTile(TileLocation* location) {
 				}
 
 				// item animation
-				if (options.show_preview && zoom <= 2.0) {
+				if (options.show_preview && zoom <= g_settings.getInteger(Config::ANIMATION_ZOOM_THRESHOLD)) {
 					(*it)->animate();
 				}
 
@@ -1677,7 +1681,8 @@ void MapDrawer::DrawTile(TileLocation* location) {
 				} else {
 					r = 255, g = 255, b = 255;
 
-					if (options.extended_house_shader && options.show_houses && tile->isHouseTile()) {
+					if (options.extended_house_shader && options.show_houses && tile->isHouseTile() && 
+					    zoom <= g_settings.getInteger(Config::EFFECTS_ZOOM_THRESHOLD)) {
 						if ((int)tile->getHouseID() == current_house_id) {
 							r /= 2;
 						} else {
@@ -1694,7 +1699,7 @@ void MapDrawer::DrawTile(TileLocation* location) {
 			}
 		}
 
-		if (zoom < 10.0) {
+		if (zoom < g_settings.getInteger(Config::SPECIAL_FEATURES_ZOOM_THRESHOLD)) {
 			// waypoint (blue flame)
 			if (!options.ingame && waypoint && options.show_waypoints) {
 				BlitSpriteType(draw_x, draw_y, SPRITE_WAYPOINT, 64, 64, 255);
@@ -1710,7 +1715,8 @@ void MapDrawer::DrawTile(TileLocation* location) {
 			}
 
 			// town temple (gray flag)
-			if (options.show_towns && tile->isTownExit(editor.map)) {
+			if (options.show_towns && tile->isTownExit(editor.map) && 
+			    zoom <= g_settings.getInteger(Config::TOWN_ZONE_ZOOM_THRESHOLD)) {
 				BlitSpriteType(draw_x, draw_y, SPRITE_TOWN_TEMPLE, 255, 255, 64, 170);
 			}
 
@@ -1931,7 +1937,7 @@ void MapDrawer::MakeTooltip(int screenx, int screeny, const std::string& text, u
 }
 
 void MapDrawer::AddLight(TileLocation* location) {
-	if (!options.isDrawLight() || !location) {
+	if (!options.isDrawLight() || !location || zoom > g_settings.getInteger(Config::LIGHT_ZOOM_THRESHOLD)) {
 		return;
 	}
 
@@ -1948,7 +1954,7 @@ void MapDrawer::AddLight(TileLocation* location) {
 		}
 	}
 
-	bool hidden = options.hide_items_when_zoomed && zoom > 10.f;
+	bool hidden = options.hide_items_when_zoomed && zoom > g_settings.getInteger(Config::ITEM_DISPLAY_ZOOM_THRESHOLD);
 	if (!hidden && !tile->items.empty()) {
 		for (auto item : tile->items) {
 			if (item->hasLight()) {

@@ -1399,12 +1399,22 @@ void GUI::DestroyPalettes() {
 }
 
 void GUI::RebuildPalettes() {
-	// Palette lits might be modified due to active palette changes
-	// Use a temporary list for iterating
-	PaletteList tmp = palettes;
-	for (auto& piter : tmp) {
-		piter->ReloadSettings(IsEditorOpen() ? &GetCurrentMap() : nullptr);
+	// Completely recreate palettes to include/exclude tileset editing buttons
+	if (!palettes.empty()) {
+		// Remember which palette was active
+		Map* current_map = IsEditorOpen() ? &GetCurrentMap() : nullptr;
+		
+		// Destroy all palettes
+		DestroyPalettes();
+		
+		// Recreate palette
+		CreatePalette();
+		
+		// Force update
+		RefreshPalettes(current_map);
 	}
+	
+	// Update the AUI manager
 	aui_manager->Update();
 }
 

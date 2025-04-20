@@ -634,14 +634,80 @@ wxNotebookPage* PreferencesWindow::CreateLODPage() {
 	wxFlexGridSizer* grid_sizer = newd wxFlexGridSizer(2, 10, 10);
 	grid_sizer->AddGrowableCol(1);
 
+	// Tooltip settings
 	grid_sizer->Add(tmptext = newd wxStaticText(lod_page, wxID_ANY, "Tooltip max zoom: "), 0);
 	tooltip_max_zoom_spin = newd wxSpinCtrl(lod_page, wxID_ANY, i2ws(g_settings.getInteger(Config::TOOLTIP_MAX_ZOOM)), 
 		wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS, 1, 100, 10);
 	grid_sizer->Add(tooltip_max_zoom_spin, 0);
 	SetWindowToolTip(tmptext, tooltip_max_zoom_spin, "When zoomed out beyond this level, tooltips will not be generated to improve performance.");
 
+	// Ground only rendering threshold
+	grid_sizer->Add(tmptext = newd wxStaticText(lod_page, wxID_ANY, "Ground-only zoom threshold: "), 0);
+	ground_only_threshold_spin = newd wxSpinCtrl(lod_page, wxID_ANY, i2ws(g_settings.getInteger(Config::GROUND_ONLY_ZOOM_THRESHOLD)), 
+		wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS, 1, 50, 8);
+	grid_sizer->Add(ground_only_threshold_spin, 0);
+	SetWindowToolTip(tmptext, ground_only_threshold_spin, "When zoomed out beyond this level, only ground tiles will be rendered for better performance.");
+
+	// Item display threshold
+	grid_sizer->Add(tmptext = newd wxStaticText(lod_page, wxID_ANY, "Item display zoom threshold: "), 0);
+	item_display_threshold_spin = newd wxSpinCtrl(lod_page, wxID_ANY, i2ws(g_settings.getInteger(Config::ITEM_DISPLAY_ZOOM_THRESHOLD)), 
+		wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS, 1, 50, 10);
+	grid_sizer->Add(item_display_threshold_spin, 0);
+	SetWindowToolTip(tmptext, item_display_threshold_spin, "When zoomed out beyond this level, items on tiles won't be displayed (unless hide items when zoomed is disabled).");
+
+	// Special features threshold
+	grid_sizer->Add(tmptext = newd wxStaticText(lod_page, wxID_ANY, "Special features zoom threshold: "), 0);
+	special_features_threshold_spin = newd wxSpinCtrl(lod_page, wxID_ANY, i2ws(g_settings.getInteger(Config::SPECIAL_FEATURES_ZOOM_THRESHOLD)), 
+		wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS, 1, 50, 10);
+	grid_sizer->Add(special_features_threshold_spin, 0);
+	SetWindowToolTip(tmptext, special_features_threshold_spin, "When zoomed out beyond this level, special features like waypoints and house exits won't be shown.");
+
+	// Animation threshold
+	grid_sizer->Add(tmptext = newd wxStaticText(lod_page, wxID_ANY, "Animation zoom threshold: "), 0);
+	animation_threshold_spin = newd wxSpinCtrl(lod_page, wxID_ANY, i2ws(g_settings.getInteger(Config::ANIMATION_ZOOM_THRESHOLD)), 
+		wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS, 1, 20, 2);
+	grid_sizer->Add(animation_threshold_spin, 0);
+	SetWindowToolTip(tmptext, animation_threshold_spin, "When zoomed out beyond this level, item animations won't be processed for better performance.");
+
+	// Effects threshold
+	grid_sizer->Add(tmptext = newd wxStaticText(lod_page, wxID_ANY, "Effects zoom threshold: "), 0);
+	effects_threshold_spin = newd wxSpinCtrl(lod_page, wxID_ANY, i2ws(g_settings.getInteger(Config::EFFECTS_ZOOM_THRESHOLD)), 
+		wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS, 1, 20, 6);
+	grid_sizer->Add(effects_threshold_spin, 0);
+	SetWindowToolTip(tmptext, effects_threshold_spin, "When zoomed out beyond this level, visual effects like house highlighting won't be rendered.");
+
+	// Light threshold
+	grid_sizer->Add(tmptext = newd wxStaticText(lod_page, wxID_ANY, "Light zoom threshold: "), 0);
+	light_threshold_spin = newd wxSpinCtrl(lod_page, wxID_ANY, i2ws(g_settings.getInteger(Config::LIGHT_ZOOM_THRESHOLD)), 
+		wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS, 1, 20, 4);
+	grid_sizer->Add(light_threshold_spin, 0);
+	SetWindowToolTip(tmptext, light_threshold_spin, "When zoomed out beyond this level, light effects won't be rendered.");
+
+	// Shade threshold
+	grid_sizer->Add(tmptext = newd wxStaticText(lod_page, wxID_ANY, "Shade zoom threshold: "), 0);
+	shade_threshold_spin = newd wxSpinCtrl(lod_page, wxID_ANY, i2ws(g_settings.getInteger(Config::SHADE_ZOOM_THRESHOLD)), 
+		wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS, 1, 30, 8);
+	grid_sizer->Add(shade_threshold_spin, 0);
+	SetWindowToolTip(tmptext, shade_threshold_spin, "When zoomed out beyond this level, tile shading won't be shown.");
+
+	// Town/Zone threshold 
+	grid_sizer->Add(tmptext = newd wxStaticText(lod_page, wxID_ANY, "Town/Zone zoom threshold: "), 0);
+	town_zone_threshold_spin = newd wxSpinCtrl(lod_page, wxID_ANY, i2ws(g_settings.getInteger(Config::TOWN_ZONE_ZOOM_THRESHOLD)), 
+		wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS, 1, 20, 6);
+	grid_sizer->Add(town_zone_threshold_spin, 0);
+	SetWindowToolTip(tmptext, town_zone_threshold_spin, "When zoomed out beyond this level, towns and zone markers won't be displayed.");
+
+	// Grid threshold
+	grid_sizer->Add(tmptext = newd wxStaticText(lod_page, wxID_ANY, "Grid zoom threshold: "), 0);
+	grid_threshold_spin = newd wxSpinCtrl(lod_page, wxID_ANY, i2ws(g_settings.getInteger(Config::GRID_ZOOM_THRESHOLD)), 
+		wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS, 1, 50, 12);
+	grid_sizer->Add(grid_threshold_spin, 0);
+	SetWindowToolTip(tmptext, grid_threshold_spin, "When zoomed out beyond this level, the grid won't be displayed.");
+
 	sizer->Add(grid_sizer, 0, wxALL, 5);
 	sizer->AddSpacer(10);
+
+	sizer->Add(newd wxStaticText(lod_page, wxID_ANY, "Higher values = better performance, less detail."), 0, wxLEFT | wxBOTTOM, 5);
 
 	lod_page->SetSizerAndFit(sizer);
 	return lod_page;
@@ -787,7 +853,13 @@ void PreferencesWindow::Apply() {
 	g_settings.setInteger(Config::ALWAYS_MAKE_BACKUP, always_make_backup_chkbox->GetValue());
 	g_settings.setInteger(Config::USE_UPDATER, update_check_on_startup_chkbox->GetValue());
 	g_settings.setInteger(Config::ONLY_ONE_INSTANCE, only_one_instance_chkbox->GetValue());
+	
+	// Check if tileset editor setting changed
+	if (g_settings.getBoolean(Config::SHOW_TILESET_EDITOR) != enable_tileset_editing_chkbox->GetValue()) {
+		palette_update_needed = true;
+	}
 	g_settings.setInteger(Config::SHOW_TILESET_EDITOR, enable_tileset_editing_chkbox->GetValue());
+	
 	g_settings.setInteger(Config::AUTO_SELECT_RAW_ON_RIGHTCLICK, auto_select_raw_chkbox->GetValue());
 	g_settings.setInteger(Config::UNDO_SIZE, undo_size_spin->GetValue());
 	g_settings.setInteger(Config::UNDO_MEM_SIZE, undo_mem_size_spin->GetValue());
@@ -799,6 +871,15 @@ void PreferencesWindow::Apply() {
 
 	// LOD Settings
 	g_settings.setInteger(Config::TOOLTIP_MAX_ZOOM, tooltip_max_zoom_spin->GetValue());
+	g_settings.setInteger(Config::GROUND_ONLY_ZOOM_THRESHOLD, ground_only_threshold_spin->GetValue());
+	g_settings.setInteger(Config::ITEM_DISPLAY_ZOOM_THRESHOLD, item_display_threshold_spin->GetValue());
+	g_settings.setInteger(Config::SPECIAL_FEATURES_ZOOM_THRESHOLD, special_features_threshold_spin->GetValue());
+	g_settings.setInteger(Config::ANIMATION_ZOOM_THRESHOLD, animation_threshold_spin->GetValue());
+	g_settings.setInteger(Config::EFFECTS_ZOOM_THRESHOLD, effects_threshold_spin->GetValue());
+	g_settings.setInteger(Config::LIGHT_ZOOM_THRESHOLD, light_threshold_spin->GetValue());
+	g_settings.setInteger(Config::SHADE_ZOOM_THRESHOLD, shade_threshold_spin->GetValue());
+	g_settings.setInteger(Config::TOWN_ZONE_ZOOM_THRESHOLD, town_zone_threshold_spin->GetValue());
+	g_settings.setInteger(Config::GRID_ZOOM_THRESHOLD, grid_threshold_spin->GetValue());
 	
 	// Editor
 	g_settings.setInteger(Config::GROUP_ACTIONS, group_actions_chkbox->GetValue());
@@ -956,16 +1037,12 @@ void PreferencesWindow::Apply() {
 		g_gui.PopupDialog(this, "Dark Mode Changed", "The application theme has been changed. Some elements may require a restart to display correctly.", wxOK);
 	}
 
-	if (!palette_update_needed) {
-		// update palette icons
+	if (palette_update_needed) {
+		// Rebuild the palettes completely
 		g_gui.RebuildPalettes();
 	} else {
-		// change palette structure
-		wxString error;
-		wxArrayString warnings;
-		g_gui.LoadVersion(g_gui.GetCurrentVersionID(), error, warnings, true);
-		g_gui.PopupDialog("Error", error, wxOK);
-		g_gui.ListDialog("Warnings", warnings);
+		// Just refresh the palettes with updated settings
+		g_gui.RefreshPalettes();
 	}
 
 	g_settings.setInteger(Config::AUTO_SAVE_ENABLED, autosave_chkbox->GetValue());

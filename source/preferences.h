@@ -151,7 +151,18 @@ protected:
 	wxCheckBox* auto_select_raw_chkbox;
 	wxCheckBox* autosave_chkbox;
 	wxSpinCtrl* autosave_interval_spin;
+	
+	// LOD settings
 	wxSpinCtrl* tooltip_max_zoom_spin;
+	wxSpinCtrl* ground_only_threshold_spin;
+	wxSpinCtrl* item_display_threshold_spin;
+	wxSpinCtrl* special_features_threshold_spin;
+	wxSpinCtrl* animation_threshold_spin;
+	wxSpinCtrl* effects_threshold_spin;
+	wxSpinCtrl* light_threshold_spin;
+	wxSpinCtrl* shade_threshold_spin;
+	wxSpinCtrl* town_zone_threshold_spin;
+	wxSpinCtrl* grid_threshold_spin;
 
 	DECLARE_EVENT_TABLE()
 };
