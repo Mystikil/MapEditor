@@ -22,6 +22,7 @@
 #include <wx/listbook.h>
 #include <wx/collpane.h>
 #include <wx/clrpicker.h>
+#include "gui.h"
 
 class PreferencesWindow : public wxDialog {
 public:
@@ -37,9 +38,12 @@ public:
 
 	void OnCollapsiblePane(wxCollapsiblePaneEvent&);
 
+	void UpdateClientOverride();
+
 protected:
 	void SetDefaults();
 	void Apply();
+	void SaveValues();
 
 	wxBookCtrl* book;
 
@@ -137,6 +141,7 @@ protected:
 	wxNotebookPage* CreateUIPage();
 	wxNotebookPage* CreateEditorPage();
 	wxNotebookPage* CreateClientPage();
+	wxNotebookPage* CreateLODPage();
 	wxNotebookPage* CreateAutomagicPage();
 
 	// Helper method to update the UI state of dark mode controls
@@ -146,6 +151,7 @@ protected:
 	wxCheckBox* auto_select_raw_chkbox;
 	wxCheckBox* autosave_chkbox;
 	wxSpinCtrl* autosave_interval_spin;
+	wxSpinCtrl* tooltip_max_zoom_spin;
 
 	DECLARE_EVENT_TABLE()
 };

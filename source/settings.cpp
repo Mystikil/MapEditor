@@ -391,6 +391,10 @@ void Settings::IO(IOMode mode) {
 	Int(HOUSE_FLOOR_SCAN, 1);
 	Int(AUTO_DETECT_HOUSE_EXIT, 1);
 
+	// LOD (Level of Detail) settings
+	section("LOD");
+	Int(TOOLTIP_MAX_ZOOM, 10);
+
 #undef section
 #undef Int
 #undef IntToSave

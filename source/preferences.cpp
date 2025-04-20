@@ -49,6 +49,7 @@ PreferencesWindow::PreferencesWindow(wxWindow* parent, bool clientVersionSelecte
 	book->AddPage(CreateGraphicsPage(), "Graphics");
 	book->AddPage(CreateUIPage(), "Interface");
 	book->AddPage(CreateClientPage(), "Client Version", clientVersionSelected);
+	book->AddPage(CreateLODPage(), "LOD");
 	book->AddPage(CreateAutomagicPage(), "Automagic");
 
 	sizer->Add(book, 1, wxEXPAND | wxALL, 10);
@@ -624,6 +625,28 @@ wxNotebookPage* PreferencesWindow::CreateClientPage() {
 	return client_page;
 }
 
+wxNotebookPage* PreferencesWindow::CreateLODPage() {
+	wxNotebookPage* lod_page = newd wxPanel(book, wxID_ANY);
+	wxSizer* sizer = newd wxBoxSizer(wxVERTICAL);
+	wxStaticText* tmptext;
+
+	// Add tooltip max zoom control
+	wxFlexGridSizer* grid_sizer = newd wxFlexGridSizer(2, 10, 10);
+	grid_sizer->AddGrowableCol(1);
+
+	grid_sizer->Add(tmptext = newd wxStaticText(lod_page, wxID_ANY, "Tooltip max zoom: "), 0);
+	tooltip_max_zoom_spin = newd wxSpinCtrl(lod_page, wxID_ANY, i2ws(g_settings.getInteger(Config::TOOLTIP_MAX_ZOOM)), 
+		wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS, 1, 100, 10);
+	grid_sizer->Add(tooltip_max_zoom_spin, 0);
+	SetWindowToolTip(tmptext, tooltip_max_zoom_spin, "When zoomed out beyond this level, tooltips will not be generated to improve performance.");
+
+	sizer->Add(grid_sizer, 0, wxALL, 5);
+	sizer->AddSpacer(10);
+
+	lod_page->SetSizerAndFit(sizer);
+	return lod_page;
+}
+
 wxNotebookPage* PreferencesWindow::CreateAutomagicPage() {
 	wxNotebookPage* automagic_page = newd wxPanel(book, wxID_ANY);
 	wxSizer* sizer = newd wxBoxSizer(wxVERTICAL);
@@ -764,17 +787,19 @@ void PreferencesWindow::Apply() {
 	g_settings.setInteger(Config::ALWAYS_MAKE_BACKUP, always_make_backup_chkbox->GetValue());
 	g_settings.setInteger(Config::USE_UPDATER, update_check_on_startup_chkbox->GetValue());
 	g_settings.setInteger(Config::ONLY_ONE_INSTANCE, only_one_instance_chkbox->GetValue());
+	g_settings.setInteger(Config::SHOW_TILESET_EDITOR, enable_tileset_editing_chkbox->GetValue());
+	g_settings.setInteger(Config::AUTO_SELECT_RAW_ON_RIGHTCLICK, auto_select_raw_chkbox->GetValue());
 	g_settings.setInteger(Config::UNDO_SIZE, undo_size_spin->GetValue());
 	g_settings.setInteger(Config::UNDO_MEM_SIZE, undo_mem_size_spin->GetValue());
 	g_settings.setInteger(Config::WORKER_THREADS, worker_threads_spin->GetValue());
 	g_settings.setInteger(Config::REPLACE_SIZE, replace_size_spin->GetValue());
 	g_settings.setInteger(Config::COPY_POSITION_FORMAT, position_format->GetSelection());
+	g_settings.setInteger(Config::AUTO_SAVE_ENABLED, autosave_chkbox->GetValue());
+	g_settings.setInteger(Config::AUTO_SAVE_INTERVAL, autosave_interval_spin->GetValue());
 
-	if (g_settings.getBoolean(Config::SHOW_TILESET_EDITOR) != enable_tileset_editing_chkbox->GetValue()) {
-		palette_update_needed = true;
-	}
-	g_settings.setInteger(Config::SHOW_TILESET_EDITOR, enable_tileset_editing_chkbox->GetValue());
-
+	// LOD Settings
+	g_settings.setInteger(Config::TOOLTIP_MAX_ZOOM, tooltip_max_zoom_spin->GetValue());
+	
 	// Editor
 	g_settings.setInteger(Config::GROUP_ACTIONS, group_actions_chkbox->GetValue());
 	g_settings.setInteger(Config::WARN_FOR_DUPLICATE_ID, duplicate_id_warn_chkbox->GetValue());
@@ -943,7 +968,6 @@ void PreferencesWindow::Apply() {
 		g_gui.ListDialog("Warnings", warnings);
 	}
 
-	g_settings.setInteger(Config::AUTO_SELECT_RAW_ON_RIGHTCLICK, auto_select_raw_chkbox->GetValue());
 	g_settings.setInteger(Config::AUTO_SAVE_ENABLED, autosave_chkbox->GetValue());
 	g_settings.setInteger(Config::AUTO_SAVE_INTERVAL, autosave_interval_spin->GetValue());
 	g_settings.setInteger(Config::USE_AUTOMAGIC, automagic_enabled_chkbox->GetValue());

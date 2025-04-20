@@ -205,6 +205,9 @@ namespace Config {
 		HOUSE_FLOOR_SCAN,
 		AUTO_DETECT_HOUSE_EXIT,
 
+		// LOD (Level of Detail) settings
+		TOOLTIP_MAX_ZOOM,
+
 		LAST,
 	};
 

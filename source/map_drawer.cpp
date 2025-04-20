@@ -1454,9 +1454,11 @@ void MapDrawer::DrawRawBrush(int screenx, int screeny, ItemType* itemType, uint8
 }
 
 void MapDrawer::WriteTooltip(Item* item, std::ostringstream& stream, bool isHouseTile) {
-	if (item == nullptr) {
+	if (zoom > g_settings.getInteger(Config::TOOLTIP_MAX_ZOOM)) {
 		return;
 	}
+
+	if (!item) return;
 
 	const uint16_t id = item->getID();
 	if (id < 100) {
@@ -1506,6 +1508,10 @@ void MapDrawer::WriteTooltip(Item* item, std::ostringstream& stream, bool isHous
 }
 
 void MapDrawer::WriteTooltip(Waypoint* waypoint, std::ostringstream& stream) {
+	if (zoom > g_settings.getInteger(Config::TOOLTIP_MAX_ZOOM)) {
+		return;
+	}
+
 	if (stream.tellp() > 0) {
 		stream << "\n";
 	}
@@ -1656,7 +1662,7 @@ void MapDrawer::DrawTile(TileLocation* location) {
 			// items on tile
 			for (ItemVector::iterator it = tile->items.begin(); it != tile->items.end(); it++) {
 				// item tooltip
-				if (options.show_tooltips && map_z == floor) {
+				if (options.show_tooltips && map_z == floor && zoom <= g_settings.getInteger(Config::TOOLTIP_MAX_ZOOM)) {
 					WriteTooltip(*it, tooltip, tile->isHouseTile());
 				}
 
@@ -1718,7 +1724,7 @@ void MapDrawer::DrawTile(TileLocation* location) {
 			}
 
 			// tooltips
-			if (options.show_tooltips) {
+			if (options.show_tooltips && zoom <= g_settings.getInteger(Config::TOOLTIP_MAX_ZOOM)) {
 				if (location->getWaypointCount() > 0) {
 					MakeTooltip(draw_x, draw_y, tooltip.str(), 0, 255, 0);
 				} else {
@@ -1915,7 +1921,7 @@ void MapDrawer::DrawLight() {
 }
 
 void MapDrawer::MakeTooltip(int screenx, int screeny, const std::string& text, uint8_t r, uint8_t g, uint8_t b) {
-	if (text.empty()) {
+	if (zoom > g_settings.getInteger(Config::TOOLTIP_MAX_ZOOM) || text.empty()) {
 		return;
 	}
 
