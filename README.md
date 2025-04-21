@@ -1,4 +1,4 @@
-Idlers tavern : https://discord.gg/FD2cYKBq5E  << Join for latest updates
+Idlers tavern : https://discord.gg/FD2cYKBq5E  << Join for latest updates OT modules services c++ codes lua scripts and engines.
 =============
 [Features]
 
