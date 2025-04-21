@@ -60,6 +60,14 @@ class ItemButton;
 
 class LiveSocket;
 
+class SelectionDialog;
+class FindItemDialog;
+class LoadOptionsDialog;
+class PropertiesDialog;
+class PreferencesWindow;
+class ItemEditor;
+class BorderEditorDialog;
+
 extern const wxEventType EVT_UPDATE_MENUS;
 
 #define EVT_ON_UPDATE_MENUS(id, fn)                                                             \

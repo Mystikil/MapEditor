@@ -2360,6 +2360,7 @@ void MainMenuBar::OnChangeFloor(wxCommandEvent& event) {
 
 	// this will have to be changed if you want to have more floors
 	// see MAKE_ACTION(FLOOR_0, wxITEM_RADIO, OnChangeFloor);
+	//
 	if (MAP_MAX_LAYER < 16) {
 		for (int i = 0; i < MAP_LAYERS; ++i) {
 			if (IsItemChecked(MenuBar::ActionID(MenuBar::FLOOR_0 + i))) {
