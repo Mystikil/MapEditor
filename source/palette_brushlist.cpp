@@ -55,26 +55,42 @@ BrushPalettePanel::BrushPalettePanel(wxWindow* parent, const TilesetContainer& t
 	topsizer->Add(ts_sizer, 1, wxEXPAND);
 
 	if (g_settings.getBoolean(Config::SHOW_TILESET_EDITOR)) {
-		wxSizer* tmpsizer = newd wxBoxSizer(wxHORIZONTAL);
+		// Create a vertical sizer to hold the two rows of buttons
+		wxSizer* buttonSizer = newd wxBoxSizer(wxVERTICAL);
+		
+		// First row - Add Tileset and Add Item
+		wxSizer* firstRowSizer = newd wxBoxSizer(wxHORIZONTAL);
 		wxButton* buttonAddTileset = newd wxButton(this, wxID_NEW, "Add new Tileset");
-		tmpsizer->Add(buttonAddTileset, wxSizerFlags(0).Center());
-
+		firstRowSizer->Add(buttonAddTileset, wxSizerFlags(1).Expand());
+		
 		wxButton* buttonAddItemToTileset = newd wxButton(this, wxID_ADD, "Add new Item");
-		tmpsizer->Add(buttonAddItemToTileset, wxSizerFlags(0).Center());
+		firstRowSizer->Add(buttonAddItemToTileset, wxSizerFlags(1).Expand());
+		
+		// Add first row to the button sizer
+		buttonSizer->Add(firstRowSizer, wxSizerFlags(0).Expand());
+		
+		// Add a small space between rows
+		buttonSizer->AddSpacer(5);
+		
+		// Second row - Quick Add Item and Create Border
+		wxSizer* secondRowSizer = newd wxBoxSizer(wxHORIZONTAL);
 		
 		// Create the Quick Add Item button, initially disabled
 		quick_add_button = newd wxButton(this, BUTTON_QUICK_ADD_ITEM, "Quick Add Item");
 		quick_add_button->SetToolTip("Quickly add the currently selected brush to the last used tileset");
 		quick_add_button->Enable(false); // Disabled until a tileset is added
-		tmpsizer->Add(quick_add_button, wxSizerFlags(0).Center());
-
-		// Add the Create Border button with some space before it
-		tmpsizer->AddSpacer(5);
+		secondRowSizer->Add(quick_add_button, wxSizerFlags(1).Expand());
+		
+		// Create Border button
 		wxButton* buttonCreateBorder = newd wxButton(this, BUTTON_ADD_BORDER, "Create Border");
 		buttonCreateBorder->SetToolTip("Open the Border Editor to create or edit auto-borders");
-		tmpsizer->Add(buttonCreateBorder, wxSizerFlags(0).Center());
-
-		topsizer->Add(tmpsizer, 0, wxCENTER, 10);
+		secondRowSizer->Add(buttonCreateBorder, wxSizerFlags(1).Expand());
+		
+		// Add second row to the button sizer
+		buttonSizer->Add(secondRowSizer, wxSizerFlags(0).Expand());
+		
+		// Add the complete button sizer to the top sizer
+		topsizer->Add(buttonSizer, 0, wxEXPAND | wxALL, 5);
 	}
 
 	for (TilesetContainer::const_iterator iter = tilesets.begin(); iter != tilesets.end(); ++iter) {
