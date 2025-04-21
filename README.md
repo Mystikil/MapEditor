@@ -1,4 +1,4 @@
-What is this? Idler Map Editor Based on OTACADEMY fork of Remeres map editor
+Idlers tavern : https://discord.gg/FD2cYKBq5E  << Join for latest updates
 =============
 [Features]
 
@@ -94,7 +94,7 @@ I often work till late I do not have the time to make commits im the guy that do
 ![image](https://github.com/user-attachments/assets/44c2defe-7cb3-4998-b371-15b1387a4b7f)
 
 
-Idlers tavern : https://discord.gg/FD2cYKBq5E
+
 
 
 Rookgaard Independence
