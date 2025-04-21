@@ -278,14 +278,24 @@ void BorderEditorDialog::CreateGUIControls() {
     m_gridPanel = new BorderGridPanel(m_borderPanel);
     gridSizer->Add(m_gridPanel, 1, wxEXPAND | wxALL, 5);
     
+    // Add instruction label
+    wxStaticText* instructions = new wxStaticText(m_borderPanel, wxID_ANY, 
+        "Click on a grid position to place the currently selected brush.\n"
+        "The item ID will be extracted automatically from the brush.");
+    instructions->SetForegroundColour(*wxBLUE);
+    gridSizer->Add(instructions, 0, wxEXPAND | wxALL, 5);
+    
     // Current selected item controls
     wxBoxSizer* itemSizer = new wxBoxSizer(wxHORIZONTAL);
     itemSizer->Add(new wxStaticText(m_borderPanel, wxID_ANY, "Item ID:"), 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 5);
     m_itemIdCtrl = new wxSpinCtrl(m_borderPanel, wxID_ANY, "0", wxDefaultPosition, wxSize(80, -1), wxSP_ARROW_KEYS, 0, 65535);
+    m_itemIdCtrl->SetToolTip("Enter an item ID manually if you don't want to use the current brush");
     itemSizer->Add(m_itemIdCtrl, 0, wxRIGHT, 5);
     wxButton* browseButton = new wxButton(m_borderPanel, wxID_FIND, "Browse...", wxDefaultPosition, wxDefaultSize, wxBU_EXACTFIT);
+    browseButton->SetToolTip("Browse for an item to use instead of the current brush");
     itemSizer->Add(browseButton, 0, wxRIGHT, 5);
-    wxButton* addButton = new wxButton(m_borderPanel, wxID_ADD, "Add/Update", wxDefaultPosition, wxDefaultSize, wxBU_EXACTFIT);
+    wxButton* addButton = new wxButton(m_borderPanel, wxID_ADD, "Add Manually", wxDefaultPosition, wxDefaultSize, wxBU_EXACTFIT);
+    addButton->SetToolTip("Add the item ID manually to the currently selected position");
     itemSizer->Add(addButton, 0);
     
     gridSizer->Add(itemSizer, 0, wxEXPAND | wxALL, 5);
@@ -733,7 +743,7 @@ void BorderEditorDialog::OnPositionSelected(wxCommandEvent& event) {
     }
     
     if (itemId > 0) {
-        // Update the item ID control
+        // Update the item ID control - keeps the UI in sync with our selection
         if (m_itemIdCtrl) {
             m_itemIdCtrl->SetValue(itemId);
             wxLogDebug("OnPositionSelected: Updated item ID control to %d", itemId);
@@ -772,9 +782,39 @@ void BorderEditorDialog::OnPositionSelected(wxCommandEvent& event) {
         OutputDebugStringA(wxString::Format("BorderEditor: Successfully added border item at position %s with item ID %d\n", 
                   wxstr(edgePositionToString(pos)).c_str(), itemId).mb_str());
     } else {
-        wxLogDebug("No valid item ID found from current brush: %s", wxString(currentBrush->getName()).c_str());
-        OutputDebugStringA(wxString::Format("BorderEditor: No valid item ID found from current brush: %s\n", wxString(currentBrush->getName()).c_str()).mb_str());
-        wxMessageBox("Could not get a valid item ID from the current brush. Please select an item brush or use the Browse button to select an item manually.", "Invalid Brush", wxICON_INFORMATION);
+        // If we couldn't get an item ID from the brush, check if there's a value in the item ID control
+        itemId = m_itemIdCtrl->GetValue();
+        
+        if (itemId > 0) {
+            // Use the value from the control to update/add the border item
+            bool updated = false;
+            for (size_t i = 0; i < m_borderItems.size(); i++) {
+                if (m_borderItems[i].position == pos) {
+                    m_borderItems[i].itemId = itemId;
+                    updated = true;
+                    break;
+                }
+            }
+            
+            if (!updated) {
+                m_borderItems.push_back(BorderItem(pos, itemId));
+            }
+            
+            // Update the grid panel
+            m_gridPanel->SetItemId(pos, itemId);
+            
+            // Update the preview
+            UpdatePreview();
+            
+            wxLogDebug("Used item ID %d from control for position %s", 
+                       itemId, wxstr(edgePositionToString(pos)).c_str());
+            OutputDebugStringA(wxString::Format("BorderEditor: Used item ID %d from control for position %s\n", 
+                       itemId, wxstr(edgePositionToString(pos)).c_str()).mb_str());
+        } else {
+            wxLogDebug("No valid item ID found from current brush: %s", wxString(currentBrush->getName()).c_str());
+            OutputDebugStringA(wxString::Format("BorderEditor: No valid item ID found from current brush: %s\n", wxString(currentBrush->getName()).c_str()).mb_str());
+            wxMessageBox("Could not get a valid item ID from the current brush. Please select an item brush or use the Browse button to select an item manually.", "Invalid Brush", wxICON_INFORMATION);
+        }
     }
 }
 
@@ -1240,12 +1280,7 @@ void BorderGridPanel::OnPaint(wxPaintEvent& event) {
     drawItemAtPos(EDGE_DSW, 0, 1, diag_offset_x, diag_offset_y);
     drawItemAtPos(EDGE_DSE, 1, 1, diag_offset_x, diag_offset_y);
     
-    // Draw second row of grids
-    const int row2_y = total_height / 2 + 50;
-    
-    // Optional: Draw description or labels for the second row
-    dc.SetFont(wxFont(10, wxFONTFAMILY_DEFAULT, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL));
-    dc.DrawText("Click on a position to place the current brush", normal_offset_x, row2_y);
+    // Remove the second row of information since we've added better instructions to the panel
 }
 
 wxPoint BorderGridPanel::GetPositionCoordinates(BorderEdgePosition pos) const {
@@ -1345,17 +1380,29 @@ void BorderGridPanel::OnMouseClick(wxMouseEvent& event) {
     
     BorderEdgePosition pos = GetPositionFromCoordinates(x, y);
     if (pos != EDGE_NONE) {
+        // Set the position as selected in the grid
         SetSelectedPosition(pos);
         
         // Notify the parent dialog that a position was selected
         wxCommandEvent selEvent(wxEVT_COMMAND_BUTTON_CLICKED, ID_BORDER_GRID_SELECT);
         selEvent.SetInt(static_cast<int>(pos));
         
-        // Get parent to handle this directly
-        BorderEditorDialog* parent = dynamic_cast<BorderEditorDialog*>(GetParent()->GetParent());
-        if (parent) {
-            parent->OnPositionSelected(selEvent);
+        // Find the parent BorderEditorDialog
+        wxWindow* parent = GetParent();
+        while (parent && !dynamic_cast<BorderEditorDialog*>(parent)) {
+            parent = parent->GetParent();
+        }
+        
+        // Send the event to the parent dialog
+        BorderEditorDialog* dialog = dynamic_cast<BorderEditorDialog*>(parent);
+        if (dialog) {
+            // Call the event handler directly
+            OutputDebugStringA(wxString::Format("BorderGridPanel::OnMouseClick: Calling OnPositionSelected directly for position %s\n", 
+                            wxstr(edgePositionToString(pos)).c_str()).mb_str());
+            dialog->OnPositionSelected(selEvent);
         } else {
+            // If we couldn't find the parent dialog, post the event to the parent
+            OutputDebugStringA("BorderGridPanel::OnMouseClick: Could not find BorderEditorDialog parent, posting event\n");
             wxPostEvent(GetParent(), selEvent);
         }
     }
