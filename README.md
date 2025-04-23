@@ -1,5 +1,12 @@
 Idlers tavern : https://discord.gg/FD2cYKBq5E  << Join for latest updates OT modules services c++ codes lua scripts and engines.
 =============
+Prerequisites:
+
+https://www.techpowerup.com/download/visual-c-redistributable-runtime-package-all-in-one/
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+
+
 [Features]
 
 There is EXE FILE ALREADY IN REPOSITORY YOU DO NOT NEED TO DOWNLOAD ANY BUILD JUST OPEN VIA EDITOR_x64 
