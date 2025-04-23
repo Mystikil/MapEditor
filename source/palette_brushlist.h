@@ -31,8 +31,18 @@ enum BrushListType {
 	BRUSHLIST_SEAMLESS_GRID
 };
 
+enum {
+	PALETTE_LAYOUT_STYLE_BORDER,
+	PALETTE_LAYOUT_STYLE_LARGE,
+	PALETTE_LAYOUT_STYLE_LISTBOX,
+	PALETTE_LAYOUT_STYLE_NEWUI,
+	BUTTON_QUICK_ADD_ITEM,
+	BUTTON_ADD_BORDER
+};
+
 // Custom ID for Quick Add button
 #define BUTTON_QUICK_ADD_ITEM 1001
+#define BUTTON_ADD_BORDER 1002
 
 class BrushBoxInterface {
 public:
@@ -323,26 +333,27 @@ public:
 	// Get currently selected brushes
 	const SelectionInfo& GetSelectionInfo() const;
 
-	virtual void InvalidateContents();
-	virtual void LoadCurrentContents();
-	virtual void LoadAllContents();
+	virtual void InvalidateContents() override;
+	virtual void LoadCurrentContents() override;
+	virtual void LoadAllContents() override;
 
-	PaletteType GetType() const;
+	PaletteType GetType() const override;
 
 	// Sets the display type (list or icons)
 	void SetListType(BrushListType ltype);
 	void SetListType(wxString ltype);
 
-	virtual void SelectFirstBrush();
-	virtual Brush* GetSelectedBrush() const;
-	virtual bool SelectBrush(const Brush* whatbrush);
+	virtual void SelectFirstBrush() override;
+	virtual Brush* GetSelectedBrush() const override;
+	virtual bool SelectBrush(const Brush* whatbrush) override;
 
-	virtual void OnSwitchIn();
+	virtual void OnSwitchIn() override;
 	void OnSwitchingPage(wxChoicebookEvent& event);
 	void OnPageChanged(wxChoicebookEvent& event);
-	void OnClickAddTileset(wxCommandEvent& WXUNUSED(event));
-	void OnClickAddItemToTileset(wxCommandEvent& WXUNUSED(event));
-	void OnClickQuickAddItem(wxCommandEvent& WXUNUSED(event));
+	void OnClickAddTileset(wxCommandEvent& event);
+	void OnClickAddItemTileset(wxCommandEvent& event);
+	void OnClickQuickAddItemTileset(wxCommandEvent& event);
+	void OnClickCreateBorder(wxCommandEvent& event);
 
 protected:
 	wxButton* quick_add_button;

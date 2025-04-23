@@ -2556,7 +2556,7 @@ void GUI::CheckAutoSave() {
 	last_autosave_check = now;
 
 	if (!g_settings.getBoolean(Config::AUTO_SAVE_ENABLED)) {
-		OutputDebugStringA("Autosave disabled\n");
+		//OutputDebugStringA("Autosave disabled\n");
 		return;
 	}
 	

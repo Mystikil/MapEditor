@@ -24,17 +24,19 @@
 #include "add_tileset_window.h"
 #include "add_item_window.h"
 #include "materials.h"
+#include "border_editor_window.h"
 
 // ============================================================================
 // Brush Palette Panel
 // A common class for terrain/doodad/item/raw palette
 
 BEGIN_EVENT_TABLE(BrushPalettePanel, PalettePanel)
-EVT_BUTTON(wxID_ADD, BrushPalettePanel::OnClickAddItemToTileset)
-EVT_BUTTON(wxID_NEW, BrushPalettePanel::OnClickAddTileset)
-EVT_BUTTON(BUTTON_QUICK_ADD_ITEM, BrushPalettePanel::OnClickQuickAddItem)
-EVT_CHOICEBOOK_PAGE_CHANGING(wxID_ANY, BrushPalettePanel::OnSwitchingPage)
-EVT_CHOICEBOOK_PAGE_CHANGED(wxID_ANY, BrushPalettePanel::OnPageChanged)
+	EVT_BUTTON(wxID_ADD, BrushPalettePanel::OnClickAddItemTileset)
+	EVT_BUTTON(wxID_NEW, BrushPalettePanel::OnClickAddTileset)
+	EVT_BUTTON(BUTTON_QUICK_ADD_ITEM, BrushPalettePanel::OnClickQuickAddItemTileset)
+	EVT_BUTTON(BUTTON_ADD_BORDER, BrushPalettePanel::OnClickCreateBorder)
+	EVT_CHOICEBOOK_PAGE_CHANGING(wxID_ANY, BrushPalettePanel::OnSwitchingPage)
+	EVT_CHOICEBOOK_PAGE_CHANGED(wxID_ANY, BrushPalettePanel::OnPageChanged)
 END_EVENT_TABLE()
 
 BrushPalettePanel::BrushPalettePanel(wxWindow* parent, const TilesetContainer& tilesets, TilesetCategoryType category, wxWindowID id) :
@@ -53,20 +55,42 @@ BrushPalettePanel::BrushPalettePanel(wxWindow* parent, const TilesetContainer& t
 	topsizer->Add(ts_sizer, 1, wxEXPAND);
 
 	if (g_settings.getBoolean(Config::SHOW_TILESET_EDITOR)) {
-		wxSizer* tmpsizer = newd wxBoxSizer(wxHORIZONTAL);
+		// Create a vertical sizer to hold the two rows of buttons
+		wxSizer* buttonSizer = newd wxBoxSizer(wxVERTICAL);
+		
+		// First row - Add Tileset and Add Item
+		wxSizer* firstRowSizer = newd wxBoxSizer(wxHORIZONTAL);
 		wxButton* buttonAddTileset = newd wxButton(this, wxID_NEW, "Add new Tileset");
-		tmpsizer->Add(buttonAddTileset, wxSizerFlags(0).Center());
-
+		firstRowSizer->Add(buttonAddTileset, wxSizerFlags(1).Expand());
+		
 		wxButton* buttonAddItemToTileset = newd wxButton(this, wxID_ADD, "Add new Item");
-		tmpsizer->Add(buttonAddItemToTileset, wxSizerFlags(0).Center());
+		firstRowSizer->Add(buttonAddItemToTileset, wxSizerFlags(1).Expand());
+		
+		// Add first row to the button sizer
+		buttonSizer->Add(firstRowSizer, wxSizerFlags(0).Expand());
+		
+		// Add a small space between rows
+		buttonSizer->AddSpacer(5);
+		
+		// Second row - Quick Add Item and Create Border
+		wxSizer* secondRowSizer = newd wxBoxSizer(wxHORIZONTAL);
 		
 		// Create the Quick Add Item button, initially disabled
 		quick_add_button = newd wxButton(this, BUTTON_QUICK_ADD_ITEM, "Quick Add Item");
 		quick_add_button->SetToolTip("Quickly add the currently selected brush to the last used tileset");
 		quick_add_button->Enable(false); // Disabled until a tileset is added
-		tmpsizer->Add(quick_add_button, wxSizerFlags(0).Center());
-
-		topsizer->Add(tmpsizer, 0, wxCENTER, 10);
+		secondRowSizer->Add(quick_add_button, wxSizerFlags(1).Expand());
+		
+		// Create Border button
+		wxButton* buttonCreateBorder = newd wxButton(this, BUTTON_ADD_BORDER, "Create Border");
+		buttonCreateBorder->SetToolTip("Open the Border Editor to create or edit auto-borders");
+		secondRowSizer->Add(buttonCreateBorder, wxSizerFlags(1).Expand());
+		
+		// Add second row to the button sizer
+		buttonSizer->Add(secondRowSizer, wxSizerFlags(0).Expand());
+		
+		// Add the complete button sizer to the top sizer
+		topsizer->Add(buttonSizer, 0, wxEXPAND | wxALL, 5);
 	}
 
 	for (TilesetContainer::const_iterator iter = tilesets.begin(); iter != tilesets.end(); ++iter) {
@@ -251,7 +275,7 @@ void BrushPalettePanel::OnClickAddTileset(wxCommandEvent& WXUNUSED(event)) {
 	}
 }
 
-void BrushPalettePanel::OnClickAddItemToTileset(wxCommandEvent& WXUNUSED(event)) {
+void BrushPalettePanel::OnClickAddItemTileset(wxCommandEvent& WXUNUSED(event)) {
 	if (!choicebook) {
 		return;
 	}
@@ -306,7 +330,7 @@ void BrushPalettePanel::OnClickAddItemToTileset(wxCommandEvent& WXUNUSED(event))
 	}
 }
 
-void BrushPalettePanel::OnClickQuickAddItem(wxCommandEvent& WXUNUSED(event)) {
+void BrushPalettePanel::OnClickQuickAddItemTileset(wxCommandEvent& WXUNUSED(event)) {
 	// Check if we have a last used tileset name
 	if (last_tileset_name.empty()) {
 		g_gui.PopupDialog("Error", "No tileset has been used yet. Please use Add Item first.", wxOK);
@@ -356,6 +380,15 @@ void BrushPalettePanel::OnClickQuickAddItem(wxCommandEvent& WXUNUSED(event)) {
 	
 	// Rebuild palettes to show the changes
 	g_gui.RebuildPalettes();
+}
+
+void BrushPalettePanel::OnClickCreateBorder(wxCommandEvent& WXUNUSED(event)) {
+	// Open the Border Editor to create or edit auto-borders
+	BorderEditorDialog* dialog = new BorderEditorDialog(g_gui.root, "Auto Border Editor");
+	dialog->Show();
+	
+	// After editing borders, refresh view to show any changes
+	g_gui.RefreshView();
 }
 
 const BrushPalettePanel::SelectionInfo& BrushPalettePanel::GetSelectionInfo() const {

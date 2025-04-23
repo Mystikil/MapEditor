@@ -217,6 +217,7 @@
     <ClCompile Include="..\..\source\artprovider.cpp" />
     <ClCompile Include="..\..\source\automagic_settings.cpp" />
     <ClCompile Include="..\..\source\borderize_window.cpp" />
+    <ClCompile Include="..\..\source\border_editor_window.cpp" />
     <ClCompile Include="..\..\source\brush_tables.cpp" />
     <ClCompile Include="..\..\source\container_properties_window.cpp" />
     <ClCompile Include="..\..\source\dark_mode_manager.cpp" />
@@ -234,6 +235,7 @@
     <ClInclude Include="..\..\source\artprovider.h" />
     <ClInclude Include="..\..\source\automagic_settings.h" />
     <ClInclude Include="..\..\source\borderize_window.h" />
+    <ClInclude Include="..\..\source\border_editor_window.h" />
     <ClInclude Include="..\..\source\dark_mode_manager.h" />
     <ClInclude Include="..\..\source\ground_validation_dialog.h" />
     <ClInclude Include="..\..\source\hotkey_manager.h" />
