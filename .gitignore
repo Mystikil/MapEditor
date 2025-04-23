@@ -14,7 +14,7 @@ CMakeLists.txt.user*
 vcproj/x64/Release/data/800/Tibia.spr
 vcproj/x64/Release/data/800/Tibia.dat
 
-
+vcproj/enc_temp_folder/*
 # assets
 *.spr
 *.dat
