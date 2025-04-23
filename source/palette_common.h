@@ -90,7 +90,6 @@ public:
 	void OnRefreshTimer(wxTimerEvent&);
 
 	void RefreshOtherPalettes();
-
 protected:
 	typedef std::vector<PalettePanel*> ToolBarList;
 	ToolBarList tool_bars;
@@ -103,7 +102,8 @@ protected:
 class BrushSizePanel : public PalettePanel {
 public:
 	BrushSizePanel(wxWindow* parent);
-	~BrushSizePanel() { }
+	~BrushSizePanel() {}
+
 
 	// Interface
 	// Flushes this panel and consequent views will feature reloaded data
@@ -126,27 +126,13 @@ public:
 	void OnClickCircleBrush(wxCommandEvent& event);
 
 	void OnClickBrushSize(int which);
-	void OnClickBrushSize0(wxCommandEvent& event) {
-		OnClickBrushSize(0);
-	}
-	void OnClickBrushSize1(wxCommandEvent& event) {
-		OnClickBrushSize(1);
-	}
-	void OnClickBrushSize2(wxCommandEvent& event) {
-		OnClickBrushSize(2);
-	}
-	void OnClickBrushSize4(wxCommandEvent& event) {
-		OnClickBrushSize(4);
-	}
-	void OnClickBrushSize6(wxCommandEvent& event) {
-		OnClickBrushSize(6);
-	}
-	void OnClickBrushSize8(wxCommandEvent& event) {
-		OnClickBrushSize(8);
-	}
-	void OnClickBrushSize11(wxCommandEvent& event) {
-		OnClickBrushSize(11);
-	}
+	void OnClickBrushSize0(wxCommandEvent& event) {OnClickBrushSize(0);}
+	void OnClickBrushSize1(wxCommandEvent& event) {OnClickBrushSize(1);}
+	void OnClickBrushSize2(wxCommandEvent& event) {OnClickBrushSize(2);}
+	void OnClickBrushSize4(wxCommandEvent& event) {OnClickBrushSize(4);}
+	void OnClickBrushSize6(wxCommandEvent& event) {OnClickBrushSize(6);}
+	void OnClickBrushSize8(wxCommandEvent& event) {OnClickBrushSize(8);}
+	void OnClickBrushSize11(wxCommandEvent& event){OnClickBrushSize(11);}
 
 protected:
 	bool loaded;
@@ -209,7 +195,6 @@ public:
 	void OnClickPVPZoneBrushButton(wxCommandEvent& event);
 	// ----
 	void OnClickLockDoorCheckbox(wxCommandEvent& event);
-
 public:
 	void DeselectAll();
 
@@ -252,7 +237,6 @@ public:
 	// wxWidgets event handling
 	void OnScroll(wxScrollEvent& event);
 	void OnClickCustomThickness(wxCommandEvent& event);
-
 public:
 	wxSlider* slider;
 	wxCheckBox* use_button;

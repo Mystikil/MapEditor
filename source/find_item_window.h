@@ -29,7 +29,8 @@
 
 class FindDialogListBox;
 
-class FindItemDialog : public wxDialog {
+class FindItemDialog : public wxDialog
+{
 public:
 	enum SearchMode {
 		ServerIDs = 0,
@@ -53,32 +54,15 @@ public:
 	};
 
 	FindItemDialog(wxWindow* parent, const wxString& title, bool onlyPickupables = false);
-	virtual ~FindItemDialog();
+	~FindItemDialog();
 
-	Brush* getResult() const {
-		return result_brush;
-	}
-	uint16_t getResultID() const {
-		return result_id;
-	}
+	Brush* getResult() const { return result_brush; }
+	uint16_t getResultID() const { return result_id; }
 
 	SearchMode getSearchMode() const;
 	void setSearchMode(SearchMode mode);
 
-	bool getUseRange() const { return use_range->GetValue(); }
-
-	wxString GetIgnoreIdsText() const { return ignore_ids_text->GetValue(); }
-	bool IsIgnoreIdsEnabled() const { return ignore_ids_checkbox->GetValue(); }
-
-	wxString GetRangeInput() const { return range_input->GetValue(); }
-
-	std::vector<std::pair<uint16_t, uint16_t>> ParseRangeString(const wxString& input);
-
-	// Public methods
-
-	std::vector<uint16_t> GetIgnoredIds() const { return ignored_ids; }
-
-protected:
+private:
 	void EnableProperties(bool enable);
 	void RefreshContentsInternal();
 
@@ -91,10 +75,6 @@ protected:
 	void OnInputTimer(wxTimerEvent& event);
 	void OnClickOK(wxCommandEvent& event);
 	void OnClickCancel(wxCommandEvent& event);
-	void OnRefreshClick(wxCommandEvent& event);
-	void OnReplaceSizeChange(wxCommandEvent& event);
-	void OnClose(wxCloseEvent& event);
-	void OnPropertyRightClick(wxMouseEvent& event);
 
 	wxRadioBox* options_radio_box;
 
@@ -120,41 +100,14 @@ protected:
 	wxCheckBox* ignore_look;
 	wxCheckBox* floor_change;
 	wxCheckBox* invalid_item;
-	wxCheckBox* use_range;
-	wxCheckBox* has_light;
-	wxCheckBox* slot_head;
-	wxCheckBox* slot_necklace;
-	wxCheckBox* slot_backpack;
-	wxCheckBox* slot_armor;
-	wxCheckBox* slot_legs;
-	wxCheckBox* slot_feet;
-	wxCheckBox* slot_ring;
-	wxCheckBox* slot_ammo;
-	wxCheckBox* auto_refresh;
 
 	FindDialogListBox* items_list;
 	wxStdDialogButtonSizer* buttons_box_sizer;
 	wxButton* ok_button;
 	wxButton* cancel_button;
-	wxButton* refresh_button;
-	wxSpinCtrl* replace_size_spin;
 	Brush* result_brush;
 	uint16_t result_id;
 	bool only_pickupables;
-
-	wxCheckBox* ignore_ids_checkbox;
-	wxTextCtrl* ignore_ids_text;
-	
-	std::vector<uint16_t> ignored_ids;
-	std::vector<std::pair<uint16_t, uint16_t>> ignored_ranges;
-	
-	void ParseIgnoredIDs();
-
-	wxTextCtrl* range_input;
-
-	bool IsInRanges(uint16_t id, const std::vector<std::pair<uint16_t, uint16_t>>& ranges);
-
-
 
 	DECLARE_EVENT_TABLE()
 };

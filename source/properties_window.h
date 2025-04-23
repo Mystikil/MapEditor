@@ -26,7 +26,8 @@ class ContainerItemButton;
 class ContainerItemPopupMenu;
 class ItemAttribute;
 
-class PropertiesWindow : public ObjectPropertiesWindowBase {
+class PropertiesWindow : public ObjectPropertiesWindowBase
+{
 public:
 	PropertiesWindow(wxWindow* parent, const Map* map, const Tile* tile, Item* item, wxPoint position = wxDefaultPosition);
 	~PropertiesWindow();
@@ -54,7 +55,7 @@ protected:
 
 	// Advanced pane
 	wxGrid* attributesGrid;
-	wxWindow* createAttributesPanel(wxWindow* parent);
+	wxWindow* createAttributesPanel(wxWindow *parent);
 	void saveAttributesPanel();
 	void SetGridValue(wxGrid* grid, int rowIndex, std::string name, const ItemAttribute& attr);
 

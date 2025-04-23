@@ -38,12 +38,8 @@ public:
 	~TilesetCategory();
 
 	bool isTrivial() const;
-	TilesetCategoryType getType() const {
-		return type;
-	}
-	size_t size() const {
-		return brushlist.size();
-	}
+	TilesetCategoryType getType() const {return type;}
+	size_t size() const {return brushlist.size();}
 
 	void loadBrush(pugi::xml_node node, wxArrayString& warnings);
 	void clear();
@@ -52,7 +48,6 @@ public:
 
 protected:
 	TilesetCategoryType type;
-
 public:
 	std::vector<Brush*> brushlist;
 	Tileset& tileset;

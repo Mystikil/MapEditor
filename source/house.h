@@ -45,25 +45,18 @@ public:
 	std::string getDescription();
 
 	int rent;
-	// HouseDoorList doorList;
+	//HouseDoorList doorList;
 	std::string name;
 	uint32_t townid;
 	bool guildhall;
 
 	void setExit(const Position& pos);
 	void setExit(Map* map, const Position& pos);
-	Position getExit() const {
-		return exit;
-	}
+	Position getExit() const {return exit;}
 	uint8_t getEmptyDoorID() const;
 	Position getDoorPositionByID(uint8_t id) const;
-
-	// Added accessor to retrieve the list of tile positions for export functionality.
-	const PositionList& getTilePositions() const { return tiles; }
-
 private:
 	uint32_t id;
-
 protected:
 	Map* map;
 	PositionList tiles;
@@ -79,34 +72,18 @@ public:
 	Houses(Map& map);
 	~Houses();
 
-	uint32_t count() const {
-		return houses.size();
-	}
+	uint32_t count() const {return houses.size();}
 
-	HouseMap::iterator begin() {
-		return houses.begin();
-	}
-	HouseMap::iterator end() {
-		return houses.end();
-	}
-	HouseMap::const_iterator begin() const {
-		return houses.begin();
-	}
-	HouseMap::const_iterator end() const {
-		return houses.end();
-	}
+	HouseMap::iterator begin() {return houses.begin();}
+	HouseMap::iterator end() {return houses.end();}
+	HouseMap::const_iterator begin() const {return houses.begin();}
+	HouseMap::const_iterator end() const {return houses.end();}
 #ifdef __VISUALC__ // C++0x compliance to some degree :)
-	HouseMap::iterator erase(HouseMap::iterator iter) {
-		return houses.erase(iter);
-	}
+	HouseMap::iterator erase(HouseMap::iterator iter) {return houses.erase(iter);}
 #else
-	void erase(HouseMap::iterator iter) {
-		houses.erase(iter);
-	}
+	void erase(HouseMap::iterator iter) {houses.erase(iter);}
 #endif
-	HouseMap::iterator find(uint32_t val) {
-		return houses.find(val);
-	}
+	HouseMap::iterator find(uint32_t val) {return houses.find(val);}
 
 	void removeHouse(House* house_to_remove);
 	void changeId(House* house, uint32_t newID);
@@ -114,7 +91,6 @@ public:
 	House* getHouse(uint32_t houseid);
 	const House* getHouse(uint32_t houseid) const;
 	uint32_t getEmptyID();
-
 protected:
 	Map& map;
 	uint32_t max_house_id;

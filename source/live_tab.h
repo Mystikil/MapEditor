@@ -25,7 +25,6 @@
 #include "live_server.h"
 
 class wxGrid;
-class wxNotebook;
 
 class MapTabbook;
 class LiveSocket;
@@ -36,22 +35,18 @@ public:
 	LiveLogTab(MapTabbook* aui, LiveSocket* socket);
 	~LiveLogTab();
 
+	bool IsCurrent() const;
+
 	void Message(const wxString& str);
 	void Chat(const wxString& speaker, const wxString& str);
 
-	virtual wxWindow* GetWindow() const {
-		return (wxPanel*)this;
-	}
+	virtual wxWindow* GetWindow() const { return (wxPanel*)this; }
 	virtual wxString GetTitle() const;
 
-	bool IsConnected() const {
-		return socket != nullptr;
-	}
+	bool IsConnected() const { return socket != nullptr; }
 	void Disconnect();
 
-	LiveSocket* GetSocket() {
-		return socket;
-	}
+	LiveSocket* GetSocket() { return socket; }
 
 	void UpdateClientList(const std::unordered_map<uint32_t, LivePeer*>& updatedClients);
 
@@ -59,21 +54,13 @@ public:
 	void OnDeselectChatbox(wxFocusEvent& evt);
 
 	void OnChat(wxCommandEvent& evt);
-	void OnKeyDown(wxKeyEvent& evt);
 	void OnResizeChat(wxSizeEvent& evt);
 	void OnResizeClientList(wxSizeEvent& evt);
-	void OnCopySelectedLogText(wxCommandEvent& evt);
-	void OnLogRightClick(wxMouseEvent& evt);
-	void OnPageChanged(wxBookCtrlEvent& evt);
-	void OnGridCellLeftClick(wxGridEvent& evt);
-	void ChangeUserColor(int row, const wxColor& color);
 
 protected:
 	MapTabbook* aui;
 	LiveSocket* socket;
-	wxNotebook* notebook;
-	wxTextCtrl* debug_log;  // For debug messages
-	wxTextCtrl* chat_log;   // For player chat
+	wxGrid* log;
 	wxTextCtrl* input;
 	wxGrid* user_list;
 

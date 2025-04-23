@@ -37,7 +37,7 @@ public:
 
 	// All events
 	void OnPaint(wxPaintEvent& event);
-	void OnEraseBackground(wxEraseEvent& event) { }
+	void OnEraseBackground(wxEraseEvent& event) {}
 
 	void OnMouseMove(wxMouseEvent& event);
 	void OnMouseLeftRelease(wxMouseEvent& event);
@@ -89,20 +89,15 @@ public:
 	void OnSelectHouseBrush(wxCommandEvent& event);
 	void OnSelectCollectionBrush(wxCommandEvent& event);
 	void OnSelectMoveTo(wxCommandEvent& event);
-
-	void OnFindSimilarItems(wxCommandEvent& event);
-	void OnGenerateIsland(wxCommandEvent& event);
-
-	void OnSelectionToDoodad(wxCommandEvent& event);
 	// ---
 	void OnProperties(wxCommandEvent& event);
-	void OnFill(wxCommandEvent& event);
 
 	void Refresh();
 
 	void ScreenToMap(int screen_x, int screen_y, int* map_x, int* map_y);
+	void MouseToMap(int* map_x, int* map_y) {ScreenToMap(cursor_x, cursor_y, map_x, map_y);}
 	void GetScreenCenter(int* map_x, int* map_y);
- 
+
 	void StartPasting();
 	void EndPasting();
 	void EnterSelectionMode();
@@ -112,12 +107,8 @@ public:
 	void UpdateZoomStatus();
 
 	void ChangeFloor(int new_floor);
-	int GetFloor() const {
-		return floor;
-	}
-	double GetZoom() const {
-		return zoom;
-	}
+	int GetFloor() const {return floor;}
+	double GetZoom() const { return zoom; }
 	void SetZoom(double value);
 	void GetViewBox(int* view_scroll_x, int* view_scroll_y, int* screensize_x, int* screensize_y) const;
 
@@ -125,31 +116,25 @@ public:
 
 	void TakeScreenshot(wxFileName path, wxString format);
 
-	void MouseToMap(int* map_x, int* map_y) {
-		ScreenToMap(cursor_x, cursor_y, map_x, map_y);
-	}
-
 protected:
 	void getTilesToDraw(int mouse_map_x, int mouse_map_y, int floor, PositionVector* tilestodraw, PositionVector* tilestoborder, bool fill = false);
-	bool floodFill(Map* map, const Position& center, int x, int y, GroundBrush* brush, PositionVector* positions);
+	bool floodFill(Map *map, const Position& center, int x, int y, GroundBrush* brush, PositionVector* positions);
 
 private:
 	enum {
 		BLOCK_SIZE = 100
 	};
 
-	inline int getFillIndex(int x, int y) const {
-		return x + BLOCK_SIZE * y;
-	}
+	inline int getFillIndex(int x, int y) const { return x + BLOCK_SIZE * y; }
 
-	static bool processed[BLOCK_SIZE * BLOCK_SIZE];
+	static bool processed[BLOCK_SIZE*BLOCK_SIZE];
 
 	Editor& editor;
-	MapDrawer* drawer;
+	MapDrawer *drawer;
 	int keyCode;
 	int countMaxFills = 0;
 
-	// View related
+// View related
 	int floor;
 	double zoom;
 	int cursor_x;
@@ -193,8 +178,6 @@ private:
 	MapPopupMenu* popup_menu;
 	AnimationTimer* animation_timer;
 
-	bool show_fill_warning = true;
-
 	friend class MapDrawer;
 
 	DECLARE_EVENT_TABLE()
@@ -207,14 +190,14 @@ public:
 	virtual ~MapPopupMenu();
 
 	void Update();
-
 protected:
 	Editor& editor;
 };
 
-class AnimationTimer : public wxTimer {
+class AnimationTimer : public wxTimer
+{
 public:
-	AnimationTimer(MapCanvas* canvas);
+	AnimationTimer(MapCanvas *canvas);
 	~AnimationTimer();
 
 	void Notify();
@@ -222,7 +205,7 @@ public:
 	void Stop();
 
 private:
-	MapCanvas* map_canvas;
+	MapCanvas *map_canvas;
 	bool started;
 };
 

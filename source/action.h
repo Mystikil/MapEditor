@@ -44,7 +44,6 @@ private:
 	void* data;
 
 	Change();
-
 public:
 	Change(Tile* tile);
 	static Change* Create(House* house, const Position& where);
@@ -52,12 +51,8 @@ public:
 	~Change();
 	void clear();
 
-	ChangeType getType() const {
-		return type;
-	}
-	void* getData() const {
-		return data;
-	}
+	ChangeType getType() const {return type;}
+	void* getData() const {return data;}
 
 	// Get memory footprint
 	uint32_t memsize() const;
@@ -86,15 +81,13 @@ protected:
 			return a.pos < b.pos;
 		}
 	};
-
 public:
+
 	typedef std::set<ValueType, Comparator> SetType;
 
 	void AddPosition(int x, int y, int z);
 	void AddChange(Change* c);
-	bool Empty() const {
-		return iset.empty() && ichanges.empty();
-	}
+	bool Empty() const {return iset.empty() && ichanges.empty();}
 	SetType& GetPosList();
 	ChangeList& GetChanges();
 
@@ -102,6 +95,8 @@ protected:
 	SetType iset;
 	ChangeList ichanges;
 };
+
+
 
 enum ActionIdentifier {
 	ACTION_MOVE,
@@ -130,21 +125,14 @@ public:
 	// Get memory footprint
 	size_t approx_memsize() const;
 	size_t memsize() const;
-	size_t size() const {
-		return changes.size();
-	}
-	ActionIdentifier getType() const {
-		return type;
-	}
+	size_t size() const {return changes.size();}
+	ActionIdentifier getType() const {return type;}
 
 	void commit(DirtyList* dirty_list);
-	bool isCommited() const {
-		return commited;
-	}
+	bool isCommited() const {return commited;}
 	void undo(DirtyList* dirty_list);
-	void redo(DirtyList* dirty_list) {
-		commit(dirty_list);
-	}
+	void redo(DirtyList* dirty_list) {commit(dirty_list);}
+
 
 protected:
 	Action(Editor& editor, ActionIdentifier ident);
@@ -163,21 +151,16 @@ class BatchAction {
 public:
 	virtual ~BatchAction();
 
-	void resetTimer() {
-		timestamp = 0;
-	}
+	void resetTimer() {timestamp = 0;}
 
 	// Get memory footprint
 	size_t memsize(bool resize = false) const;
-	size_t size() const {
-		return batch.size();
-	}
-	ActionIdentifier getType() const {
-		return type;
-	}
+	size_t size() const {return batch.size();}
+	ActionIdentifier getType() const {return type;}
 
 	virtual void addAction(Action* action);
 	virtual void addAndCommitAction(Action* action);
+
 
 protected:
 	BatchAction(Editor& editor, ActionIdentifier ident);
@@ -217,12 +200,8 @@ public:
 	void redo();
 	void clear();
 
-	bool canUndo() {
-		return current > 0;
-	}
-	bool canRedo() {
-		return current < actions.size();
-	}
+	bool canUndo() {return current > 0;}
+	bool canRedo() {return current < actions.size();}
 
 protected:
 	size_t current;

@@ -26,7 +26,8 @@ class BatchAction;
 
 class SelectionThread;
 
-class Selection {
+class Selection
+{
 public:
 	Selection(Editor& editor);
 	~Selection();
@@ -50,9 +51,7 @@ public:
 	void clear();
 
 	// Returns true when inside a session
-	bool isBusy() {
-		return busy;
-	}
+	bool isBusy() {return busy;}
 
 	//
 	Position minPosition() const;
@@ -77,26 +76,13 @@ public:
 	// This deletes the thread
 	void join(SelectionThread* thread);
 
-	size_t size() {
-		return tiles.size();
-	}
-	size_t size() const {
-		return tiles.size();
-	}
+	size_t size() {return tiles.size();}
+	size_t size() const {return tiles.size();}
 	void updateSelectionCount();
-	TileSet::iterator begin() {
-		return tiles.begin();
-	}
-	TileSet::iterator end() {
-		return tiles.end();
-	}
-	TileSet& getTiles() {
-		return tiles;
-	}
-	Tile* getSelectedTile() {
-		ASSERT(size() == 1);
-		return *tiles.begin();
-	}
+	TileSet::iterator begin() {return tiles.begin();}
+	TileSet::iterator end() {return tiles.end();}
+	TileSet& getTiles() {return tiles; }
+	Tile* getSelectedTile() {ASSERT(size() == 1); return *tiles.begin();}
 
 private:
 	bool busy;

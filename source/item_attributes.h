@@ -31,7 +31,8 @@ class ItemAttribute;
 class PropWriteStream;
 class PropStream;
 
-class ItemAttribute {
+class ItemAttribute
+{
 public:
 	ItemAttribute();
 	ItemAttribute(const std::string& str);
@@ -72,10 +73,11 @@ private:
 
 typedef std::map<std::string, ItemAttribute> ItemAttributeMap;
 
-class ItemAttributes {
+class ItemAttributes
+{
 public:
 	ItemAttributes();
-	ItemAttributes(const ItemAttributes& i);
+	ItemAttributes(const ItemAttributes &i);
 	virtual ~ItemAttributes();
 
 	// Save / load

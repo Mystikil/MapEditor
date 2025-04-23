@@ -32,175 +32,164 @@
 
 Settings g_settings;
 
-Settings::Settings() :
-	store(Config::LAST)
+Settings::Settings() : store(Config::LAST)
 #ifdef __WINDOWS__
-	,
-	use_file_cfg(false)
+			   , use_file_cfg(false)
 #endif
 {
 	setDefaults();
 }
 
-Settings::~Settings() {
+Settings::~Settings()
+{
 	////
 }
 
-wxConfigBase& Settings::getConfigObject() {
+wxConfigBase& Settings::getConfigObject()
+{
 	return *dynamic_cast<wxConfigBase*>(wxConfig::Get());
 }
 
-bool Settings::getBoolean(uint32_t key) const {
-	if (key > Config::LAST) {
+bool Settings::getBoolean(uint32_t key) const
+{
+	if(key > Config::LAST) {
 		return false;
 	}
 
 	const DynamicValue& dv = store[key];
-	if (dv.type == TYPE_INT) {
+	if(dv.type == TYPE_INT) {
 		return dv.intval != 0;
 	}
 	return false;
 }
 
-int Settings::getInteger(uint32_t key) const {
-	if (key > Config::LAST) {
-		return 0;
-	}
+int Settings::getInteger(uint32_t key) const
+{
+	if(key > Config::LAST) return 0;
 	const DynamicValue& dv = store[key];
-	if (dv.type == TYPE_INT) {
+	if(dv.type == TYPE_INT)
 		return dv.intval;
-	}
 	return 0;
 }
 
-float Settings::getFloat(uint32_t key) const {
-	if (key > Config::LAST) {
-		return 0.0;
-	}
+float Settings::getFloat(uint32_t key) const
+{
+	if(key > Config::LAST) return 0.0;
 	const DynamicValue& dv = store[key];
-	if (dv.type == TYPE_FLOAT) {
+	if(dv.type == TYPE_FLOAT) {
 		return dv.floatval;
 	}
 	return 0.0;
 }
 
-std::string Settings::getString(uint32_t key) const {
-	if (key > Config::LAST) {
-		return "";
-	}
+std::string Settings::getString(uint32_t key) const
+{
+	if(key > Config::LAST) return "";
 	const DynamicValue& dv = store[key];
-	if (dv.type == TYPE_STR && dv.strval != nullptr) {
+	if(dv.type == TYPE_STR && dv.strval != nullptr)
 		return *dv.strval;
-	}
 	return "";
 }
 
-void Settings::setInteger(uint32_t key, int newval) {
-	if (key > Config::LAST) {
-		return;
-	}
+void Settings::setInteger(uint32_t key, int newval)
+{
+	if(key > Config::LAST) return;
 	DynamicValue& dv = store[key];
-	if (dv.type == TYPE_INT) {
+	if(dv.type == TYPE_INT) {
 		dv.intval = newval;
-	} else if (dv.type == TYPE_NONE) {
+	} else if(dv.type == TYPE_NONE) {
 		dv.type = TYPE_INT;
 		dv.intval = newval;
 	}
 }
 
-void Settings::setFloat(uint32_t key, float newval) {
-	if (key > Config::LAST) {
-		return;
-	}
+void Settings::setFloat(uint32_t key, float newval)
+{
+	if(key > Config::LAST) return;
 	DynamicValue& dv = store[key];
-	if (dv.type == TYPE_FLOAT) {
+	if(dv.type == TYPE_FLOAT) {
 		dv.floatval = newval;
-	} else if (dv.type == TYPE_NONE) {
+	} else if(dv.type == TYPE_NONE) {
 		dv.type = TYPE_FLOAT;
 		dv.floatval = newval;
 	}
 }
 
-void Settings::setString(uint32_t key, std::string newval) {
-	if (key > Config::LAST) {
-		return;
-	}
+void Settings::setString(uint32_t key, std::string newval)
+{
+	if(key > Config::LAST) return;
 	DynamicValue& dv = store[key];
-	if (dv.type == TYPE_STR) {
+	if(dv.type == TYPE_STR) {
 		delete dv.strval;
 		dv.strval = newd std::string(newval);
-	} else if (dv.type == TYPE_NONE) {
+	} else if(dv.type == TYPE_NONE) {
 		dv.type = TYPE_STR;
 		dv.strval = newd std::string(newval);
 	}
 }
 
-std::string Settings::DynamicValue::str() {
-	switch (type) {
-		case TYPE_FLOAT:
-			return f2s(floatval);
-		case TYPE_STR:
-			return std::string(*strval);
-		case TYPE_INT:
-			return i2s(intval);
+std::string Settings::DynamicValue::str()
+{
+	switch(type) {
+		case TYPE_FLOAT:return f2s(floatval);
+		case TYPE_STR:  return std::string(*strval);
+		case TYPE_INT:  return i2s(intval);
 		default:
-		case TYPE_NONE:
-			return "";
+		case TYPE_NONE: return "";
 	}
 }
 
-void Settings::IO(IOMode mode) {
-	wxConfigBase* conf = (mode == DEFAULT ? nullptr : dynamic_cast<wxConfigBase*>(wxConfig::Get()));
+void Settings::IO(IOMode mode)
+{
+	wxConfigBase* conf = (mode == DEFAULT? nullptr : dynamic_cast<wxConfigBase*>(wxConfig::Get()));
 
 	using namespace Config;
-#define section(s) \
-	if (conf)      \
-	conf->SetPath("/" s)
-#define Int(key, dflt)                                     \
-	do {                                                   \
-		if (mode == DEFAULT) {                             \
-			setInteger(key, dflt);                         \
-		} else if (mode == SAVE) {                         \
-			conf->Write(#key, getInteger(key));            \
-		} else if (mode == LOAD) {                         \
+#define section(s) if(conf) conf->SetPath("/" s)
+#define Int(key, dflt) \
+	do { \
+		if(mode == DEFAULT) { \
+			setInteger(key, dflt); \
+		} else if(mode == SAVE) { \
+			conf->Write(#key, getInteger(key)); \
+		} else if(mode == LOAD) { \
 			setInteger(key, conf->Read(#key, long(dflt))); \
-		}                                                  \
-	} while (false)
-#define IntToSave(key, dflt)                               \
-	do {                                                   \
-		if (mode == DEFAULT) {                             \
-			setInteger(key, dflt);                         \
-		} else if (mode == SAVE) {                         \
-			conf->Write(#key, getInteger(key##_TO_SAVE));  \
-		} else if (mode == LOAD) {                         \
+		} \
+	} while(false)
+#define IntToSave(key, dflt) \
+	do { \
+		if(mode == DEFAULT) { \
+			setInteger(key, dflt); \
+		} else if(mode == SAVE) { \
+			conf->Write(#key, getInteger(key##_TO_SAVE)); \
+		} else if(mode == LOAD) { \
 			setInteger(key, conf->Read(#key, (long)dflt)); \
-			setInteger(key##_TO_SAVE, getInteger(key));    \
-		}                                                  \
-	} while (false)
-#define Float(key, dflt)                        \
-	do {                                        \
-		if (mode == DEFAULT) {                  \
-			setFloat(key, dflt);                \
-		} else if (mode == SAVE) {              \
-			conf->Write(#key, getFloat(key));   \
-		} else if (mode == LOAD) {              \
-			double tmp_float;                   \
+			setInteger(key##_TO_SAVE , getInteger(key)); \
+		} \
+	} while(false)
+#define Float(key, dflt) \
+	do {\
+		if(mode == DEFAULT) { \
+			setFloat(key, dflt); \
+		} else if(mode == SAVE) { \
+			conf->Write(#key, getFloat(key)); \
+		} else if(mode == LOAD) { \
+			double tmp_float;\
 			conf->Read(#key, &tmp_float, dflt); \
-			setFloat(key, tmp_float);           \
-		}                                       \
-	} while (false)
-#define String(key, dflt)                             \
-	do {                                              \
-		if (mode == DEFAULT) {                        \
-			setString(key, dflt);                     \
-		} else if (mode == SAVE) {                    \
+			setFloat(key, tmp_float); \
+		} \
+	} while(false)
+#define String(key, dflt) \
+	do { \
+		if(mode == DEFAULT) { \
+			setString(key, dflt); \
+		} else if(mode == SAVE) { \
 			conf->Write(#key, wxstr(getString(key))); \
-		} else if (mode == LOAD) {                    \
-			wxString str;                             \
-			conf->Read(#key, &str, dflt);             \
-			setString(key, nstr(str));                \
-		}                                             \
-	} while (false)
+		} else if(mode == LOAD) { \
+			wxString str; \
+			conf->Read(#key, &str, dflt); \
+			setString(key, nstr(str)); \
+		} \
+	} while(false)
 
 	section("View");
 	Int(TRANSPARENT_FLOORS, 0);
@@ -230,11 +219,10 @@ void Settings::IO(IOMode mode) {
 	Int(SHOW_TOWNS, 0);
 	Int(ALWAYS_SHOW_ZONES, 1);
 	Int(EXT_HOUSE_SHADER, 1);
-	
 
 	section("Version");
 	Int(VERSION_ID, 0);
-	Int(CHECK_SIGNATURES, 0);
+	Int(CHECK_SIGNATURES, 1);
 	Int(USE_CUSTOM_DATA_DIRECTORY, 0);
 	String(DATA_DIRECTORY, "");
 	String(EXTENSIONS_DIRECTORY, "");
@@ -245,8 +233,8 @@ void Settings::IO(IOMode mode) {
 	Int(WORKER_THREADS, 1);
 	Int(MERGE_MOVE, 0);
 	Int(MERGE_PASTE, 0);
-	Int(UNDO_SIZE, 40);
-	Int(UNDO_MEM_SIZE, 64);
+	Int(UNDO_SIZE, 400);
+	Int(UNDO_MEM_SIZE, 40);
 	Int(GROUP_ACTIONS, 1);
 	Int(SELECTION_TYPE, SELECT_CURRENT_FLOOR);
 	Int(COMPENSATED_SELECT, 1);
@@ -255,17 +243,13 @@ void Settings::IO(IOMode mode) {
 	Int(SWITCH_MOUSEBUTTONS, 0);
 	Int(DOUBLECLICK_PROPERTIES, 1);
 	Int(LISTBOX_EATS_ALL_EVENTS, 1);
-	Int(BORDER_IS_GROUND, 0);
+	Int(BORDER_IS_GROUND, 1);
 	Int(BORDERIZE_PASTE, 1);
 	Int(BORDERIZE_DRAG, 1);
 	Int(BORDERIZE_DRAG_THRESHOLD, 6000);
 	Int(BORDERIZE_PASTE_THRESHOLD, 10000);
-	Int(BORDERIZE_DELETE, 0);
 	Int(ALWAYS_MAKE_BACKUP, 0);
 	Int(USE_AUTOMAGIC, 1);
-	Int(SAME_GROUND_TYPE_BORDER, 0);
-	Int(WALLS_REPEL_BORDERS, 1);
-	Int(LAYER_CARPETS, 0);
 	Int(HOUSE_BRUSH_REMOVE_ITEMS, 0);
 	Int(AUTO_ASSIGN_DOORID, 1);
 	Int(ERASER_LEAVE_UNIQUE, 1);
@@ -354,13 +338,6 @@ void Settings::IO(IOMode mode) {
 	section("experimental");
 	Int(EXPERIMENTAL_FOG, 0);
 
-	// Network settings
-	section("Network");
-	String(LIVE_HOST, "localhost");
-	Int(LIVE_PORT, 12356);
-	String(LIVE_PASSWORD, "");
-	String(LIVE_USERNAME, wxGetUserId().ToStdString());
-
 	section("");
 	Int(GOTO_WEBSITE_ON_BOOT, 0);
 	Int(USE_UPDATER, 1);
@@ -372,7 +349,6 @@ void Settings::IO(IOMode mode) {
 
 	// checkbox in terrain palette
 	Int(DRAW_LOCKED_DOOR, 0);
-	//Int(HIGHLIGHT_LOCKED_DOORS, 0);
 
 #undef section
 #undef Int
@@ -381,28 +357,29 @@ void Settings::IO(IOMode mode) {
 #undef String
 }
 
-void Settings::load() {
+void Settings::load()
+{
 	wxConfigBase* conf;
 #ifdef __WINDOWS__
 	FileName filename("editor.cfg");
-	if (filename.FileExists()) { // Use local file if it exists
+	if(filename.FileExists()) { // Use local file if it exists
 		wxFileInputStream file(filename.GetFullPath());
 		conf = newd wxFileConfig(file);
 		use_file_cfg = true;
 		g_settings.setInteger(Config::INDIRECTORY_INSTALLATION, 1);
 	} else { // Use registry
-		conf = newd wxConfig("IME", "Idlerlive", "", "", wxCONFIG_USE_GLOBAL_FILE);
+		conf = newd wxConfig("Mapeditor", "OTAcademy", "", "", wxCONFIG_USE_GLOBAL_FILE);
 		g_settings.setInteger(Config::INDIRECTORY_INSTALLATION, 0);
 	}
 #else
 	FileName filename("./editor.cfg");
-	if (filename.FileExists()) { // Use local file if it exists
+	if(filename.FileExists()) { // Use local file if it exists
 		wxFileInputStream file(filename.GetFullPath());
 		conf = newd wxFileConfig(file);
 		g_settings.setInteger(Config::INDIRECTORY_INSTALLATION, 1);
 	} else { // Else use global (user-specific) conf
 		filename.Assign(wxStandardPaths::Get().GetUserConfigDir() + "/.rme/editor.cfg");
-		if (filename.FileExists()) {
+		if(filename.FileExists()) {
 			wxFileInputStream file(filename.GetFullPath());
 			conf = newd wxFileConfig(file);
 		} else {
@@ -416,25 +393,24 @@ void Settings::load() {
 	IO(LOAD);
 }
 
-void Settings::save(bool endoftheworld) {
+void Settings::save(bool endoftheworld)
+{
 	IO(SAVE);
 #ifdef __WINDOWS__
-	if (use_file_cfg) {
+	if(use_file_cfg) {
 		wxFileConfig* conf = dynamic_cast<wxFileConfig*>(wxConfig::Get());
-		if (!conf) {
+		if(!conf)
 			return;
-		}
 		FileName filename("editor.cfg");
 		wxFileOutputStream file(filename.GetFullPath());
 		conf->Save(file);
 	}
 #else
 	wxFileConfig* conf = dynamic_cast<wxFileConfig*>(wxConfig::Get());
-	if (!conf) {
+	if(!conf)
 		return;
-	}
 	FileName filename("./editor.cfg");
-	if (filename.FileExists()) { // Use local file if it exists
+	if(filename.FileExists()) { // Use local file if it exists
 		wxFileOutputStream file(filename.GetFullPath());
 		conf->Save(file);
 	} else { // Else use global (user-specific) conf
@@ -445,7 +421,7 @@ void Settings::save(bool endoftheworld) {
 		conf->Save(file);
 	}
 #endif
-	if (endoftheworld) {
+	if(endoftheworld) {
 		wxConfigBase* conf = dynamic_cast<wxConfigBase*>(wxConfig::Get());
 		wxConfig::Set(nullptr);
 		delete conf;

@@ -17,19 +17,20 @@
 
 #ifdef _USE_UPDATER_
 
-	#ifndef RME_UPDATER_H_
-		#define RME_UPDATER_H_
+#ifndef RME_UPDATER_H_
+#define RME_UPDATER_H_
 
-		#include "threads.h"
+#include "threads.h"
 
 extern const wxEventType EVT_UPDATE_CHECK_FINISHED;
 
-		#define EVT_ON_UPDATE_CHECK_FINISHED(id, fn)                                                    \
-			DECLARE_EVENT_TABLE_ENTRY(                                                                  \
-				EVT_UPDATE_CHECK_FINISHED, id, wxID_ANY,                                                \
-				(wxObjectEventFunction)(wxEventFunction)wxStaticCastEvent(wxCommandEventFunction, &fn), \
-				(wxObject*)nullptr                                                                      \
-			),
+#define EVT_ON_UPDATE_CHECK_FINISHED(id, fn) \
+    DECLARE_EVENT_TABLE_ENTRY( \
+        EVT_UPDATE_CHECK_FINISHED, id, wxID_ANY, \
+        (wxObjectEventFunction)(wxEventFunction) wxStaticCastEvent( wxCommandEventFunction, &fn ), \
+        (wxObject *) nullptr \
+    ),
+
 
 class wxURL;
 
@@ -37,7 +38,6 @@ class UpdateConnectionThread : public DetachedThread {
 public:
 	UpdateConnectionThread(wxEvtHandler* receiver, wxURL* url);
 	virtual ~UpdateConnectionThread();
-
 protected:
 	virtual ExitCode Entry();
 	wxEvtHandler* receiver;
@@ -52,6 +52,7 @@ public:
 	void connect(wxEvtHandler* receiver);
 };
 
-	#endif
+#endif
 
 #endif
+

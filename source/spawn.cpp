@@ -20,15 +20,18 @@
 #include "tile.h"
 #include "spawn.h"
 
-Spawns::Spawns() {
+Spawns::Spawns()
+{
 	////
 }
 
-Spawns::~Spawns() {
+Spawns::~Spawns()
+{
 	////
 }
 
-void Spawns::addSpawn(Tile* tile) {
+void Spawns::addSpawn(Tile* tile)
+{
 	ASSERT(tile->spawn);
 
 	auto it = spawns.insert(tile->getPosition());

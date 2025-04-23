@@ -25,7 +25,8 @@
 #include "gui_ids.h"
 #include "numbertextctrl.h"
 
-class MainToolBar : public wxEvtHandler {
+class MainToolBar : public wxEvtHandler
+{
 public:
 	MainToolBar(wxWindow* parent, wxAuiManager* manager);
 	~MainToolBar();
@@ -38,7 +39,6 @@ public:
 	void HideAll(bool update = true);
 	void LoadPerspective();
 	void SavePerspective();
-	void RegisterHotkeys();
 
 	void OnStandardButtonClick(wxCommandEvent& event);
 	void OnBrushesButtonClick(wxCommandEvent& event);

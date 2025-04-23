@@ -15,6 +15,7 @@
 // along with this program. If not, see <http://www.gnu.org/licenses/>.
 //////////////////////////////////////////////////////////////////////
 
+
 #ifndef RME_PREFERENCES_WINDOW_H_
 #define RME_PREFERENCES_WINDOW_H_
 
@@ -23,11 +24,11 @@
 #include <wx/collpane.h>
 #include <wx/clrpicker.h>
 
-class PreferencesWindow : public wxDialog {
+class PreferencesWindow : public wxDialog
+{
 public:
-	explicit PreferencesWindow(wxWindow* parent) :
-		PreferencesWindow(parent, false) {};
-	PreferencesWindow(wxWindow* parent, bool clientVersionSelected);
+	explicit PreferencesWindow(wxWindow* parent) : PreferencesWindow(parent, false) {};
+    PreferencesWindow(wxWindow* parent, bool clientVersionSelected);
 	virtual ~PreferencesWindow();
 
 	void OnClickDefaults(wxCommandEvent&);
@@ -123,11 +124,6 @@ protected:
 	wxNotebookPage* CreateUIPage();
 	wxNotebookPage* CreateEditorPage();
 	wxNotebookPage* CreateClientPage();
-
-	// Add with other checkbox declarations
-	wxCheckBox* auto_select_raw_chkbox;
-	wxCheckBox* autosave_chkbox;
-	wxSpinCtrl* autosave_interval_spin;
 
 	DECLARE_EVENT_TABLE()
 };

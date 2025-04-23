@@ -15,12 +15,14 @@
 // along with this program. If not, see <http://www.gnu.org/licenses/>.
 //////////////////////////////////////////////////////////////////////
 
+
 #ifndef RME_MAIN_BAR_H_
 #define RME_MAIN_BAR_H_
 
 #include <wx/docview.h>
 
-namespace MenuBar {
+namespace MenuBar
+{
 	struct Action;
 
 	enum ActionID {
@@ -43,7 +45,6 @@ namespace MenuBar {
 		REDO,
 		FIND_ITEM,
 		REPLACE_ITEMS,
-
 		SEARCH_ON_MAP_EVERYTHING,
 		SEARCH_ON_MAP_UNIQUE,
 		SEARCH_ON_MAP_ACTION,
@@ -121,8 +122,6 @@ namespace MenuBar {
 		SHOW_TOWNS,
 		ALWAYS_SHOW_ZONES,
 		EXT_HOUSE_SHADER,
-		REFRESH_ITEMS,
-
 		WIN_MINIMAP,
 		NEW_PALETTE,
 		TAKE_SCREENSHOT,
@@ -157,21 +156,15 @@ namespace MenuBar {
 		EXTENSIONS,
 		GOTO_WEBSITE,
 		ABOUT,
-		ID_MENU_SERVER_HOST,
-		ID_MENU_SERVER_CONNECT,
 
 		EXPERIMENTAL_FOG,
-		MAP_REMOVE_DUPLICATES,
-		SHOW_HOTKEYS,
-		MAP_MENU_REPLACE_ITEMS,
-		MAP_MENU_GENERATE_ISLAND,
-		MAP_VALIDATE_GROUND,
 	};
 }
 
 class MainFrame;
 
-class MainMenuBar : public wxEvtHandler {
+class MainMenuBar : public wxEvtHandler
+{
 public:
 	MainMenuBar(MainFrame* frame);
 	virtual ~MainMenuBar();
@@ -261,8 +254,6 @@ public:
 	void OnMapCleanup(wxCommandEvent& event);
 	void OnMapProperties(wxCommandEvent& event);
 	void OnMapStatistics(wxCommandEvent& event);
-	void OnMapRemoveDuplicates(wxCommandEvent& event);
-	void OnMapValidateGround(wxCommandEvent& event);
 
 	// View Menu
 	void OnToolbars(wxCommandEvent& event);
@@ -277,8 +268,6 @@ public:
 	void OnStartLive(wxCommandEvent& event);
 	void OnJoinLive(wxCommandEvent& event);
 	void OnCloseLive(wxCommandEvent& event);
-	void onServerHost(wxCommandEvent& event);
-	void onServerConnect(wxCommandEvent& event);
 
 	// Window Menu
 	void OnMinimapWindow(wxCommandEvent& event);
@@ -301,11 +290,6 @@ public:
 	void OnListExtensions(wxCommandEvent& event);
 	void OnGotoWebsite(wxCommandEvent& event);
 	void OnAbout(wxCommandEvent& event);
-	void OnShowHotkeys(wxCommandEvent& event);
-
-	// Add to class MainMenuBar private section:
-	void OnRefreshItems(wxCommandEvent& event);
-	void OnGenerateIsland(wxCommandEvent& event);
 
 protected:
 	// Load and returns a menu item, also sets accelerator
@@ -313,15 +297,15 @@ protected:
 	// Checks the items in the menus according to the settings (in config)
 	void LoadValues();
 	void SearchItems(bool unique, bool action, bool container, bool writable, bool onSelection = false);
-
 protected:
+
 	MainFrame* frame;
 	wxMenuBar* menubar;
 
 	// Used so that calling Check on menu items don't trigger events (avoids infinite recursion)
 	bool checking_programmaticly;
 
-	std::map<MenuBar::ActionID, std::list<wxMenuItem*>> items;
+	std::map<MenuBar::ActionID, std::list<wxMenuItem*> > items;
 
 	// Hardcoded recent files
 	wxFileHistory recentFiles;
@@ -331,12 +315,13 @@ protected:
 	DECLARE_EVENT_TABLE();
 };
 
-namespace MenuBar {
-	struct Action {
-		Action() :
-			id(0), kind(wxITEM_NORMAL) { }
-		Action(std::string s, int id, wxItemKind kind, wxCommandEventFunction handler) :
-			id(id), setting(0), name(s), kind(kind), handler(handler) { }
+namespace MenuBar
+{
+	struct Action
+	{
+		Action() : id(0), kind(wxITEM_NORMAL) {}
+		Action(std::string s, int id, wxItemKind kind, wxCommandEventFunction handler)
+			: id(id), setting(0), name(s), kind(kind), handler(handler) {}
 
 		int id;
 		int setting;
@@ -345,8 +330,5 @@ namespace MenuBar {
 		wxCommandEventFunction handler;
 	};
 }
-
-// Add this declaration before the MainMenuBar class
-std::vector<std::pair<uint16_t, uint16_t>> ParseRangeString(const wxString& input);
 
 #endif

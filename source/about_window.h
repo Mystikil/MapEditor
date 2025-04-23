@@ -32,7 +32,6 @@ public:
 
 	void OnTetris(wxCommandEvent&);
 	void OnSnake(wxCommandEvent&);
-
 private:
 	wxSizer* topsizer;
 	GamePanel* game_panel;

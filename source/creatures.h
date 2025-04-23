@@ -28,7 +28,8 @@ class CreatureBrush;
 
 typedef std::map<std::string, CreatureType*> CreatureMap;
 
-class CreatureDatabase {
+class CreatureDatabase
+{
 protected:
 	CreatureMap creature_map;
 
@@ -46,12 +47,8 @@ public:
 	CreatureType* addCreatureType(const std::string& name, bool isNpc, const Outfit& outfit);
 
 	bool hasMissing() const;
-	iterator begin() {
-		return creature_map.begin();
-	}
-	iterator end() {
-		return creature_map.end();
-	}
+	iterator begin() {return creature_map.begin();}
+	iterator end() {return creature_map.end();}
 
 	bool loadFromXML(const FileName& filename, bool standard, wxString& error, wxArrayString& warnings);
 	bool importXMLFromOT(const FileName& filename, wxString& error, wxArrayString& warnings);

@@ -20,7 +20,8 @@
 
 class DatDebugViewListBox;
 
-class DatDebugView : public wxPanel {
+class DatDebugView : public wxPanel
+{
 public:
 	DatDebugView(wxWindow* parent);
 	~DatDebugView();
@@ -29,6 +30,7 @@ public:
 	void OnClickList(wxCommandEvent&);
 
 protected:
+
 	DatDebugViewListBox* item_list;
 	wxTextCtrl* search_field;
 

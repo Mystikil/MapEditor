@@ -25,7 +25,8 @@
 class ContainerItemButton;
 class ContainerItemPopupMenu;
 
-class OldPropertiesWindow : public ObjectPropertiesWindowBase {
+class OldPropertiesWindow : public ObjectPropertiesWindowBase
+{
 public:
 	OldPropertiesWindow(wxWindow* parent, const Map* map, const Tile* tile, Item* item, wxPoint = wxDefaultPosition);
 	OldPropertiesWindow(wxWindow* parent, const Map* map, const Tile* tile, Creature* creature, wxPoint = wxDefaultPosition);
@@ -86,3 +87,4 @@ protected:
 };
 
 #endif
+
