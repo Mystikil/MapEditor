@@ -20,6 +20,13 @@
 
 #include "main.h"
 
+// Forward declarations
+class Position;
+class Map;
+
+// Constant for Next search button ID
+#define SEARCH_RESULT_NEXT_BUTTON 1001
+
 class SearchResultWindow : public wxPanel {
 public:
 	SearchResultWindow(wxWindow* parent);
@@ -28,16 +35,37 @@ public:
 	void Clear();
 	void AddPosition(wxString description, Position pos);
 	void SetIgnoredIds(const wxString& ignored_ids_str, bool enable);
+	
+	// Get all found positions for continuation search
+	std::vector<Position> GetFoundPositions() const;
+	
+	// Store search parameters for continuation
+	void StoreSearchInfo(uint16_t itemId, bool onSelection = false);
+	
+	// Continue the search with the stored parameters
+	void ContinueSearch();
+	
+	// Methods for retrieving ignored items info
+	wxString GetIgnoredItemsText() const;
+	bool IsIgnoreListEnabled() const;
 
 	void OnClickResult(wxCommandEvent&);
 	void OnClickExport(wxCommandEvent&);
 	void OnClickClear(wxCommandEvent&);
+	void OnClickNext(wxCommandEvent&);
 
 protected:
 	wxListBox* result_list;
 	std::vector<uint16_t> ignored_ids;
 	std::vector<std::pair<uint16_t, uint16_t>> ignored_ranges;
 	bool use_ignored_ids;
+	
+	// Search continuation data
+	uint16_t last_search_itemid;
+	bool last_search_on_selection;
+	bool has_last_search;
+	wxString last_ignored_ids_text;
+	bool last_ignored_ids_enabled;
 
 	DECLARE_EVENT_TABLE()
 };

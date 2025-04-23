@@ -189,46 +189,57 @@ GUI g_gui;
 GUI::GUI() :
 	aui_manager(nullptr),
 	root(nullptr),
-	minimap(nullptr),
 	minimap_enabled(false),
-	gem(nullptr),
+	mode(DRAWING_MODE),
+	pasting(false),
+	hotkeys_enabled(true),
 	search_result_window(nullptr),
+	loaded_version(CLIENT_VERSION_NONE),
 	secondary_map(nullptr),
+	minimap(nullptr),
+	has_last_search(false),
+	last_search_itemid(0),
+	last_search_on_selection(false),
+	last_ignored_ids_enabled(false),
+	creature_spawntime(0),
+	gem(nullptr),
 	doodad_buffer_map(std::make_unique<BaseMap>()),
-
 	house_brush(nullptr),
 	house_exit_brush(nullptr),
 	waypoint_brush(nullptr),
 	optional_brush(nullptr),
 	eraser(nullptr),
+	spawn_brush(nullptr),
 	normal_door_brush(nullptr),
 	locked_door_brush(nullptr),
 	magic_door_brush(nullptr),
 	quest_door_brush(nullptr),
 	hatch_door_brush(nullptr),
+	normal_door_alt_brush(nullptr),
+	archway_door_brush(nullptr),
 	window_door_brush(nullptr),
-
+	pz_brush(nullptr),
+	rook_brush(nullptr),
+	nolog_brush(nullptr),
+	pvp_brush(nullptr),
 	OGLContext(nullptr),
-	loaded_version(CLIENT_VERSION_NONE),
-	mode(SELECTION_MODE),
-	pasting(false),
-	hotkeys_enabled(true),
-
 	current_brush(nullptr),
 	previous_brush(nullptr),
 	brush_shape(BRUSHSHAPE_SQUARE),
 	brush_size(0),
 	brush_variation(0),
-
-	creature_spawntime(0),
 	draw_locked_doors(false),
 	use_custom_thickness(false),
 	custom_thickness_mod(0.0),
 	progressBar(nullptr),
+	progressFrom(0),
+	progressTo(0),
+	currentProgress(0),
+	winDisabler(nullptr),
 	disabled_counter(0),
 	last_autosave(time(nullptr)),
-	last_autosave_check(time(nullptr)) {
-	// Note: doodad_buffer_map is now created with std::make_unique in the initializer list
+	last_autosave_check(time(nullptr))
+{
 }
 
 GUI::~GUI() {
@@ -2816,4 +2827,27 @@ void GUI::UpdateDetachedViewsTitle(Editor* editor) {
 			}
 		}
 	}
+}
+
+void GUI::StoreSearchState(uint16_t itemId, bool onSelection) {
+	has_last_search = true;
+	last_search_itemid = itemId;
+	last_search_on_selection = onSelection;
+	
+	if (search_result_window) {
+		last_ignored_ids_text = search_result_window->GetIgnoredItemsText();
+		last_ignored_ids_enabled = search_result_window->IsIgnoreListEnabled();
+	}
+	
+	OutputDebugStringA(wxString::Format("GUI::StoreSearchState - Stored search for item ID %d, ignore list %s\n",
+		last_search_itemid, last_ignored_ids_enabled ? "enabled" : "disabled").c_str());
+}
+
+void GUI::RestoreSearchState(SearchResultWindow* window) {
+	if (!window || !has_last_search)
+		return;
+		
+	window->SetIgnoredIds(last_ignored_ids_text, last_ignored_ids_enabled);
+	
+	OutputDebugStringA(wxString::Format("GUI::RestoreSearchState - Restored search for item ID %d\n", last_search_itemid).c_str());
 }

@@ -1017,7 +1017,15 @@ void MainMenuBar::OnSearchForItem(wxCommandEvent& WXUNUSED(event)) {
                 SearchResultWindow* resultWindow = g_gui.ShowSearchWindow();
                 resultWindow->Clear();
                 for (const auto& pair : result) {
-                    resultWindow->AddPosition(wxString::Format("Item %d", pair.second->getID()), pair.first->getPosition());
+                    resultWindow->AddPosition(wxString::Format("%s (ID: %d)", 
+                        wxstr(pair.second->getName()),
+                        pair.second->getID()), pair.first->getPosition());
+                }
+                
+                // Store the first ID for continuation (if results aren't empty)
+                if (!result.empty()) {
+                    uint16_t firstItemId = result[0].second->getID();
+                    resultWindow->StoreSearchInfo(firstItemId, false);
                 }
             }
         } else {
@@ -1040,6 +1048,9 @@ void MainMenuBar::OnSearchForItem(wxCommandEvent& WXUNUSED(event)) {
 
             // Pass the ignored IDs configuration from the dialog
             window->SetIgnoredIds(dialog.GetIgnoreIdsText(), dialog.IsIgnoreIdsEnabled());
+            
+            // Store search parameters for continuation
+            window->StoreSearchInfo(dialog.getResultID(), false);
 
             for (std::vector<std::pair<Tile*, Item*>>::const_iterator iter = result.begin(); iter != result.end(); ++iter) {
                 Tile* tile = iter->first;
@@ -1236,8 +1247,18 @@ void MainMenuBar::OnSearchForItemOnSelection(wxCommandEvent& WXUNUSED(event)) {
 				
 				SearchResultWindow* resultWindow = g_gui.ShowSearchWindow();
 				resultWindow->Clear();
+				
+				// Pass the ignored IDs configuration from the dialog
+				resultWindow->SetIgnoredIds(dialog.GetIgnoreIdsText(), dialog.IsIgnoreIdsEnabled());
+				
+				// Store search parameters for range searches to enable continuation
+				uint16_t firstItemId = result.empty() ? 0 : result[0].second->getID();
+				resultWindow->StoreSearchInfo(firstItemId, true);
+
 				for (const auto& pair : result) {
-					resultWindow->AddPosition(wxString::Format("Item %d", pair.second->getID()), pair.first->getPosition());
+					resultWindow->AddPosition(wxString::Format("%s (ID: %d)", 
+						wxstr(pair.second->getName()),
+						pair.second->getID()), pair.first->getPosition());
 				}
 			}
 		} else {
@@ -1260,6 +1281,9 @@ void MainMenuBar::OnSearchForItemOnSelection(wxCommandEvent& WXUNUSED(event)) {
 
 			// Pass the ignored IDs configuration from the dialog
 			window->SetIgnoredIds(dialog.GetIgnoreIdsText(), dialog.IsIgnoreIdsEnabled());
+            
+            // Store search parameters for continuation
+            window->StoreSearchInfo(dialog.getResultID(), true);
 
 			for (std::vector<std::pair<Tile*, Item*>>::const_iterator iter = result.begin(); iter != result.end(); ++iter) {
 				Tile* tile = iter->first;

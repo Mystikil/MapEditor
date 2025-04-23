@@ -904,6 +904,16 @@ void FindItemDialog::OnClickOK(wxCommandEvent& event) {
 			}
 		}
 	}
+	
+	// Store the search information in the search result window for continuation
+	SearchResultWindow* window = g_gui.GetSearchWindow();
+	if (window) {
+		uint16_t searchId = getResultID();
+		if (searchId > 0) {
+			window->StoreSearchInfo(searchId, false); // We'll set the selection parameter elsewhere
+			OutputDebugStringA(wxString::Format("Stored search ID %d in result window\n", searchId).c_str());
+		}
+	}
 
 	EndModal(wxID_OK);
 }

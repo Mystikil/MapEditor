@@ -20,6 +20,7 @@
 #include "result_window.h"
 #include "gui.h"
 #include "position.h"
+#include "main_menubar.h"
 #include <vector>
 #include <algorithm>
 #include "string_utils.h"
@@ -28,16 +29,22 @@ BEGIN_EVENT_TABLE(SearchResultWindow, wxPanel)
 EVT_LISTBOX(wxID_ANY, SearchResultWindow::OnClickResult)
 EVT_BUTTON(wxID_FILE, SearchResultWindow::OnClickExport)
 EVT_BUTTON(wxID_CLEAR, SearchResultWindow::OnClickClear)
+EVT_BUTTON(SEARCH_RESULT_NEXT_BUTTON, SearchResultWindow::OnClickNext)
 END_EVENT_TABLE()
 
 SearchResultWindow::SearchResultWindow(wxWindow* parent) :
 	wxPanel(parent, wxID_ANY),
-	use_ignored_ids(false) {
+	use_ignored_ids(false),
+	last_search_itemid(0),
+	last_search_on_selection(false),
+	has_last_search(false),
+	last_ignored_ids_enabled(false) {
 	wxSizer* sizer = newd wxBoxSizer(wxVERTICAL);
 	result_list = newd wxListBox(this, wxID_ANY, wxDefaultPosition, wxSize(200, 330), 0, nullptr, wxLB_SINGLE | wxLB_ALWAYS_SB);
 	sizer->Add(result_list, wxSizerFlags(1).Expand());
 
 	wxSizer* buttonsSizer = newd wxBoxSizer(wxHORIZONTAL);
+	buttonsSizer->Add(newd wxButton(this, SEARCH_RESULT_NEXT_BUTTON, "Next"), wxSizerFlags(0).Center());
 	buttonsSizer->Add(newd wxButton(this, wxID_FILE, "Export"), wxSizerFlags(0).Center());
 	buttonsSizer->Add(newd wxButton(this, wxID_CLEAR, "Clear"), wxSizerFlags(0).Center());
 	sizer->Add(buttonsSizer, wxSizerFlags(0).Center().DoubleBorder());
@@ -53,6 +60,7 @@ void SearchResultWindow::Clear() {
 		delete reinterpret_cast<Position*>(result_list->GetClientData(n));
 	}
 	result_list->Clear();
+	has_last_search = false;
 }
 
 void SearchResultWindow::AddPosition(wxString description, Position pos) {
@@ -116,6 +124,23 @@ void SearchResultWindow::AddPosition(wxString description, Position pos) {
 	OutputDebugStringA(wxString::Format("Added to result list: %s\n", display_text).c_str());
 }
 
+std::vector<Position> SearchResultWindow::GetFoundPositions() const {
+	std::vector<Position> positions;
+	for (uint32_t n = 0; n < result_list->GetCount(); ++n) {
+		Position* pos = reinterpret_cast<Position*>(result_list->GetClientData(n));
+		if (pos) {
+			positions.push_back(*pos);
+		}
+	}
+	return positions;
+}
+
+void SearchResultWindow::StoreSearchInfo(uint16_t itemId, bool onSelection) {
+	last_search_itemid = itemId;
+	last_search_on_selection = onSelection;
+	has_last_search = true;
+}
+
 void SearchResultWindow::OnClickResult(wxCommandEvent& event) {
 	Position* pos = reinterpret_cast<Position*>(event.GetClientData());
 	if (pos) {
@@ -149,43 +174,147 @@ void SearchResultWindow::OnClickClear(wxCommandEvent& WXUNUSED(event)) {
 	Clear();
 }
 
-void SearchResultWindow::SetIgnoredIds(const wxString& ignored_ids_str, bool enable) {
-	OutputDebugStringA("SearchResultWindow::SetIgnoredIds called\n");
-	
-	use_ignored_ids = enable;
-	ignored_ids.clear();
-	ignored_ranges.clear();
-	
-	if (!enable) {
-		OutputDebugStringA("Ignored IDs disabled\n");
+void SearchResultWindow::OnClickNext(wxCommandEvent& WXUNUSED(event)) {
+	ContinueSearch();
+}
+
+void SearchResultWindow::ContinueSearch() {
+	if (!has_last_search) {
+		g_gui.PopupDialog("Search Error", "No previous search available to continue.", wxOK | wxICON_INFORMATION);
 		return;
 	}
 	
-	std::string input = as_lower_str(nstr(ignored_ids_str));
-	OutputDebugStringA(wxString::Format("Setting ignored IDs: %s\n", input).c_str());
+	// Store current positions to avoid duplicates
+	std::vector<Position> existingPositions = GetFoundPositions();
 	
-	std::vector<std::string> parts = splitString(input, ',');
-	
-	for (const auto& part : parts) {
-		if (part.find('-') != std::string::npos) {
-			std::vector<std::string> range = splitString(part, '-');
-			if (range.size() == 2 && isInteger(range[0]) && isInteger(range[1])) {
-				uint16_t from = static_cast<uint16_t>(std::stoi(range[0]));
-				uint16_t to = static_cast<uint16_t>(std::stoi(range[1]));
-				if (from <= to) {
-					ignored_ranges.emplace_back(from, to);
-					OutputDebugStringA(wxString::Format("Added ignored range: %d-%d\n", from, to).c_str());
+	// Custom Finder that skips already found positions
+	class ContinuedFinder {
+	public:
+		ContinuedFinder(uint16_t itemId, const std::vector<Position>& existingPositions, uint32_t maxCount) :
+			itemId(itemId), existingPositions(existingPositions), maxCount(maxCount) {}
+		
+		uint16_t itemId;
+		std::vector<Position> existingPositions;
+		uint32_t maxCount;
+		std::vector<std::pair<Tile*, Item*>> result;
+		
+		bool limitReached() const {
+			return result.size() >= (size_t)maxCount;
+		}
+		
+		bool isPositionAlreadyFound(const Position& pos) const {
+			for (const Position& existingPos : existingPositions) {
+				if (existingPos.x == pos.x && existingPos.y == pos.y && existingPos.z == pos.z) {
+					return true;
 				}
 			}
-		} else {
-			if (isInteger(part)) {
-				uint16_t id = static_cast<uint16_t>(std::stoi(part));
-				ignored_ids.push_back(id);
-				OutputDebugStringA(wxString::Format("Added ignored ID: %d\n", id).c_str());
+			return false;
+		}
+		
+		void operator()(Map& map, Tile* tile, Item* item, long long done) {
+			if (result.size() >= (size_t)maxCount) {
+				return;
+			}
+			
+			if (done % 0x8000 == 0) {
+				g_gui.SetLoadDone((unsigned int)(100 * done / map.getTileCount()));
+			}
+			
+			if (item->getID() == itemId) {
+				// Skip if this position was already found
+				if (!isPositionAlreadyFound(tile->getPosition())) {
+					result.push_back(std::make_pair(tile, item));
+				}
+			}
+		}
+	};
+	
+	// Run the continued search
+	g_gui.CreateLoadBar("Continuing search...");
+	
+	ContinuedFinder finder(last_search_itemid, existingPositions, 
+		(uint32_t)g_settings.getInteger(Config::REPLACE_SIZE));
+	
+	foreach_ItemOnMap(g_gui.GetCurrentMap(), finder, last_search_on_selection);
+	std::vector<std::pair<Tile*, Item*>>& result = finder.result;
+	
+	g_gui.DestroyLoadBar();
+	
+	if (finder.limitReached()) {
+		wxString msg;
+		msg << "The configured limit has been reached. Only " << finder.maxCount << " additional results will be displayed.";
+		g_gui.PopupDialog("Notice", msg, wxOK);
+	}
+	
+	if (result.empty()) {
+		g_gui.PopupDialog("Search Complete", "No more matching items found.", wxOK | wxICON_INFORMATION);
+		return;
+	}
+	
+	// Add new results to the window
+	for (const auto& pair : result) {
+		Tile* tile = pair.first;
+		Item* item = pair.second;
+		
+		wxString description = wxString::Format("%s (ID: %d)", 
+			wxstr(item->getName()),
+			item->getID());
+		
+		AddPosition(description, tile->getPosition());
+	}
+}
+
+void SearchResultWindow::SetIgnoredIds(const wxString& ignored_ids_str, bool enable) {
+	use_ignored_ids = enable;
+	last_ignored_ids_text = ignored_ids_str;
+	last_ignored_ids_enabled = enable;
+	
+	// Clear previous
+	ignored_ids.clear();
+	ignored_ranges.clear();
+	
+	if (!ignored_ids_str.empty() && enable) {
+		// Parse the ignored IDs string
+		wxArrayString parts = wxStringTokenize(ignored_ids_str, ",");
+		
+		for (const wxString& part : parts) {
+			// Trim whitespace - create a non-const copy to use Trim
+			wxString trimmed = part;
+			trimmed.Trim(true).Trim(false);
+			
+			// Check if it's a range (contains "-")
+			size_t rangePos = trimmed.Find('-');
+			if (rangePos != wxString::npos) {
+				// It's a range
+				wxString firstStr = trimmed.Left(rangePos);
+				wxString secondStr = trimmed.Mid(rangePos + 1);
+				
+				// Trim these strings as well
+				firstStr.Trim(true).Trim(false);
+				secondStr.Trim(true).Trim(false);
+				
+				long first, second;
+				if (firstStr.ToLong(&first) && secondStr.ToLong(&second)) {
+					ignored_ranges.push_back(std::make_pair(
+						static_cast<uint16_t>(first), 
+						static_cast<uint16_t>(second)));
+				}
+			}
+			else {
+				// It's a single ID
+				long id;
+				if (trimmed.ToLong(&id)) {
+					ignored_ids.push_back(static_cast<uint16_t>(id));
+				}
 			}
 		}
 	}
-	
-	OutputDebugStringA(wxString::Format("Total ignored IDs: %zu, Total ranges: %zu\n", 
-		ignored_ids.size(), ignored_ranges.size()).c_str());
+}
+
+wxString SearchResultWindow::GetIgnoredItemsText() const {
+	return last_ignored_ids_text;
+}
+
+bool SearchResultWindow::IsIgnoreListEnabled() const {
+	return last_ignored_ids_enabled;
 }

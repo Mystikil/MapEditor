@@ -221,6 +221,11 @@ public:
 	SearchResultWindow* GetSearchWindow();
 	SearchResultWindow* ShowSearchWindow();
 	void HideSearchWindow();
+	
+	// Search state persistence
+	void StoreSearchState(uint16_t itemId, bool onSelection);
+	void RestoreSearchState(SearchResultWindow* window);
+	bool HasStoredSearch() const { return has_last_search; }
 
 	// Minimap
 	void CreateMinimap();
@@ -516,6 +521,13 @@ public:
 
 	// Dark mode
 	void ApplyDarkMode();
+
+	// Search state variables
+	bool has_last_search;
+	uint16_t last_search_itemid;
+	bool last_search_on_selection;
+	wxString last_ignored_ids_text;
+	bool last_ignored_ids_enabled;
 };
 
 extern GUI g_gui;
