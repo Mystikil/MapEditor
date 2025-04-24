@@ -73,9 +73,13 @@ namespace Config {
 		BORDERIZE_DRAG,
 		BORDERIZE_DRAG_THRESHOLD,
 		BORDERIZE_PASTE_THRESHOLD,
+		BORDERIZE_DELETE,
 		ICON_BACKGROUND,
 		ALWAYS_MAKE_BACKUP,
 		USE_AUTOMAGIC,
+		SAME_GROUND_TYPE_BORDER,
+		WALLS_REPEL_BORDERS,
+		LAYER_CARPETS,
 		HOUSE_BRUSH_REMOVE_ITEMS,
 		AUTO_ASSIGN_DOORID,
 		ERASER_LEAVE_UNIQUE,
@@ -180,7 +184,36 @@ namespace Config {
 		ALWAYS_SHOW_ZONES,
 		EXT_HOUSE_SHADER,
 
+		AUTO_SELECT_RAW_ON_RIGHTCLICK,
+		AUTO_SAVE_ENABLED,
+		AUTO_SAVE_INTERVAL,
+
+		// Network/Live settings
+		LIVE_HOST,
+		LIVE_PORT,
+		LIVE_PASSWORD,
+		LIVE_USERNAME,
+
+		DARK_MODE,
+		DARK_MODE_CUSTOM_COLOR,
+		DARK_MODE_RED,
+		DARK_MODE_GREEN,
+		DARK_MODE_BLUE,
+
+		// House creation settings
+		MAX_HOUSE_TILES,
+		HOUSE_FLOOR_SCAN,
+		AUTO_DETECT_HOUSE_EXIT,
+
 		LAST,
+	};
+
+	// Hotkey settings
+	const std::string HOTKEY_PREFIX = "hotkey.";
+
+	enum HotkeySettings : uint32_t {
+		HOTKEY_BASE = 1000, // Start at 1000 to avoid conflicts
+		// Add more specific hotkey settings as needed
 	};
 }
 
@@ -201,9 +234,12 @@ public:
 	void setString(uint32_t key, std::string newval);
 
 	wxConfigBase& getConfigObject();
-	void setDefaults() {IO(DEFAULT);}
+	void setDefaults() {
+		IO(DEFAULT);
+	}
 	void load();
 	void save(bool endoftheworld = false);
+
 public:
 	enum DynamicType {
 		TYPE_NONE,
@@ -213,27 +249,42 @@ public:
 	};
 	class DynamicValue {
 	public:
-		DynamicValue() : type(TYPE_NONE) {
+		DynamicValue() :
+			type(TYPE_NONE) {
 			intval = 0;
 		};
-		DynamicValue(DynamicType t) : type(t) {
-			if(t == TYPE_STR) strval = nullptr;
-			else if(t == TYPE_INT) intval = 0;
-			else if(t == TYPE_FLOAT) floatval = 0.0;
-			else intval = 0;
+		DynamicValue(DynamicType t) :
+			type(t) {
+			if (t == TYPE_STR) {
+				strval = nullptr;
+			} else if (t == TYPE_INT) {
+				intval = 0;
+			} else if (t == TYPE_FLOAT) {
+				floatval = 0.0;
+			} else {
+				intval = 0;
+			}
 		};
 		~DynamicValue() {
-			if(type == TYPE_STR)
+			if (type == TYPE_STR) {
 				delete strval;
+			}
 		}
-		DynamicValue(const DynamicValue& dv) : type(dv.type) {
-			if(dv.type == TYPE_STR) strval = newd std::string(*dv.strval);
-			else if(dv.type == TYPE_INT) intval = dv.intval;
-			else if(dv.type == TYPE_FLOAT) floatval = dv.floatval;
-			else intval = 0;
+		DynamicValue(const DynamicValue& dv) :
+			type(dv.type) {
+			if (dv.type == TYPE_STR) {
+				strval = newd std::string(*dv.strval);
+			} else if (dv.type == TYPE_INT) {
+				intval = dv.intval;
+			} else if (dv.type == TYPE_FLOAT) {
+				floatval = dv.floatval;
+			} else {
+				intval = 0;
+			}
 		};
 
 		std::string str();
+
 	private:
 		DynamicType type;
 		union {
@@ -244,6 +295,7 @@ public:
 
 		friend class Settings;
 	};
+
 private:
 	enum IOMode {
 		DEFAULT,

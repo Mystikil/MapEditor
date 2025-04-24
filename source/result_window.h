@@ -20,14 +20,14 @@
 
 #include "main.h"
 
-class SearchResultWindow : public wxPanel
-{
+class SearchResultWindow : public wxPanel {
 public:
 	SearchResultWindow(wxWindow* parent);
 	virtual ~SearchResultWindow();
 
 	void Clear();
 	void AddPosition(wxString description, Position pos);
+	void SetIgnoredIds(const wxString& ignored_ids_str, bool enable);
 
 	void OnClickResult(wxCommandEvent&);
 	void OnClickExport(wxCommandEvent&);
@@ -35,6 +35,9 @@ public:
 
 protected:
 	wxListBox* result_list;
+	std::vector<uint16_t> ignored_ids;
+	std::vector<std::pair<uint16_t, uint16_t>> ignored_ranges;
+	bool use_ignored_ids;
 
 	DECLARE_EVENT_TABLE()
 };

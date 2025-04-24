@@ -15,7 +15,6 @@
 // along with this program. If not, see <http://www.gnu.org/licenses/>.
 //////////////////////////////////////////////////////////////////////
 
-
 #ifndef RME_PREFERENCES_WINDOW_H_
 #define RME_PREFERENCES_WINDOW_H_
 
@@ -24,11 +23,11 @@
 #include <wx/collpane.h>
 #include <wx/clrpicker.h>
 
-class PreferencesWindow : public wxDialog
-{
+class PreferencesWindow : public wxDialog {
 public:
-	explicit PreferencesWindow(wxWindow* parent) : PreferencesWindow(parent, false) {};
-    PreferencesWindow(wxWindow* parent, bool clientVersionSelected);
+	explicit PreferencesWindow(wxWindow* parent) :
+		PreferencesWindow(parent, false) {};
+	PreferencesWindow(wxWindow* parent, bool clientVersionSelected);
 	virtual ~PreferencesWindow();
 
 	void OnClickDefaults(wxCommandEvent&);
@@ -78,6 +77,9 @@ protected:
 	wxCheckBox* hide_items_when_zoomed_chkbox;
 	wxColourPickerCtrl* cursor_color_pick;
 	wxColourPickerCtrl* cursor_alt_color_pick;
+	wxCheckBox* dark_mode_chkbox;
+	wxCheckBox* dark_mode_color_enabled_chkbox;
+	wxColourPickerCtrl* dark_mode_color_pick;
 	/*
 	wxCheckBox* texture_managment_chkbox;
 	wxSpinCtrl* clean_interval_spin;
@@ -86,6 +88,17 @@ protected:
 	wxSpinCtrl* software_threshold_spin;
 	wxSpinCtrl* software_clean_amount_spin;
 	*/
+
+	// Automagic
+	wxCheckBox* automagic_enabled_chkbox;
+	wxCheckBox* same_ground_type_chkbox;
+	wxCheckBox* walls_repel_borders_chkbox;
+	wxCheckBox* layer_carpets_chkbox;
+	wxCheckBox* borderize_delete_chkbox;
+	wxCheckBox* borderize_paste_chkbox;
+	wxCheckBox* borderize_drag_chkbox;
+	wxSpinCtrl* borderize_drag_threshold_spin;
+	wxSpinCtrl* borderize_paste_threshold_spin;
 
 	// Interface
 	wxChoice* terrain_palette_style_choice;
@@ -124,6 +137,15 @@ protected:
 	wxNotebookPage* CreateUIPage();
 	wxNotebookPage* CreateEditorPage();
 	wxNotebookPage* CreateClientPage();
+	wxNotebookPage* CreateAutomagicPage();
+
+	// Helper method to update the UI state of dark mode controls
+	void UpdateDarkModeUI();
+
+	// Add with other checkbox declarations
+	wxCheckBox* auto_select_raw_chkbox;
+	wxCheckBox* autosave_chkbox;
+	wxSpinCtrl* autosave_interval_spin;
 
 	DECLARE_EVENT_TABLE()
 };

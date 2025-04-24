@@ -25,8 +25,7 @@
 
 class Editor;
 
-class CopyBuffer
-{
+class CopyBuffer {
 public:
 	CopyBuffer();
 	virtual ~CopyBuffer();
@@ -45,7 +44,9 @@ public:
 	size_t GetTileCount();
 
 	BaseMap& getBufferMap();
+
 private:
+	void collectModifiedPositions(const Position& toPosition, PositionVector& positions);
 	Position copyPos;
 	BaseMap* tiles;
 };

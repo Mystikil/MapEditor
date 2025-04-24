@@ -15,7 +15,6 @@
 // along with this program. If not, see <http://www.gnu.org/licenses/>.
 //////////////////////////////////////////////////////////////////////
 
-
 #ifndef RME_TILESET_CREATURE_H_
 #define RME_TILESET_CREATURE_H_
 
@@ -48,6 +47,7 @@ protected:
 	void SelectTileset(size_t index);
 	void SelectCreature(size_t index);
 	void SelectCreature(std::string name);
+
 public:
 	// Event handling
 	void OnChangeSpawnTime(wxSpinEvent& event);
@@ -57,18 +57,37 @@ public:
 	void OnListBoxChange(wxCommandEvent& event);
 	void OnClickCreatureBrushButton(wxCommandEvent& event);
 	void OnClickSpawnBrushButton(wxCommandEvent& event);
+	void OnClickLoadNPCsButton(wxCommandEvent& event);
+	void OnClickLoadMonstersButton(wxCommandEvent& event);
+	void OnClickPurgeCreaturesButton(wxCommandEvent& event);
+	void OnClickSearchButton(wxCommandEvent& event);
+	void OnSearchFieldText(wxCommandEvent& event);
+	void OnSearchFieldFocus(wxFocusEvent& event);
+	void OnSearchFieldKillFocus(wxFocusEvent& event);
+	void OnSearchFieldKeyDown(wxKeyEvent& event);
+
 protected:
 	void SelectCreatureBrush();
 	void SelectSpawnBrush();
+	bool LoadNPCsFromFolder(const wxString& folder);
+	bool LoadMonstersFromFolder(const wxString& folder);
+	bool PurgeCreaturePalettes();
 
 	wxChoice* tileset_choice;
 	SortableListBox* creature_list;
 	wxToggleButton* creature_brush_button;
 	wxToggleButton* spawn_brush_button;
+	wxButton* load_npcs_button;
+	wxButton* load_monsters_button;
+	wxButton* purge_creatures_button;
 	wxSpinCtrl* creature_spawntime_spin;
 	wxSpinCtrl* spawn_size_spin;
+	wxTextCtrl* search_field;
+	wxButton* search_button;
 
 	bool handling_event;
+
+	void FilterCreatures(const wxString& search_text);
 
 	DECLARE_EVENT_TABLE();
 };

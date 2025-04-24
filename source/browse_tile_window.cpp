@@ -25,11 +25,26 @@
 #include "gui.h"
 #include "browse_tile_window.h"
 
+
+	/* TASK: Item Reordering Implementation
+	 * Current state: Static item list with no reordering capability
+	 * 
+	 * Required changes:
+	 * 1. Add Up/Down buttons to allow item reordering
+	 * 2. Implement item index swapping functionality
+	 * 3. Update tile item order after reordering
+	 * 4. Refresh display after reordering
+	 * 
+	 * Future enhancement possibility:
+	 * - Consider implementing drag-and-drop functionality
+	 *   using custom wxVListBox implementation
+	 */
+
+
 // ============================================================================
 //
 
-class BrowseTileListBox : public wxVListBox
-{
+class BrowseTileListBox : public wxVListBox {
 public:
 	BrowseTileListBox(wxWindow* parent, wxWindowID id, Tile* tile);
 	~BrowseTileListBox();
@@ -38,6 +53,9 @@ public:
 	wxCoord OnMeasureItem(size_t index) const;
 	Item* GetSelectedItem();
 	void RemoveSelected();
+	void MoveSelectedUp();
+	void MoveSelectedDown();
+	Tile* GetEditTile() const { return edit_tile; }
 
 protected:
 	void UpdateItems();
@@ -48,31 +66,30 @@ protected:
 };
 
 BrowseTileListBox::BrowseTileListBox(wxWindow* parent, wxWindowID id, Tile* tile) :
-wxVListBox(parent, id, wxDefaultPosition, wxSize(200, 180), wxLB_MULTIPLE), edit_tile(tile)
-{
+	wxVListBox(parent, id, wxDefaultPosition, wxSize(200, 180), wxLB_MULTIPLE), edit_tile(tile) {
 	UpdateItems();
 }
 
-BrowseTileListBox::~BrowseTileListBox()
-{
+BrowseTileListBox::~BrowseTileListBox() {
 	////
 }
 
-void BrowseTileListBox::OnDrawItem(wxDC& dc, const wxRect& rect, size_t n) const
-{
+void BrowseTileListBox::OnDrawItem(wxDC& dc, const wxRect& rect, size_t n) const {
 	ItemsMap::const_iterator item_iterator = items.find(int(n));
 	Item* item = item_iterator->second;
 
 	Sprite* sprite = g_gui.gfx.getSprite(item->getClientID());
-	if(sprite)
+	if (sprite) {
 		sprite->DrawTo(&dc, SPRITE_SIZE_32x32, rect.GetX(), rect.GetY(), rect.GetWidth(), rect.GetHeight());
+	}
 
-	if(IsSelected(n)) {
+	if (IsSelected(n)) {
 		item->select();
-		if(HasFocus())
+		if (HasFocus()) {
 			dc.SetTextForeground(wxColor(0xFF, 0xFF, 0xFF));
-		else
+		} else {
 			dc.SetTextForeground(wxColor(0x00, 0x00, 0xFF));
+		}
 	} else {
 		item->deselect();
 		dc.SetTextForeground(wxColor(0x00, 0x00, 0x00));
@@ -83,29 +100,29 @@ void BrowseTileListBox::OnDrawItem(wxDC& dc, const wxRect& rect, size_t n) const
 	dc.DrawText(label, rect.GetX() + 40, rect.GetY() + 6);
 }
 
-wxCoord BrowseTileListBox::OnMeasureItem(size_t n) const
-{
+wxCoord BrowseTileListBox::OnMeasureItem(size_t n) const {
 	return 32;
 }
 
-Item* BrowseTileListBox::GetSelectedItem()
-{
-	if(GetItemCount() == 0 || GetSelectedCount() == 0)
+Item* BrowseTileListBox::GetSelectedItem() {
+	if (GetItemCount() == 0 || GetSelectedCount() == 0) {
 		return nullptr;
+	}
 
 	return edit_tile->getTopSelectedItem();
 }
 
-void BrowseTileListBox::RemoveSelected()
-{
-	if(GetItemCount() == 0 || GetSelectedCount() == 0) return;
+void BrowseTileListBox::RemoveSelected() {
+	if (GetItemCount() == 0 || GetSelectedCount() == 0) {
+		return;
+	}
 
 	Clear();
 	items.clear();
 
 	// Delete the items from the tile
 	ItemVector tile_selection = edit_tile->popSelectedItems(true);
-	for(ItemVector::iterator iit = tile_selection.begin(); iit != tile_selection.end(); ++iit) {
+	for (ItemVector::iterator iit = tile_selection.begin(); iit != tile_selection.end(); ++iit) {
 		delete *iit;
 	}
 
@@ -113,15 +130,14 @@ void BrowseTileListBox::RemoveSelected()
 	Refresh();
 }
 
-void BrowseTileListBox::UpdateItems()
-{
+void BrowseTileListBox::UpdateItems() {
 	int n = 0;
-	for(ItemVector::reverse_iterator it = edit_tile->items.rbegin(); it != edit_tile->items.rend(); ++it) {
+	for (ItemVector::reverse_iterator it = edit_tile->items.rbegin(); it != edit_tile->items.rend(); ++it) {
 		items[n] = (*it);
 		++n;
 	}
 
-	if(edit_tile->ground) {
+	if (edit_tile->ground) {
 		items[n] = edit_tile->ground;
 		++n;
 	}
@@ -129,19 +145,70 @@ void BrowseTileListBox::UpdateItems()
 	SetItemCount(n);
 }
 
+void BrowseTileListBox::MoveSelectedUp() {
+	if (GetItemCount() == 0 || GetSelectedCount() == 0) {
+		return;
+	}
+
+	int selected = GetSelection();
+	if (selected <= 0) {
+		return;
+	}
+
+	// Don't allow moving ground items
+	Item* selectedItem = items[selected];
+	if (selectedItem == edit_tile->ground) {
+		return;
+	}
+
+	// Swap items in the tile's item vector
+	ItemVector::iterator it = edit_tile->items.begin() + (edit_tile->items.size() - selected - 1);
+	if (it != edit_tile->items.end() && (it + 1) != edit_tile->items.end()) {
+		std::iter_swap(it, it + 1);
+	}
+
+	// Update display
+	UpdateItems();
+	SetSelection(selected - 1);
+	Refresh();
+}
+
+void BrowseTileListBox::MoveSelectedDown() {
+	if (GetItemCount() == 0 || GetSelectedCount() == 0) {
+		return;
+	}
+
+	int selected = GetSelection();
+	if (selected >= GetItemCount() - 1) {
+		return;
+	}
+
+	// Swap items in the tile's item vector
+	ItemVector::iterator it = edit_tile->items.begin() + (edit_tile->items.size() - selected - 1);
+	if (it != edit_tile->items.begin()) {
+		std::iter_swap(it, it - 1);
+	}
+
+	// Update display
+	UpdateItems();
+	SetSelection(selected + 1);
+	Refresh();
+}
+
 // ============================================================================
 //
 
 BEGIN_EVENT_TABLE(BrowseTileWindow, wxDialog)
-	EVT_BUTTON(wxID_REMOVE, BrowseTileWindow::OnClickDelete)
-	EVT_BUTTON(wxID_FIND, BrowseTileWindow::OnClickSelectRaw)
-	EVT_BUTTON(wxID_OK, BrowseTileWindow::OnClickOK)
-	EVT_BUTTON(wxID_CANCEL, BrowseTileWindow::OnClickCancel)
+EVT_BUTTON(wxID_REMOVE, BrowseTileWindow::OnClickDelete)
+EVT_BUTTON(wxID_FIND, BrowseTileWindow::OnClickSelectRaw)
+EVT_BUTTON(wxID_OK, BrowseTileWindow::OnClickOK)
+EVT_BUTTON(wxID_CANCEL, BrowseTileWindow::OnClickCancel)
+EVT_BUTTON(wxID_UP, BrowseTileWindow::OnClickUp)
+EVT_BUTTON(wxID_DOWN, BrowseTileWindow::OnClickDown)
 END_EVENT_TABLE()
 
 BrowseTileWindow::BrowseTileWindow(wxWindow* parent, Tile* tile, wxPoint position /* = wxDefaultPosition */) :
-wxDialog(parent, wxID_ANY, "Browse Field", position, wxSize(600, 400), wxCAPTION | wxCLOSE_BOX | wxRESIZE_BORDER)
-{
+	wxDialog(parent, wxID_ANY, "Browse Field", position, wxSize(600, 400), wxCAPTION | wxCLOSE_BOX | wxRESIZE_BORDER) {
 	wxSizer* sizer = newd wxBoxSizer(wxVERTICAL);
 	item_list = newd BrowseTileListBox(this, wxID_ANY, tile);
 	sizer->Add(item_list, wxSizerFlags(1).Expand());
@@ -150,7 +217,7 @@ wxDialog(parent, wxID_ANY, "Browse Field", position, wxSize(600, 400), wxCAPTION
 	pos << "x=" << tile->getX() << ",  y=" << tile->getY() << ",  z=" << tile->getZ();
 
 	wxSizer* infoSizer = newd wxBoxSizer(wxVERTICAL);
-    wxBoxSizer* buttons = newd wxBoxSizer(wxHORIZONTAL);
+	wxBoxSizer* buttons = newd wxBoxSizer(wxHORIZONTAL);
 	delete_button = newd wxButton(this, wxID_REMOVE, "Delete");
 	delete_button->Enable(false);
 	buttons->Add(delete_button);
@@ -158,6 +225,15 @@ wxDialog(parent, wxID_ANY, "Browse Field", position, wxSize(600, 400), wxCAPTION
 	select_raw_button = newd wxButton(this, wxID_FIND, "Select RAW");
 	select_raw_button->Enable(false);
 	buttons->Add(select_raw_button);
+	wxBoxSizer* move_buttons = newd wxBoxSizer(wxHORIZONTAL);
+	up_button = newd wxButton(this, wxID_UP, "Up");
+	up_button->Enable(false);
+	move_buttons->Add(up_button);
+	move_buttons->AddSpacer(5);
+	down_button = newd wxButton(this, wxID_DOWN, "Down");
+	down_button->Enable(false);
+	move_buttons->Add(down_button);
+	buttons->Add(move_buttons);
 	infoSizer->Add(buttons);
 	infoSizer->AddSpacer(5);
 	infoSizer->Add(newd wxStaticText(this, wxID_ANY, "Position:  " + pos), wxSizerFlags(0).Left());
@@ -182,41 +258,50 @@ wxDialog(parent, wxID_ANY, "Browse Field", position, wxSize(600, 400), wxCAPTION
 	item_list->Connect(wxEVT_COMMAND_LISTBOX_SELECTED, wxCommandEventHandler(BrowseTileWindow::OnItemSelected), NULL, this);
 }
 
-BrowseTileWindow::~BrowseTileWindow()
-{
+BrowseTileWindow::~BrowseTileWindow() {
 	// Disconnect Events
 	item_list->Disconnect(wxEVT_COMMAND_LISTBOX_SELECTED, wxCommandEventHandler(BrowseTileWindow::OnItemSelected), NULL, this);
 }
 
-void BrowseTileWindow::OnItemSelected(wxCommandEvent& WXUNUSED(event))
-{
+void BrowseTileWindow::OnItemSelected(wxCommandEvent& WXUNUSED(event)) {
 	const size_t count = item_list->GetSelectedCount();
+	const int selected = item_list->GetSelection();
+	
 	delete_button->Enable(count != 0);
 	select_raw_button->Enable(count == 1);
+	
+	// Only enable Up button if not ground item
+	bool isGroundItem = (selected >= 0 && item_list->GetSelectedItem() == item_list->GetEditTile()->ground);
+	up_button->Enable(count == 1 && selected > 0 && !isGroundItem);
+	down_button->Enable(count == 1 && selected < item_list->GetItemCount() - 1);
 }
 
-void BrowseTileWindow::OnClickDelete(wxCommandEvent& WXUNUSED(event))
-{
+void BrowseTileWindow::OnClickDelete(wxCommandEvent& WXUNUSED(event)) {
 	item_list->RemoveSelected();
 	item_count_txt->SetLabelText("Item count:  " + i2ws(item_list->GetItemCount()));
 }
 
-void BrowseTileWindow::OnClickSelectRaw(wxCommandEvent& WXUNUSED(event))
-{
+void BrowseTileWindow::OnClickSelectRaw(wxCommandEvent& WXUNUSED(event)) {
 	Item* item = item_list->GetSelectedItem();
-	if(item && item->getRAWBrush())
+	if (item && item->getRAWBrush()) {
 		g_gui.SelectBrush(item->getRAWBrush(), TILESET_RAW);
+	}
 
 	EndModal(1);
 }
 
-void BrowseTileWindow::OnClickOK(wxCommandEvent& WXUNUSED(event))
-{
+void BrowseTileWindow::OnClickOK(wxCommandEvent& WXUNUSED(event)) {
 	EndModal(1);
 }
 
-void BrowseTileWindow::OnClickCancel(wxCommandEvent& WXUNUSED(event))
-{
+void BrowseTileWindow::OnClickCancel(wxCommandEvent& WXUNUSED(event)) {
 	EndModal(0);
 }
 
+void BrowseTileWindow::OnClickUp(wxCommandEvent& WXUNUSED(event)) {
+	item_list->MoveSelectedUp();
+}
+
+void BrowseTileWindow::OnClickDown(wxCommandEvent& WXUNUSED(event)) {
+	item_list->MoveSelectedDown();
+}

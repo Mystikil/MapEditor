@@ -15,7 +15,6 @@
 // along with this program. If not, see <http://www.gnu.org/licenses/>.
 //////////////////////////////////////////////////////////////////////
 
-
 #include "main.h"
 
 #include <wx/collpane.h>
@@ -27,47 +26,49 @@
 #include "gui.h"
 
 #include "preferences.h"
+#include "main_menubar.h"
+#include "main_toolbar.h"
+#include "dark_mode_manager.h"
 
 BEGIN_EVENT_TABLE(PreferencesWindow, wxDialog)
-	EVT_BUTTON(wxID_OK, PreferencesWindow::OnClickOK)
-	EVT_BUTTON(wxID_CANCEL, PreferencesWindow::OnClickCancel)
-	EVT_BUTTON(wxID_APPLY, PreferencesWindow::OnClickApply)
-	EVT_COLLAPSIBLEPANE_CHANGED(wxID_ANY, PreferencesWindow::OnCollapsiblePane)
+EVT_BUTTON(wxID_OK, PreferencesWindow::OnClickOK)
+EVT_BUTTON(wxID_CANCEL, PreferencesWindow::OnClickCancel)
+EVT_BUTTON(wxID_APPLY, PreferencesWindow::OnClickApply)
+EVT_COLLAPSIBLEPANE_CHANGED(wxID_ANY, PreferencesWindow::OnCollapsiblePane)
 END_EVENT_TABLE()
 
-PreferencesWindow::PreferencesWindow(wxWindow *parent, bool clientVersionSelected = false)
-        : wxDialog(parent, wxID_ANY, "Preferences", wxDefaultPosition, wxSize(400, 400), wxCAPTION | wxCLOSE_BOX) {
-    wxSizer* sizer = newd wxBoxSizer(wxVERTICAL);
+PreferencesWindow::PreferencesWindow(wxWindow* parent, bool clientVersionSelected = false) :
+	wxDialog(parent, wxID_ANY, "Preferences", wxDefaultPosition, wxSize(400, 400), wxCAPTION | wxCLOSE_BOX) {
+	wxSizer* sizer = newd wxBoxSizer(wxVERTICAL);
 
-    book = newd wxNotebook(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxBK_TOP);
-    //book->SetPadding(4);
+	book = newd wxNotebook(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxBK_TOP);
+	// book->SetPadding(4);
 
-    book->AddPage(CreateGeneralPage(), "General", true);
-    book->AddPage(CreateEditorPage(), "Editor");
-    book->AddPage(CreateGraphicsPage(), "Graphics");
-    book->AddPage(CreateUIPage(), "Interface");
-    book->AddPage(CreateClientPage(), "Client Version", clientVersionSelected);
+	book->AddPage(CreateGeneralPage(), "General", true);
+	book->AddPage(CreateEditorPage(), "Editor");
+	book->AddPage(CreateGraphicsPage(), "Graphics");
+	book->AddPage(CreateUIPage(), "Interface");
+	book->AddPage(CreateClientPage(), "Client Version", clientVersionSelected);
+	book->AddPage(CreateAutomagicPage(), "Automagic");
 
-    sizer->Add(book, 1, wxEXPAND | wxALL, 10);
+	sizer->Add(book, 1, wxEXPAND | wxALL, 10);
 
-    wxSizer* subsizer = newd wxBoxSizer(wxHORIZONTAL);
-    subsizer->Add(newd wxButton(this, wxID_OK, "OK"), wxSizerFlags(1).Center());
-    subsizer->Add(newd wxButton(this, wxID_CANCEL, "Cancel"), wxSizerFlags(1).Border(wxALL, 5).Left().Center());
-    subsizer->Add(newd wxButton(this, wxID_APPLY, "Apply"), wxSizerFlags(1).Center());
-    sizer->Add(subsizer, 0, wxCENTER | wxLEFT | wxBOTTOM | wxRIGHT, 10);
+	wxSizer* subsizer = newd wxBoxSizer(wxHORIZONTAL);
+	subsizer->Add(newd wxButton(this, wxID_OK, "OK"), wxSizerFlags(1).Center());
+	subsizer->Add(newd wxButton(this, wxID_CANCEL, "Cancel"), wxSizerFlags(1).Border(wxALL, 5).Left().Center());
+	subsizer->Add(newd wxButton(this, wxID_APPLY, "Apply"), wxSizerFlags(1).Center());
+	sizer->Add(subsizer, 0, wxCENTER | wxLEFT | wxBOTTOM | wxRIGHT, 10);
 
-    SetSizerAndFit(sizer);
-    Centre(wxBOTH);
-    // FindWindowById(PANE_ADVANCED_GRAPHICS, this)->GetParent()->Fit();
+	SetSizerAndFit(sizer);
+	Centre(wxBOTH);
+	// FindWindowById(PANE_ADVANCED_GRAPHICS, this)->GetParent()->Fit();
 }
 
-PreferencesWindow::~PreferencesWindow()
-{
+PreferencesWindow::~PreferencesWindow() {
 	////
 }
 
-wxNotebookPage* PreferencesWindow::CreateGeneralPage()
-{
+wxNotebookPage* PreferencesWindow::CreateGeneralPage() {
 	wxNotebookPage* general_page = newd wxPanel(book, wxID_ANY);
 
 	wxSizer* sizer = newd wxBoxSizer(wxVERTICAL);
@@ -96,9 +97,29 @@ wxNotebookPage* PreferencesWindow::CreateGeneralPage()
 	enable_tileset_editing_chkbox->SetToolTip("Show tileset editing options.");
 	sizer->Add(enable_tileset_editing_chkbox, 0, wxLEFT | wxTOP, 5);
 
+	auto_select_raw_chkbox = newd wxCheckBox(general_page, wxID_ANY, "Auto-select RAW on right-click");
+	auto_select_raw_chkbox->SetValue(g_settings.getBoolean(Config::AUTO_SELECT_RAW_ON_RIGHTCLICK));
+	auto_select_raw_chkbox->SetToolTip("Automatically selects RAW brush when right-clicking items while showing the context menu.");
+	sizer->Add(auto_select_raw_chkbox, 0, wxLEFT | wxTOP, 5);
+
 	sizer->AddSpacer(10);
 
-    auto * grid_sizer = newd wxFlexGridSizer(2, 10, 10);
+	// Add autosave options
+	wxBoxSizer* autosave_sizer = newd wxBoxSizer(wxHORIZONTAL); 
+	autosave_chkbox = newd wxCheckBox(general_page, wxID_ANY, "Enable autosave");
+	autosave_chkbox->SetValue(g_settings.getBoolean(Config::AUTO_SAVE_ENABLED));
+	autosave_chkbox->SetToolTip("Automatically save a backup of your map periodically");
+	autosave_sizer->Add(autosave_chkbox, 0, wxALL, 5);
+
+	autosave_interval_spin = newd wxSpinCtrl(general_page, wxID_ANY, i2ws(g_settings.getInteger(Config::AUTO_SAVE_INTERVAL)), 
+		wxDefaultPosition, wxSize(120, -1), wxSP_ARROW_KEYS, 1, 7200, 60);
+	autosave_interval_spin->SetToolTip("How often (in seconds) should autosave occur");
+	autosave_sizer->Add(autosave_interval_spin, 0, wxALL, 5);
+	autosave_sizer->Add(newd wxStaticText(general_page, wxID_ANY, "seconds"), 0, wxALL | wxALIGN_CENTER_VERTICAL, 5);
+
+	sizer->Add(autosave_sizer);
+
+	auto* grid_sizer = newd wxFlexGridSizer(2, 10, 10);
 	grid_sizer->AddGrowableCol(1);
 
 	grid_sizer->Add(tmptext = newd wxStaticText(general_page, wxID_ANY, "Undo queue size: "), 0);
@@ -125,7 +146,7 @@ wxNotebookPage* PreferencesWindow::CreateGeneralPage()
 	sizer->AddSpacer(10);
 
 	wxString position_choices[] = { "  {x = 0, y = 0, z = 0}",
-                                    R"(  {"x":0,"y":0,"z":0})",
+									R"(  {"x":0,"y":0,"z":0})",
 									"  x, y, z",
 									"  (x, y, z)",
 									"  Position(x, y, z)" };
@@ -140,8 +161,7 @@ wxNotebookPage* PreferencesWindow::CreateGeneralPage()
 	return general_page;
 }
 
-wxNotebookPage* PreferencesWindow::CreateEditorPage()
-{
+wxNotebookPage* PreferencesWindow::CreateEditorPage() {
 	wxNotebookPage* editor_page = newd wxPanel(book, wxID_ANY);
 
 	wxSizer* sizer = newd wxBoxSizer(wxVERTICAL);
@@ -203,8 +223,7 @@ wxNotebookPage* PreferencesWindow::CreateEditorPage()
 	return editor_page;
 }
 
-wxNotebookPage* PreferencesWindow::CreateGraphicsPage()
-{
+wxNotebookPage* PreferencesWindow::CreateGraphicsPage() {
 	wxWindow* tmp;
 	wxNotebookPage* graphics_page = newd wxPanel(book, wxID_ANY);
 
@@ -212,22 +231,57 @@ wxNotebookPage* PreferencesWindow::CreateGraphicsPage()
 
 	hide_items_when_zoomed_chkbox = newd wxCheckBox(graphics_page, wxID_ANY, "Hide items when zoomed out");
 	hide_items_when_zoomed_chkbox->SetValue(g_settings.getBoolean(Config::HIDE_ITEMS_WHEN_ZOOMED));
+	hide_items_when_zoomed_chkbox->SetToolTip("Hides items when zooming out too far.");
 	sizer->Add(hide_items_when_zoomed_chkbox, 0, wxLEFT | wxTOP, 5);
-	SetWindowToolTip(hide_items_when_zoomed_chkbox, "When this option is checked, \"loose\" items will be hidden when you zoom very far out.");
 
 	icon_selection_shadow_chkbox = newd wxCheckBox(graphics_page, wxID_ANY, "Use icon selection shadow");
 	icon_selection_shadow_chkbox->SetValue(g_settings.getBoolean(Config::USE_GUI_SELECTION_SHADOW));
+	icon_selection_shadow_chkbox->SetToolTip("When this option is enabled, a darker shadow will be used for selection highlights (for icon-based palettes).");
 	sizer->Add(icon_selection_shadow_chkbox, 0, wxLEFT | wxTOP, 5);
-	SetWindowToolTip(icon_selection_shadow_chkbox, "When this option is checked, selected items in the palette menu will be shaded.");
 
-	use_memcached_chkbox = newd wxCheckBox(graphics_page, wxID_ANY, "Use memcached sprites");
-	use_memcached_chkbox->SetValue(g_settings.getBoolean(Config::USE_MEMCACHED_SPRITES));
+	use_memcached_chkbox = newd wxCheckBox(graphics_page, wxID_ANY, "Cache sprites in memory");
+	use_memcached_chkbox->SetValue(g_settings.getBoolean(Config::USE_MEMCACHED_SPRITES_TO_SAVE));
+	use_memcached_chkbox->SetToolTip("Uncheck this to conserve memory.");
 	sizer->Add(use_memcached_chkbox, 0, wxLEFT | wxTOP, 5);
-	SetWindowToolTip(use_memcached_chkbox, "When this is checked, sprites will be loaded into memory at startup and unpacked at runtime. This is faster but consumes more memory.\nIf it is not checked, the editor will use less memory but there will be a performance decrease due to reading sprites from the disk.");
+
+	dark_mode_chkbox = newd wxCheckBox(graphics_page, wxID_ANY, "Use dark mode");
+	dark_mode_chkbox->SetValue(g_settings.getBoolean(Config::DARK_MODE));
+	dark_mode_chkbox->SetToolTip("Enable dark mode for the application interface.");
+	sizer->Add(dark_mode_chkbox, 0, wxLEFT | wxTOP, 5);
+
+	// Add dark mode color picker
+	wxBoxSizer* dark_mode_color_sizer = newd wxBoxSizer(wxHORIZONTAL);
+	dark_mode_color_sizer->Add(newd wxStaticText(graphics_page, wxID_ANY, "Custom dark mode color: "), 0, wxALIGN_CENTER_VERTICAL);
+	dark_mode_color_enabled_chkbox = newd wxCheckBox(graphics_page, wxID_ANY, "Enable");
+	dark_mode_color_enabled_chkbox->SetValue(g_settings.getBoolean(Config::DARK_MODE_CUSTOM_COLOR));
+	dark_mode_color_enabled_chkbox->SetToolTip("Use a custom color for dark mode instead of the default dark color.");
+	dark_mode_color_sizer->Add(dark_mode_color_enabled_chkbox, 0, wxLEFT | wxALIGN_CENTER_VERTICAL, 5);
+	
+	wxColor current_dark_color = wxColor(
+		g_settings.getInteger(Config::DARK_MODE_RED),
+		g_settings.getInteger(Config::DARK_MODE_GREEN),
+		g_settings.getInteger(Config::DARK_MODE_BLUE)
+	);
+	dark_mode_color_pick = newd wxColourPickerCtrl(graphics_page, wxID_ANY, current_dark_color);
+	dark_mode_color_pick->SetToolTip("Select custom color for dark mode. This will be used when both dark mode and custom color are enabled.");
+	dark_mode_color_sizer->Add(dark_mode_color_pick, 0, wxLEFT | wxALIGN_CENTER_VERTICAL, 5);
+	sizer->Add(dark_mode_color_sizer, 0, wxLEFT | wxTOP, 5);
+
+	// Connect events to update UI state
+	dark_mode_chkbox->Bind(wxEVT_CHECKBOX, [this](wxCommandEvent&) {
+		UpdateDarkModeUI();
+	});
+	
+	dark_mode_color_enabled_chkbox->Bind(wxEVT_CHECKBOX, [this](wxCommandEvent&) {
+		UpdateDarkModeUI();
+	});
+	
+	// Initial update of UI state
+	UpdateDarkModeUI();
 
 	sizer->AddSpacer(10);
 
-    auto * subsizer = newd wxFlexGridSizer(2, 10, 10);
+	auto* subsizer = newd wxFlexGridSizer(2, 10, 10);
 	subsizer->AddGrowableCol(1);
 
 	// Icon background color
@@ -235,9 +289,9 @@ wxNotebookPage* PreferencesWindow::CreateGraphicsPage()
 	icon_background_choice->Append("Black background");
 	icon_background_choice->Append("Gray background");
 	icon_background_choice->Append("White background");
-	if(g_settings.getInteger(Config::ICON_BACKGROUND) == 255) {
+	if (g_settings.getInteger(Config::ICON_BACKGROUND) == 255) {
 		icon_background_choice->SetSelection(2);
-	} else if(g_settings.getInteger(Config::ICON_BACKGROUND) == 88) {
+	} else if (g_settings.getInteger(Config::ICON_BACKGROUND) == 88) {
 		icon_background_choice->SetSelection(1);
 	} else {
 		icon_background_choice->SetSelection(0);
@@ -249,22 +303,12 @@ wxNotebookPage* PreferencesWindow::CreateGraphicsPage()
 
 	// Cursor colors
 	subsizer->Add(tmp = newd wxStaticText(graphics_page, wxID_ANY, "Cursor color: "), 0);
-	subsizer->Add(cursor_color_pick = newd wxColourPickerCtrl(graphics_page, wxID_ANY, wxColor(
-		g_settings.getInteger(Config::CURSOR_RED),
-		g_settings.getInteger(Config::CURSOR_GREEN),
-		g_settings.getInteger(Config::CURSOR_BLUE),
-		g_settings.getInteger(Config::CURSOR_ALPHA)
-		)), 0);
+	subsizer->Add(cursor_color_pick = newd wxColourPickerCtrl(graphics_page, wxID_ANY, wxColor(g_settings.getInteger(Config::CURSOR_RED), g_settings.getInteger(Config::CURSOR_GREEN), g_settings.getInteger(Config::CURSOR_BLUE), g_settings.getInteger(Config::CURSOR_ALPHA))), 0);
 	SetWindowToolTip(icon_background_choice, tmp, "The color of the main cursor on the map (while in drawing mode).");
 
 	// Alternate cursor color
 	subsizer->Add(tmp = newd wxStaticText(graphics_page, wxID_ANY, "Secondary cursor color: "), 0);
-	subsizer->Add(cursor_alt_color_pick = newd wxColourPickerCtrl(graphics_page, wxID_ANY, wxColor(
-		g_settings.getInteger(Config::CURSOR_ALT_RED),
-		g_settings.getInteger(Config::CURSOR_ALT_GREEN),
-		g_settings.getInteger(Config::CURSOR_ALT_BLUE),
-		g_settings.getInteger(Config::CURSOR_ALT_ALPHA)
-		)), 0);
+	subsizer->Add(cursor_alt_color_pick = newd wxColourPickerCtrl(graphics_page, wxID_ANY, wxColor(g_settings.getInteger(Config::CURSOR_ALT_RED), g_settings.getInteger(Config::CURSOR_ALT_GREEN), g_settings.getInteger(Config::CURSOR_ALT_BLUE), g_settings.getInteger(Config::CURSOR_ALT_ALPHA))), 0);
 	SetWindowToolTip(icon_background_choice, tmp, "The color of the secondary cursor on the map (for houses and flags).");
 
 	// Screenshot dir
@@ -281,13 +325,13 @@ wxNotebookPage* PreferencesWindow::CreateGraphicsPage()
 	screenshot_format_choice->Append("JPG");
 	screenshot_format_choice->Append("TGA");
 	screenshot_format_choice->Append("BMP");
-	if(g_settings.getString(Config::SCREENSHOT_FORMAT) == "png") {
+	if (g_settings.getString(Config::SCREENSHOT_FORMAT) == "png") {
 		screenshot_format_choice->SetSelection(0);
-	} else if(g_settings.getString(Config::SCREENSHOT_FORMAT) == "jpg") {
+	} else if (g_settings.getString(Config::SCREENSHOT_FORMAT) == "jpg") {
 		screenshot_format_choice->SetSelection(1);
-	} else if(g_settings.getString(Config::SCREENSHOT_FORMAT) == "tga") {
+	} else if (g_settings.getString(Config::SCREENSHOT_FORMAT) == "tga") {
 		screenshot_format_choice->SetSelection(2);
-	} else if(g_settings.getString(Config::SCREENSHOT_FORMAT) == "bmp") {
+	} else if (g_settings.getString(Config::SCREENSHOT_FORMAT) == "bmp") {
 		screenshot_format_choice->SetSelection(3);
 	} else {
 		screenshot_format_choice->SetSelection(0);
@@ -353,8 +397,7 @@ wxNotebookPage* PreferencesWindow::CreateGraphicsPage()
 	return graphics_page;
 }
 
-wxChoice* PreferencesWindow::AddPaletteStyleChoice(wxWindow* parent, wxSizer* sizer, const wxString& short_description, const wxString& description, const std::string& setting)
-{
+wxChoice* PreferencesWindow::AddPaletteStyleChoice(wxWindow* parent, wxSizer* sizer, const wxString& short_description, const wxString& description, const std::string& setting) {
 	wxStaticText* text;
 	sizer->Add(text = newd wxStaticText(parent, wxID_ANY, short_description), 0);
 
@@ -364,65 +407,77 @@ wxChoice* PreferencesWindow::AddPaletteStyleChoice(wxWindow* parent, wxSizer* si
 	choice->Append("Large Icons");
 	choice->Append("Small Icons");
 	choice->Append("Listbox with Icons");
+	
+	// Add Direct Draw option for RAW palette only
+	if (short_description.Contains("RAW")) {
+		choice->Append("Direct Draw");
+	}
 
 	text->SetToolTip(description);
 	choice->SetToolTip(description);
 
-	if(setting == "large icons") {
+	if (setting == "large icons") {
 		choice->SetSelection(0);
-	} else if(setting == "small icons") {
+	} else if (setting == "small icons") {
 		choice->SetSelection(1);
-	} else if(setting == "listbox") {
+	} else if (setting == "listbox") {
 		choice->SetSelection(2);
+	} else if (setting == "direct draw") {
+		choice->SetSelection(3);
 	}
 
 	return choice;
 }
 
-void PreferencesWindow::SetPaletteStyleChoice(wxChoice* ctrl, int key)
-{
-	if(ctrl->GetSelection() == 0) {
+void PreferencesWindow::SetPaletteStyleChoice(wxChoice* ctrl, int key) {
+	if (ctrl->GetSelection() == 0) {
 		g_settings.setString(key, "large icons");
-	} else if(ctrl->GetSelection() == 1) {
+	} else if (ctrl->GetSelection() == 1) {
 		g_settings.setString(key, "small icons");
-	} else if(ctrl->GetSelection() == 2) {
+	} else if (ctrl->GetSelection() == 2) {
 		g_settings.setString(key, "listbox");
+	} else if (ctrl->GetSelection() == 3 && ctrl->GetString(3) == "Direct Draw") {
+		g_settings.setString(key, "direct draw");
 	}
 }
 
-wxNotebookPage* PreferencesWindow::CreateUIPage()
-{
+wxNotebookPage* PreferencesWindow::CreateUIPage() {
 	wxNotebookPage* ui_page = newd wxPanel(book, wxID_ANY);
 
 	wxSizer* sizer = newd wxBoxSizer(wxVERTICAL);
 
-    auto * subsizer = newd wxFlexGridSizer(2, 10, 10);
+	auto* subsizer = newd wxFlexGridSizer(2, 10, 10);
 	subsizer->AddGrowableCol(1);
 	terrain_palette_style_choice = AddPaletteStyleChoice(
 		ui_page, subsizer,
 		"Terrain Palette Style:",
 		"Configures the look of the terrain palette.",
-		g_settings.getString(Config::PALETTE_TERRAIN_STYLE));
+		g_settings.getString(Config::PALETTE_TERRAIN_STYLE)
+	);
 	collection_palette_style_choice = AddPaletteStyleChoice(
 		ui_page, subsizer,
 		"Collections Palette Style:",
 		"Configures the look of the collections palette.",
-		g_settings.getString(Config::PALETTE_COLLECTION_STYLE));
+		g_settings.getString(Config::PALETTE_COLLECTION_STYLE)
+	);
 	doodad_palette_style_choice = AddPaletteStyleChoice(
 		ui_page, subsizer,
 		"Doodad Palette Style:",
 		"Configures the look of the doodad palette.",
-		g_settings.getString(Config::PALETTE_DOODAD_STYLE));
+		g_settings.getString(Config::PALETTE_DOODAD_STYLE)
+	);
 	item_palette_style_choice = AddPaletteStyleChoice(
 		ui_page, subsizer,
 		"Item Palette Style:",
 		"Configures the look of the item palette.",
-		g_settings.getString(Config::PALETTE_ITEM_STYLE));
+		g_settings.getString(Config::PALETTE_ITEM_STYLE)
+	);
 	raw_palette_style_choice = AddPaletteStyleChoice(
 		ui_page, subsizer,
 		"RAW Palette Style:",
 		"Configures the look of the raw palette.",
-		g_settings.getString(Config::PALETTE_RAW_STYLE));
+		g_settings.getString(Config::PALETTE_RAW_STYLE)
+	);
 
 	sizer->Add(subsizer, 0, wxALL, 6);
 
@@ -481,14 +536,14 @@ wxNotebookPage* PreferencesWindow::CreateUIPage()
 
 	sizer->Add(newd wxStaticText(ui_page, wxID_ANY, "Scroll speed: "), 0, wxLEFT | wxTOP, 5);
 
-    auto true_scrollspeed = int(std::abs(g_settings.getFloat(Config::SCROLL_SPEED)) * 10);
+	auto true_scrollspeed = int(std::abs(g_settings.getFloat(Config::SCROLL_SPEED)) * 10);
 	scroll_speed_slider = newd wxSlider(ui_page, wxID_ANY, true_scrollspeed, 1, max(true_scrollspeed, 100));
 	scroll_speed_slider->SetToolTip("This controls how fast the map will scroll when you hold down the center mouse button and move it around.");
 	sizer->Add(scroll_speed_slider, 0, wxEXPAND, 5);
 
 	sizer->Add(newd wxStaticText(ui_page, wxID_ANY, "Zoom speed: "), 0, wxLEFT | wxTOP, 5);
 
-    auto true_zoomspeed = int(g_settings.getFloat(Config::ZOOM_SPEED) * 10);
+	auto true_zoomspeed = int(g_settings.getFloat(Config::ZOOM_SPEED) * 10);
 	zoom_speed_slider = newd wxSlider(ui_page, wxID_ANY, true_zoomspeed, 1, max(true_zoomspeed, 100));
 	zoom_speed_slider->SetToolTip("This controls how fast you will zoom when you scroll the center mouse button.");
 	sizer->Add(zoom_speed_slider, 0, wxEXPAND, 5);
@@ -498,8 +553,7 @@ wxNotebookPage* PreferencesWindow::CreateUIPage()
 	return ui_page;
 }
 
-wxNotebookPage* PreferencesWindow::CreateClientPage()
-{
+wxNotebookPage* PreferencesWindow::CreateClientPage() {
 	wxNotebookPage* client_page = newd wxPanel(book, wxID_ANY);
 
 	// Refresh g_settings
@@ -508,7 +562,7 @@ wxNotebookPage* PreferencesWindow::CreateClientPage()
 
 	wxSizer* topsizer = newd wxBoxSizer(wxVERTICAL);
 
-    auto * options_sizer = newd wxFlexGridSizer(2, 10, 10);
+	auto* options_sizer = newd wxFlexGridSizer(2, 10, 10);
 	options_sizer->AddGrowableCol(1);
 
 	// Default client version choice control
@@ -528,19 +582,20 @@ wxNotebookPage* PreferencesWindow::CreateClientPage()
 	topsizer->Add(options_sizer, wxSizerFlags(0).Expand());
 	topsizer->AddSpacer(10);
 
-	wxScrolledWindow *client_list_window = newd wxScrolledWindow(client_page, wxID_ANY, wxDefaultPosition, wxDefaultSize);
+	wxScrolledWindow* client_list_window = newd wxScrolledWindow(client_page, wxID_ANY, wxDefaultPosition, wxDefaultSize);
 	client_list_window->SetMinSize(FROM_DIP(this, wxSize(450, 450)));
-    auto * client_list_sizer = newd wxFlexGridSizer(2, 10, 10);
+	auto* client_list_sizer = newd wxFlexGridSizer(2, 10, 10);
 	client_list_sizer->AddGrowableCol(1);
 
-    int version_counter = 0;
+	int version_counter = 0;
 	for (auto version : versions) {
-        if(!version->isVisible())
+		if (!version->isVisible()) {
 			continue;
+		}
 
 		default_version_choice->Append(wxstr(version->getName()));
 
-		wxStaticText *tmp_text = newd wxStaticText(client_list_window, wxID_ANY, wxString(version->getName()));
+		wxStaticText* tmp_text = newd wxStaticText(client_list_window, wxID_ANY, wxString(version->getName()));
 		client_list_sizer->Add(tmp_text, wxSizerFlags(0).Expand());
 
 		wxDirPickerCtrl* dir_picker = newd wxDirPickerCtrl(client_list_window, wxID_ANY, version->getClientPath().GetFullPath());
@@ -552,8 +607,9 @@ wxNotebookPage* PreferencesWindow::CreateClientPage()
 		tmp_text->SetToolTip(tooltip);
 		dir_picker->SetToolTip(tooltip);
 
-		if(version->getID() == g_settings.getInteger(Config::DEFAULT_CLIENT_VERSION))
+		if (version->getID() == g_settings.getInteger(Config::DEFAULT_CLIENT_VERSION)) {
 			default_version_choice->SetSelection(version_counter);
+		}
 
 		version_counter++;
 	}
@@ -568,36 +624,140 @@ wxNotebookPage* PreferencesWindow::CreateClientPage()
 	return client_page;
 }
 
+wxNotebookPage* PreferencesWindow::CreateAutomagicPage() {
+	wxNotebookPage* automagic_page = newd wxPanel(book, wxID_ANY);
+	wxSizer* sizer = newd wxBoxSizer(wxVERTICAL);
+
+	// Create main checkbox for enabling/disabling automagic
+	automagic_enabled_chkbox = newd wxCheckBox(automagic_page, wxID_ANY, "Enable Automagic");
+	automagic_enabled_chkbox->SetValue(g_settings.getBoolean(Config::USE_AUTOMAGIC));
+	automagic_enabled_chkbox->SetToolTip("Automatically apply borders and wall connections when editing (Toggle with 'A' key)");
+	sizer->Add(automagic_enabled_chkbox, 0, wxLEFT | wxTOP, 5);
+
+	// Create settings group for detailed options
+	wxStaticBoxSizer* settings_sizer = newd wxStaticBoxSizer(wxVERTICAL, automagic_page, "Border Settings");
+	
+	same_ground_type_chkbox = newd wxCheckBox(automagic_page, wxID_ANY, "Same Ground Type Border");
+	same_ground_type_chkbox->SetValue(g_settings.getBoolean(Config::SAME_GROUND_TYPE_BORDER));
+	same_ground_type_chkbox->SetToolTip("Preserve existing borders and only apply borders for the current ground type");
+	settings_sizer->Add(same_ground_type_chkbox, 0, wxALL, 5);
+	
+	walls_repel_borders_chkbox = newd wxCheckBox(automagic_page, wxID_ANY, "Walls Repel Borders");
+	walls_repel_borders_chkbox->SetValue(g_settings.getBoolean(Config::WALLS_REPEL_BORDERS));
+	walls_repel_borders_chkbox->SetToolTip("When enabled, walls will block border generation, preventing borders from crossing through walls");
+	settings_sizer->Add(walls_repel_borders_chkbox, 0, wxALL, 5);
+	
+	layer_carpets_chkbox = newd wxCheckBox(automagic_page, wxID_ANY, "Layer Carpets");
+	layer_carpets_chkbox->SetValue(g_settings.getBoolean(Config::LAYER_CARPETS));
+	layer_carpets_chkbox->SetToolTip("When enabled, carpet brushes will be placed on top of existing carpets instead of replacing them");
+	settings_sizer->Add(layer_carpets_chkbox, 0, wxALL, 5);
+	
+	borderize_delete_chkbox = newd wxCheckBox(automagic_page, wxID_ANY, "Borderize on Delete");
+	borderize_delete_chkbox->SetValue(g_settings.getBoolean(Config::BORDERIZE_DELETE));
+	borderize_delete_chkbox->SetToolTip("When enabled, deleting items will trigger automatic bordering of surrounding tiles");
+	settings_sizer->Add(borderize_delete_chkbox, 0, wxALL, 5);
+	
+	// Paste/Drag borderize settings
+	borderize_paste_chkbox = newd wxCheckBox(automagic_page, wxID_ANY, "Borderize on Paste");
+	borderize_paste_chkbox->SetValue(g_settings.getBoolean(Config::BORDERIZE_PASTE));
+	borderize_paste_chkbox->SetToolTip("When enabled, pasting will trigger automatic bordering");
+	settings_sizer->Add(borderize_paste_chkbox, 0, wxALL, 5);
+	
+	wxBoxSizer* paste_threshold_sizer = newd wxBoxSizer(wxHORIZONTAL);
+	paste_threshold_sizer->Add(newd wxStaticText(automagic_page, wxID_ANY, "Paste Borderize Threshold:  "), 0, wxLEFT | wxTOP, 5);
+	borderize_paste_threshold_spin = newd wxSpinCtrl(automagic_page, wxID_ANY, i2ws(g_settings.getInteger(Config::BORDERIZE_PASTE_THRESHOLD)), wxDefaultPosition, wxDefaultSize);
+	paste_threshold_sizer->Add(borderize_paste_threshold_spin, 0, wxLEFT | wxTOP, 5);
+	settings_sizer->Add(paste_threshold_sizer, 0, wxALL, 0);
+	
+	borderize_drag_chkbox = newd wxCheckBox(automagic_page, wxID_ANY, "Borderize on Drag");
+	borderize_drag_chkbox->SetValue(g_settings.getBoolean(Config::BORDERIZE_DRAG));
+	borderize_drag_chkbox->SetToolTip("When enabled, dragging will trigger automatic bordering");
+	settings_sizer->Add(borderize_drag_chkbox, 0, wxALL, 5);
+	
+	wxBoxSizer* drag_threshold_sizer = newd wxBoxSizer(wxHORIZONTAL);
+	drag_threshold_sizer->Add(newd wxStaticText(automagic_page, wxID_ANY, "Drag Borderize Threshold:  "), 0, wxLEFT | wxTOP, 5);
+	borderize_drag_threshold_spin = newd wxSpinCtrl(automagic_page, wxID_ANY, i2ws(g_settings.getInteger(Config::BORDERIZE_DRAG_THRESHOLD)), wxDefaultPosition, wxDefaultSize);
+	drag_threshold_sizer->Add(borderize_drag_threshold_spin, 0, wxLEFT | wxTOP, 5);
+	settings_sizer->Add(drag_threshold_sizer, 0, wxALL, 0);
+	
+	sizer->Add(settings_sizer, 0, wxEXPAND | wxALL, 5);
+	
+	// Add description text
+	wxStaticText* description = newd wxStaticText(automagic_page, wxID_ANY, 
+		"The Automagic system automatically applies borders and wall connections.\n\n"
+		"When 'Same Ground Type Border' is enabled, the editor will:\n"
+		"- Preserve existing borders on tiles\n"
+		"- Only apply borders for the current ground type\n"
+		"- Respect Z-axis positioning of existing borders\n\n"
+		"When 'Walls Repel Borders' is enabled, the editor will:\n"
+		"- Prevent borders from crossing through walls\n"
+		"- Treat walls as barriers for border generation\n"
+		"The threshold values control the maximum selection size for\n"
+		"auto-borderizing during paste and drag operations.");
+	sizer->Add(description, 0, wxALL, 5);
+	
+	// Make dependent controls dynamically enable/disable based on master checkbox
+	automagic_enabled_chkbox->Bind(wxEVT_CHECKBOX, [this](wxCommandEvent&) {
+		bool enabled = automagic_enabled_chkbox->GetValue();
+		same_ground_type_chkbox->Enable(enabled);
+		walls_repel_borders_chkbox->Enable(enabled);
+		layer_carpets_chkbox->Enable(enabled);
+		borderize_delete_chkbox->Enable(enabled);
+		borderize_paste_chkbox->Enable(enabled);
+		borderize_drag_chkbox->Enable(enabled);
+		borderize_paste_threshold_spin->Enable(enabled && borderize_paste_chkbox->GetValue());
+		borderize_drag_threshold_spin->Enable(enabled && borderize_drag_chkbox->GetValue());
+	});
+	
+	borderize_paste_chkbox->Bind(wxEVT_CHECKBOX, [this](wxCommandEvent&) {
+		borderize_paste_threshold_spin->Enable(automagic_enabled_chkbox->GetValue() && borderize_paste_chkbox->GetValue());
+	});
+	
+	borderize_drag_chkbox->Bind(wxEVT_CHECKBOX, [this](wxCommandEvent&) {
+		borderize_drag_threshold_spin->Enable(automagic_enabled_chkbox->GetValue() && borderize_drag_chkbox->GetValue());
+	});
+	
+	// Initial state setup
+	bool enabled = automagic_enabled_chkbox->GetValue();
+	same_ground_type_chkbox->Enable(enabled);
+	walls_repel_borders_chkbox->Enable(enabled);
+	layer_carpets_chkbox->Enable(enabled);
+	borderize_delete_chkbox->Enable(enabled);
+	borderize_paste_chkbox->Enable(enabled);
+	borderize_drag_chkbox->Enable(enabled);
+	borderize_paste_threshold_spin->Enable(enabled && borderize_paste_chkbox->GetValue());
+	borderize_drag_threshold_spin->Enable(enabled && borderize_drag_chkbox->GetValue());
+	
+	automagic_page->SetSizerAndFit(sizer);
+	return automagic_page;
+}
+
 // Event handlers!
 
-void PreferencesWindow::OnClickOK(wxCommandEvent& WXUNUSED(event))
-{
+void PreferencesWindow::OnClickOK(wxCommandEvent& WXUNUSED(event)) {
 	Apply();
 	EndModal(0);
 }
 
-void PreferencesWindow::OnClickCancel(wxCommandEvent& WXUNUSED(event))
-{
+void PreferencesWindow::OnClickCancel(wxCommandEvent& WXUNUSED(event)) {
 	EndModal(0);
 }
 
-void PreferencesWindow::OnClickApply(wxCommandEvent& WXUNUSED(event))
-{
+void PreferencesWindow::OnClickApply(wxCommandEvent& WXUNUSED(event)) {
 	Apply();
 }
 
-void PreferencesWindow::OnCollapsiblePane(wxCollapsiblePaneEvent& event)
-{
-    auto * win = (wxWindow*)event.GetEventObject();
+void PreferencesWindow::OnCollapsiblePane(wxCollapsiblePaneEvent& event) {
+	auto* win = (wxWindow*)event.GetEventObject();
 	win->GetParent()->Fit();
 }
 
 // Stuff
 
-void PreferencesWindow::Apply()
-{
+void PreferencesWindow::Apply() {
 	bool must_restart = false;
 	bool palette_update_needed = false;
+	bool dark_mode_changed = false;
 
 	// General
 	g_settings.setInteger(Config::WELCOME_DIALOG, show_welcome_dialog_chkbox->GetValue());
@@ -627,54 +787,80 @@ void PreferencesWindow::Apply()
 	g_settings.setInteger(Config::MERGE_MOVE, merge_move_chkbox->GetValue());
 	g_settings.setInteger(Config::MERGE_PASTE, merge_paste_chkbox->GetValue());
 
+
 	// Graphics
 	g_settings.setInteger(Config::USE_GUI_SELECTION_SHADOW, icon_selection_shadow_chkbox->GetValue());
-	if(g_settings.getBoolean(Config::USE_MEMCACHED_SPRITES) != use_memcached_chkbox->GetValue()) {
+	if (g_settings.getBoolean(Config::USE_MEMCACHED_SPRITES) != use_memcached_chkbox->GetValue()) {
 		must_restart = true;
 	}
 	g_settings.setInteger(Config::USE_MEMCACHED_SPRITES_TO_SAVE, use_memcached_chkbox->GetValue());
-	if(icon_background_choice->GetSelection() == 0) {
-		if(g_settings.getInteger(Config::ICON_BACKGROUND) != 0) {
+	if (icon_background_choice->GetSelection() == 0) {
+		if (g_settings.getInteger(Config::ICON_BACKGROUND) != 0) {
 			g_gui.gfx.cleanSoftwareSprites();
 		}
 		g_settings.setInteger(Config::ICON_BACKGROUND, 0);
-	} else if(icon_background_choice->GetSelection() == 1) {
-		if(g_settings.getInteger(Config::ICON_BACKGROUND) != 88) {
+	} else if (icon_background_choice->GetSelection() == 1) {
+		if (g_settings.getInteger(Config::ICON_BACKGROUND) != 88) {
 			g_gui.gfx.cleanSoftwareSprites();
 		}
 		g_settings.setInteger(Config::ICON_BACKGROUND, 88);
-	} else if(icon_background_choice->GetSelection() == 2) {
-		if(g_settings.getInteger(Config::ICON_BACKGROUND) != 255) {
+	} else if (icon_background_choice->GetSelection() == 2) {
+		if (g_settings.getInteger(Config::ICON_BACKGROUND) != 255) {
 			g_gui.gfx.cleanSoftwareSprites();
 		}
 		g_settings.setInteger(Config::ICON_BACKGROUND, 255);
+	}
+
+	// Dark mode setting
+	bool new_dark_mode_value = dark_mode_chkbox->GetValue();
+	if (g_settings.getBoolean(Config::DARK_MODE) != new_dark_mode_value) {
+		g_settings.setInteger(Config::DARK_MODE, new_dark_mode_value ? 1 : 0);
+		dark_mode_changed = true;
+	}
+
+	// Dark mode custom color settings
+	bool new_custom_color_value = dark_mode_color_enabled_chkbox->GetValue();
+	if (g_settings.getBoolean(Config::DARK_MODE_CUSTOM_COLOR) != new_custom_color_value) {
+		g_settings.setInteger(Config::DARK_MODE_CUSTOM_COLOR, new_custom_color_value ? 1 : 0);
+		dark_mode_changed = true;
+	}
+
+	wxColor dark_mode_clr = dark_mode_color_pick->GetColour();
+	if (g_settings.getInteger(Config::DARK_MODE_RED) != dark_mode_clr.Red() ||
+		g_settings.getInteger(Config::DARK_MODE_GREEN) != dark_mode_clr.Green() ||
+		g_settings.getInteger(Config::DARK_MODE_BLUE) != dark_mode_clr.Blue()) {
+		
+		g_settings.setInteger(Config::DARK_MODE_RED, dark_mode_clr.Red());
+		g_settings.setInteger(Config::DARK_MODE_GREEN, dark_mode_clr.Green());
+		g_settings.setInteger(Config::DARK_MODE_BLUE, dark_mode_clr.Blue());
+		dark_mode_changed = true;
 	}
 
 	// Screenshots
 	g_settings.setString(Config::SCREENSHOT_DIRECTORY, nstr(screenshot_directory_picker->GetPath()));
 
 	std::string new_format = nstr(screenshot_format_choice->GetStringSelection());
-	if(new_format == "PNG") {
+	if (new_format == "PNG") {
 		g_settings.setString(Config::SCREENSHOT_FORMAT, "png");
-	} else if(new_format == "TGA") {
+	} else if (new_format == "TGA") {
 		g_settings.setString(Config::SCREENSHOT_FORMAT, "tga");
-	} else if(new_format == "JPG") {
+	} else if (new_format == "JPG") {
 		g_settings.setString(Config::SCREENSHOT_FORMAT, "jpg");
-	} else if(new_format == "BMP") {
+	} else if (new_format == "BMP") {
 		g_settings.setString(Config::SCREENSHOT_FORMAT, "bmp");
 	}
 
 	wxColor clr = cursor_color_pick->GetColour();
-		g_settings.setInteger(Config::CURSOR_RED, clr.Red());
-		g_settings.setInteger(Config::CURSOR_GREEN, clr.Green());
-		g_settings.setInteger(Config::CURSOR_BLUE, clr.Blue());
-		//g_settings.setInteger(Config::CURSOR_ALPHA, clr.Alpha());
+	g_settings.setInteger(Config::CURSOR_RED, clr.Red());
+	g_settings.setInteger(Config::CURSOR_GREEN, clr.Green());
+	g_settings.setInteger(Config::CURSOR_BLUE, clr.Blue());
+	// g_settings.setInteger(Config::CURSOR_ALPHA, clr.Alpha());
 
 	clr = cursor_alt_color_pick->GetColour();
-		g_settings.setInteger(Config::CURSOR_ALT_RED, clr.Red());
-		g_settings.setInteger(Config::CURSOR_ALT_GREEN, clr.Green());
-		g_settings.setInteger(Config::CURSOR_ALT_BLUE, clr.Blue());
-		//g_settings.setInteger(Config::CURSOR_ALT_ALPHA, clr.Alpha());
+	g_settings.setInteger(Config::CURSOR_ALT_RED, clr.Red());
+	g_settings.setInteger(Config::CURSOR_ALT_GREEN, clr.Green());
+	g_settings.setInteger(Config::CURSOR_ALT_BLUE, clr.Blue());
+	// g_settings.setInteger(Config::CURSOR_ALT_ALPHA, clr.Alpha());
 
 	g_settings.setInteger(Config::HIDE_ITEMS_WHEN_ZOOMED, hide_items_when_zoomed_chkbox->GetValue());
 	/*
@@ -701,28 +887,29 @@ void PreferencesWindow::Apply()
 	g_settings.setInteger(Config::USE_LARGE_CONTAINER_ICONS, large_container_icons_chkbox->GetValue());
 	g_settings.setInteger(Config::USE_LARGE_CHOOSE_ITEM_ICONS, large_pick_item_icons_chkbox->GetValue());
 
-
 	g_settings.setInteger(Config::SWITCH_MOUSEBUTTONS, switch_mousebtn_chkbox->GetValue());
 	g_settings.setInteger(Config::DOUBLECLICK_PROPERTIES, doubleclick_properties_chkbox->GetValue());
 
 	float scroll_mul = 1.0;
-	if(inversed_scroll_chkbox->GetValue()) {
+	if (inversed_scroll_chkbox->GetValue()) {
 		scroll_mul = -1.0;
 	}
-	g_settings.setFloat(Config::SCROLL_SPEED, scroll_mul * scroll_speed_slider->GetValue()/10.f);
-	g_settings.setFloat(Config::ZOOM_SPEED, zoom_speed_slider->GetValue()/10.f);
+	g_settings.setFloat(Config::SCROLL_SPEED, scroll_mul * scroll_speed_slider->GetValue() / 10.f);
+	g_settings.setFloat(Config::ZOOM_SPEED, zoom_speed_slider->GetValue() / 10.f);
 
 	// Client
 	ClientVersionList versions = ClientVersion::getAllVisible();
 	int version_counter = 0;
 	for (auto version : versions) {
-        wxString dir = version_dir_pickers[version_counter]->GetPath();
-		if(dir.Length() > 0 && dir.Last() != '/' && dir.Last() != '\\')
+		wxString dir = version_dir_pickers[version_counter]->GetPath();
+		if (dir.Length() > 0 && dir.Last() != '/' && dir.Last() != '\\') {
 			dir.Append("/");
+		}
 		version->setClientPath(FileName(dir));
 
-		if(version->getName() == default_version_choice->GetStringSelection())
+		if (version->getName() == default_version_choice->GetStringSelection()) {
 			g_settings.setInteger(Config::DEFAULT_CLIENT_VERSION, version->getID());
+		}
 
 		version_counter++;
 	}
@@ -734,8 +921,14 @@ void PreferencesWindow::Apply()
 
 	g_settings.save();
 
-	if(must_restart) {
+	if (must_restart) {
 		g_gui.PopupDialog(this, "Notice", "You must restart the editor for the changes to take effect.", wxOK);
+	}
+
+	if (dark_mode_changed) {
+		g_darkMode.ToggleDarkMode();
+		g_darkMode.ApplyTheme(g_gui.root);
+		g_gui.PopupDialog(this, "Dark Mode Changed", "The application theme has been changed. Some elements may require a restart to display correctly.", wxOK);
 	}
 
 	if (!palette_update_needed) {
@@ -749,4 +942,23 @@ void PreferencesWindow::Apply()
 		g_gui.PopupDialog("Error", error, wxOK);
 		g_gui.ListDialog("Warnings", warnings);
 	}
+
+	g_settings.setInteger(Config::AUTO_SELECT_RAW_ON_RIGHTCLICK, auto_select_raw_chkbox->GetValue());
+	g_settings.setInteger(Config::AUTO_SAVE_ENABLED, autosave_chkbox->GetValue());
+	g_settings.setInteger(Config::AUTO_SAVE_INTERVAL, autosave_interval_spin->GetValue());
+	g_settings.setInteger(Config::USE_AUTOMAGIC, automagic_enabled_chkbox->GetValue());
+	g_settings.setInteger(Config::SAME_GROUND_TYPE_BORDER, same_ground_type_chkbox->GetValue());
+	g_settings.setInteger(Config::WALLS_REPEL_BORDERS, walls_repel_borders_chkbox->GetValue());
+	g_settings.setInteger(Config::LAYER_CARPETS, layer_carpets_chkbox->GetValue());
+	g_settings.setInteger(Config::BORDERIZE_DELETE, borderize_delete_chkbox->GetValue());
+	g_settings.setInteger(Config::BORDERIZE_PASTE, borderize_paste_chkbox->GetValue());
+	g_settings.setInteger(Config::BORDERIZE_PASTE_THRESHOLD, borderize_paste_threshold_spin->GetValue());
+	g_settings.setInteger(Config::BORDERIZE_DRAG, borderize_drag_chkbox->GetValue());
+	g_settings.setInteger(Config::BORDERIZE_DRAG_THRESHOLD, borderize_drag_threshold_spin->GetValue());
+}
+
+void PreferencesWindow::UpdateDarkModeUI() {
+	bool enabled = dark_mode_chkbox->GetValue();
+	dark_mode_color_enabled_chkbox->Enable(enabled);
+	dark_mode_color_pick->Enable(enabled && dark_mode_color_enabled_chkbox->GetValue());
 }

@@ -26,69 +26,76 @@
 class DirtyList;
 class MapTab;
 
-class LiveClient : public LiveSocket
-{
-	public:
-		LiveClient();
-		~LiveClient();
+class LiveClient : public LiveSocket {
+public:
+	LiveClient();
+	~LiveClient();
 
-		//
-		bool connect(const std::string& address, uint16_t port);
-		void tryConnect(asio::ip::tcp::resolver::iterator endpoint);
+	//
+	bool connect(const std::string& address, uint16_t port);
+	void tryConnect(boost::asio::ip::tcp::resolver::iterator endpoint);
 
-		void close();
-		bool handleError(const std::error_code& error);
+	void close();
+	bool handleError(const boost::system::error_code& error);
 
-		//
-		std::string getHostName() const;
+	//
+	std::string getHostName() const;
 
-		//
-		void receiveHeader();
-		void receive(uint32_t packetSize);
-		void send(NetworkMessage& message);
+	//
+	void receiveHeader() override;
+	void receive(uint32_t packetSize) override;
+	void send(NetworkMessage& message) override;
 
-		//
-		void updateCursor(const Position& position);
+	//
+	void updateCursor(const Position& position) override;
 
-		LiveLogTab* createLogWindow(wxWindow* parent);
-		MapTab* createEditorWindow();
+	LiveLogTab* createLogWindow(wxWindow* parent);
 
-		// send packets
-		void sendHello();
-		void sendNodeRequests();
-		void sendChanges(DirtyList& dirtyList);
-		void sendChat(const wxString& chatMessage);
-		void sendReady();
+	
+	MapTab* createEditorWindow();
 
-		// Flags a node as queried and stores it, need to call SendNodeRequest to send it to server
-		void queryNode(int32_t ndx, int32_t ndy, bool underground);
+	// Override socket type check
+	bool IsClient() const override { return true; }
 
-	protected:
-		void parsePacket(NetworkMessage message);
 
-		// parse packets
-		void parseHello(NetworkMessage& message);
-		void parseKick(NetworkMessage& message);
-		void parseClientAccepted(NetworkMessage& message);
-		void parseChangeClientVersion(NetworkMessage& message);
-		void parseServerTalk(NetworkMessage& message);
-		void parseNode(NetworkMessage& message);
-		void parseCursorUpdate(NetworkMessage& message);
-		void parseStartOperation(NetworkMessage& message);
-		void parseUpdateOperation(NetworkMessage& message);
+	// send packets
+	void sendHello();
+	void sendNodeRequests();
+	void sendChanges(DirtyList& dirtyList);
+	void sendChat(const wxString& chatMessage) override;
+	void sendReady();
+	void sendColorUpdate(uint32_t targetClientId, const wxColor& color);
 
-		//
-		NetworkMessage readMessage;
+	// Flags a node as queried and stores it, need to call SendNodeRequest to send it to server
+	void queryNode(int32_t ndx, int32_t ndy, bool underground);
 
-		std::set<uint32_t> queryNodeList;
-		wxString currentOperation;
+protected:
+	void parsePacket(NetworkMessage message);
 
-		std::shared_ptr<asio::ip::tcp::resolver> resolver;
-		std::shared_ptr<asio::ip::tcp::socket> socket;
+	// parse packets
+	void parseHello(NetworkMessage& message);
+	void parseKick(NetworkMessage& message);
+	void parseClientAccepted(NetworkMessage& message);
+	void parseChangeClientVersion(NetworkMessage& message);
+	void parseServerTalk(NetworkMessage& message);
+	void parseNode(NetworkMessage& message);
+	void parseCursorUpdate(NetworkMessage& message);
+	void parseStartOperation(NetworkMessage& message);
+	void parseUpdateOperation(NetworkMessage& message);
+	void parseColorUpdate(NetworkMessage& message);
 
-		Editor* editor;
+	//
+	NetworkMessage readMessage;
 
-		bool stopped;
+	std::set<uint32_t> queryNodeList;
+	wxString currentOperation;
+
+	std::shared_ptr<boost::asio::ip::tcp::resolver> resolver;
+	std::shared_ptr<boost::asio::ip::tcp::socket> socket;
+
+	Editor* editor;
+
+	bool stopped;
 };
 
 #endif

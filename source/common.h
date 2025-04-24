@@ -72,7 +72,7 @@ std::wstring string2wstring(const std::string& utf8string);
 std::string wstring2string(const std::wstring& widestring);
 
 // Gets position values from ClipBoard
-bool posFromClipboard(Position& position, const int mapWidth = MAP_MAX_WIDTH, const int mapHeight = MAP_MAX_HEIGHT);
+bool posFromClipboard(Position& position, int mapWidth, int mapHeight, const std::string& input = "");
 
 // Returns 'yes' if the defined value is true or 'no' if it is false.
 wxString b2yn(bool v);
@@ -82,32 +82,40 @@ wxColor colorFromEightBit(int color);
 // Standard math functions
 template <class T>
 inline T abs(T t) {
-	return (t < 0? -t : t);
+	return (t < 0 ? -t : t);
 }
 
 template <class T, class U>
 inline T min(T t, U u) {
-	return (t < u? t : u);
+	return (t < u ? t : u);
 }
 
 template <class T, class U>
 T max(T t, U u) {
-	return (t > u? t : u);
+	return (t > u ? t : u);
 }
 
 template <class T, class U, class V>
 inline T min(T t, U u, V v) {
 	int min = t;
-	if ( u < min ) min = u;
-	if ( v < min ) min = v;
+	if (u < min) {
+		min = u;
+	}
+	if (v < min) {
+		min = v;
+	}
 	return min;
 }
 
 template <class T, class U, class V>
 inline T max(T t, U u, V v) {
 	int max = t;
-	if ( u > max ) max = u;
-	if ( v > max ) max = v;
+	if (u > max) {
+		max = u;
+	}
+	if (v > max) {
+		max = v;
+	}
 	return max;
 }
 

@@ -24,40 +24,84 @@
 #include "creature_brush.h"
 #include "spawn_brush.h"
 #include "materials.h"
+#include <wx/dir.h>
+#include <wx/filefn.h>
+#include <wx/textdlg.h>
+
+// Define the new event ID for the Load NPCs button
+#define PALETTE_LOAD_NPCS_BUTTON 1952
+#define PALETTE_LOAD_MONSTERS_BUTTON 1953
+#define PALETTE_PURGE_CREATURES_BUTTON 1954
+#define PALETTE_SEARCH_BUTTON 1955
+#define PALETTE_SEARCH_FIELD 1956
 
 // ============================================================================
 // Creature palette
 
 BEGIN_EVENT_TABLE(CreaturePalettePanel, PalettePanel)
-	EVT_CHOICE(PALETTE_CREATURE_TILESET_CHOICE, CreaturePalettePanel::OnTilesetChange)
+EVT_CHOICE(PALETTE_CREATURE_TILESET_CHOICE, CreaturePalettePanel::OnTilesetChange)
 
-	EVT_LISTBOX(PALETTE_CREATURE_LISTBOX, CreaturePalettePanel::OnListBoxChange)
+EVT_LISTBOX(PALETTE_CREATURE_LISTBOX, CreaturePalettePanel::OnListBoxChange)
 
-	EVT_TOGGLEBUTTON(PALETTE_CREATURE_BRUSH_BUTTON, CreaturePalettePanel::OnClickCreatureBrushButton)
-	EVT_TOGGLEBUTTON(PALETTE_SPAWN_BRUSH_BUTTON, CreaturePalettePanel::OnClickSpawnBrushButton)
+EVT_TOGGLEBUTTON(PALETTE_CREATURE_BRUSH_BUTTON, CreaturePalettePanel::OnClickCreatureBrushButton)
+EVT_TOGGLEBUTTON(PALETTE_SPAWN_BRUSH_BUTTON, CreaturePalettePanel::OnClickSpawnBrushButton)
+EVT_BUTTON(PALETTE_LOAD_NPCS_BUTTON, CreaturePalettePanel::OnClickLoadNPCsButton)
+EVT_BUTTON(PALETTE_LOAD_MONSTERS_BUTTON, CreaturePalettePanel::OnClickLoadMonstersButton)
+EVT_BUTTON(PALETTE_PURGE_CREATURES_BUTTON, CreaturePalettePanel::OnClickPurgeCreaturesButton)
+EVT_BUTTON(PALETTE_SEARCH_BUTTON, CreaturePalettePanel::OnClickSearchButton)
+EVT_TEXT(PALETTE_SEARCH_FIELD, CreaturePalettePanel::OnSearchFieldText)
 
-	EVT_SPINCTRL(PALETTE_CREATURE_SPAWN_TIME, CreaturePalettePanel::OnChangeSpawnTime)
-	EVT_SPINCTRL(PALETTE_CREATURE_SPAWN_SIZE, CreaturePalettePanel::OnChangeSpawnSize)
+EVT_SPINCTRL(PALETTE_CREATURE_SPAWN_TIME, CreaturePalettePanel::OnChangeSpawnTime)
+EVT_SPINCTRL(PALETTE_CREATURE_SPAWN_SIZE, CreaturePalettePanel::OnChangeSpawnSize)
 END_EVENT_TABLE()
 
 CreaturePalettePanel::CreaturePalettePanel(wxWindow* parent, wxWindowID id) :
 	PalettePanel(parent, id),
-	handling_event(false)
-{
+	handling_event(false) {
 	wxSizer* topsizer = newd wxBoxSizer(wxVERTICAL);
 
 	wxSizer* sidesizer = newd wxStaticBoxSizer(wxVERTICAL, this, "Creatures");
 	tileset_choice = newd wxChoice(this, PALETTE_CREATURE_TILESET_CHOICE, wxDefaultPosition, wxDefaultSize, (int)0, (const wxString*)nullptr);
 	sidesizer->Add(tileset_choice, 0, wxEXPAND);
 
+	// Add search field and button
+	wxSizer* searchSizer = newd wxBoxSizer(wxHORIZONTAL);
+	searchSizer->Add(newd wxStaticText(this, wxID_ANY, "Search:"), 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 5);
+	search_field = newd wxTextCtrl(this, PALETTE_SEARCH_FIELD, wxEmptyString, wxDefaultPosition, wxDefaultSize, wxTE_PROCESS_ENTER);
+	searchSizer->Add(search_field, 1, wxEXPAND);
+	search_button = newd wxButton(this, PALETTE_SEARCH_BUTTON, "Go", wxDefaultPosition, wxDefaultSize, wxBU_EXACTFIT);
+	searchSizer->Add(search_button, 0, wxLEFT, 5);
+	sidesizer->Add(searchSizer, 0, wxEXPAND | wxTOP, 5);
+	
+	// Connect the focus events to disable hotkeys during typing
+	search_field->Connect(wxEVT_SET_FOCUS, wxFocusEventHandler(CreaturePalettePanel::OnSearchFieldFocus), nullptr, this);
+	search_field->Connect(wxEVT_KILL_FOCUS, wxFocusEventHandler(CreaturePalettePanel::OnSearchFieldKillFocus), nullptr, this);
+	// Connect key down event to handle key presses in the search field
+	search_field->Connect(wxEVT_KEY_DOWN, wxKeyEventHandler(CreaturePalettePanel::OnSearchFieldKeyDown), nullptr, this);
+
 	creature_list = newd SortableListBox(this, PALETTE_CREATURE_LISTBOX);
-	sidesizer->Add(creature_list, 1, wxEXPAND);
+	sidesizer->Add(creature_list, 1, wxEXPAND | wxTOP, 5);
+	
+	// Add buttons for loading NPCs, monsters, and purging creatures
+	wxSizer* buttonSizer = newd wxBoxSizer(wxHORIZONTAL);
+	
+	load_npcs_button = newd wxButton(this, PALETTE_LOAD_NPCS_BUTTON, "Load NPCs Folder");
+	buttonSizer->Add(load_npcs_button, 1, wxEXPAND | wxRIGHT, 5);
+	
+	load_monsters_button = newd wxButton(this, PALETTE_LOAD_MONSTERS_BUTTON, "Load Monsters Folder");
+	buttonSizer->Add(load_monsters_button, 1, wxEXPAND | wxLEFT, 5);
+	
+	sidesizer->Add(buttonSizer, 0, wxEXPAND | wxTOP, 5);
+	
+	purge_creatures_button = newd wxButton(this, PALETTE_PURGE_CREATURES_BUTTON, "Purge Creatures");
+	sidesizer->Add(purge_creatures_button, 0, wxEXPAND | wxTOP, 5);
+	
 	topsizer->Add(sidesizer, 1, wxEXPAND);
 
 	// Brush selection
 	sidesizer = newd wxStaticBoxSizer(newd wxStaticBox(this, wxID_ANY, "Brushes", wxDefaultPosition, wxSize(150, 200)), wxVERTICAL);
 
-	//sidesizer->Add(180, 1, wxEXPAND);
+	// sidesizer->Add(180, 1, wxEXPAND);
 
 	wxFlexGridSizer* grid = newd wxFlexGridSizer(3, 10, 10);
 	grid->AddGrowableCol(1);
@@ -81,33 +125,29 @@ CreaturePalettePanel::CreaturePalettePanel(wxWindow* parent, wxWindowID id) :
 	OnUpdate();
 }
 
-CreaturePalettePanel::~CreaturePalettePanel()
-{
+CreaturePalettePanel::~CreaturePalettePanel() {
 	////
 }
 
-PaletteType CreaturePalettePanel::GetType() const
-{
+PaletteType CreaturePalettePanel::GetType() const {
 	return TILESET_CREATURE;
 }
 
-void CreaturePalettePanel::SelectFirstBrush()
-{
+void CreaturePalettePanel::SelectFirstBrush() {
 	SelectCreatureBrush();
 }
 
-Brush* CreaturePalettePanel::GetSelectedBrush() const
-{
-	if(creature_brush_button->GetValue()) {
-		if(creature_list->GetCount() == 0) {
+Brush* CreaturePalettePanel::GetSelectedBrush() const {
+	if (creature_brush_button->GetValue()) {
+		if (creature_list->GetCount() == 0) {
 			return nullptr;
 		}
 		Brush* brush = reinterpret_cast<Brush*>(creature_list->GetClientData(creature_list->GetSelection()));
-		if(brush && brush->isCreature()) {
+		if (brush && brush->isCreature()) {
 			g_gui.SetSpawnTime(creature_spawntime_spin->GetValue());
 			return brush;
 		}
-	} else if(spawn_brush_button->GetValue()) {
+	} else if (spawn_brush_button->GetValue()) {
 		g_settings.setInteger(Config::CURRENT_SPAWN_RADIUS, spawn_size_spin->GetValue());
 		g_settings.setInteger(Config::DEFAULT_SPAWNTIME, creature_spawntime_spin->GetValue());
 		return g_gui.spawn_brush;
@@ -115,32 +155,31 @@ Brush* CreaturePalettePanel::GetSelectedBrush() const
 	return nullptr;
 }
 
-bool CreaturePalettePanel::SelectBrush(const Brush* whatbrush)
-{
-	if(!whatbrush)
+bool CreaturePalettePanel::SelectBrush(const Brush* whatbrush) {
+	if (!whatbrush) {
 		return false;
+	}
 
-	if(whatbrush->isCreature()) {
+	if (whatbrush->isCreature()) {
 		int current_index = tileset_choice->GetSelection();
-		if(current_index != wxNOT_FOUND) {
+		if (current_index != wxNOT_FOUND) {
 			const TilesetCategory* tsc = reinterpret_cast<const TilesetCategory*>(tileset_choice->GetClientData(current_index));
 			// Select first house
-			for(BrushVector::const_iterator iter = tsc->brushlist.begin(); iter != tsc->brushlist.end(); ++iter) {
-				if(*iter == whatbrush) {
+			for (BrushVector::const_iterator iter = tsc->brushlist.begin(); iter != tsc->brushlist.end(); ++iter) {
+				if (*iter == whatbrush) {
 					SelectCreature(whatbrush->getName());
 					return true;
 				}
 			}
 		}
 		// Not in the current display, search the hidden one's
-		for(size_t i = 0; i < tileset_choice->GetCount(); ++i) {
-			if(current_index != (int)i) {
+		for (size_t i = 0; i < tileset_choice->GetCount(); ++i) {
+			if (current_index != (int)i) {
 				const TilesetCategory* tsc = reinterpret_cast<const TilesetCategory*>(tileset_choice->GetClientData(i));
-				for(BrushVector::const_iterator iter = tsc->brushlist.begin();
-						iter != tsc->brushlist.end();
-						++iter)
-				{
-					if(*iter == whatbrush) {
+				for (BrushVector::const_iterator iter = tsc->brushlist.begin();
+					 iter != tsc->brushlist.end();
+					 ++iter) {
+					if (*iter == whatbrush) {
 						SelectTileset(i);
 						SelectCreature(whatbrush->getName());
 						return true;
@@ -148,28 +187,26 @@ bool CreaturePalettePanel::SelectBrush(const Brush* whatbrush)
 				}
 			}
 		}
-	} else if(whatbrush->isSpawn()) {
+	} else if (whatbrush->isSpawn()) {
 		SelectSpawnBrush();
 		return true;
 	}
 	return false;
 }
 
-int CreaturePalettePanel::GetSelectedBrushSize() const
-{
+int CreaturePalettePanel::GetSelectedBrushSize() const {
 	return spawn_size_spin->GetValue();
 }
 
-void CreaturePalettePanel::OnUpdate()
-{
+void CreaturePalettePanel::OnUpdate() {
 	tileset_choice->Clear();
 	g_materials.createOtherTileset();
 
-	for(TilesetContainer::const_iterator iter = g_materials.tilesets.begin(); iter != g_materials.tilesets.end(); ++iter) {
+	for (TilesetContainer::const_iterator iter = g_materials.tilesets.begin(); iter != g_materials.tilesets.end(); ++iter) {
 		const TilesetCategory* tsc = iter->second->getCategory(TILESET_CREATURE);
-		if(tsc && tsc->size() > 0) {
+		if (tsc && tsc->size() > 0) {
 			tileset_choice->Append(wxstr(iter->second->name), const_cast<TilesetCategory*>(tsc));
-		} else if(iter->second->name == "NPCs" || iter->second->name == "Others") {
+		} else if (iter->second->name == "NPCs" || iter->second->name == "Others") {
 			Tileset* ts = const_cast<Tileset*>(iter->second);
 			TilesetCategory* rtsc = ts->getCategory(TILESET_CREATURE);
 			tileset_choice->Append(wxstr(ts->name), rtsc);
@@ -178,57 +215,57 @@ void CreaturePalettePanel::OnUpdate()
 	SelectTileset(0);
 }
 
-void CreaturePalettePanel::OnUpdateBrushSize(BrushShape shape, int size)
-{
+void CreaturePalettePanel::OnUpdateBrushSize(BrushShape shape, int size) {
 	return spawn_size_spin->SetValue(size);
 }
 
-void CreaturePalettePanel::OnSwitchIn()
-{
+void CreaturePalettePanel::OnSwitchIn() {
 	g_gui.ActivatePalette(GetParentPalette());
 	g_gui.SetBrushSize(spawn_size_spin->GetValue());
 }
 
-void CreaturePalettePanel::SelectTileset(size_t index)
-{
+void CreaturePalettePanel::SelectTileset(size_t index) {
 	ASSERT(tileset_choice->GetCount() >= index);
 
 	creature_list->Clear();
-	if(tileset_choice->GetCount() == 0) {
+	if (tileset_choice->GetCount() == 0) {
 		// No tilesets :(
 		creature_brush_button->Enable(false);
 	} else {
 		const TilesetCategory* tsc = reinterpret_cast<const TilesetCategory*>(tileset_choice->GetClientData(index));
 		// Select first house
-		for(BrushVector::const_iterator iter = tsc->brushlist.begin();
-				iter != tsc->brushlist.end();
-				++iter)
-		{
+		for (BrushVector::const_iterator iter = tsc->brushlist.begin();
+			 iter != tsc->brushlist.end();
+			 ++iter) {
 			creature_list->Append(wxstr((*iter)->getName()), *iter);
 		}
 		creature_list->Sort();
-		SelectCreature(0);
+		
+		// Apply filter if search field has text
+		if (!search_field->IsEmpty()) {
+			FilterCreatures(search_field->GetValue());
+		} else {
+			SelectCreature(0);
+		}
 
 		tileset_choice->SetSelection(index);
 	}
 }
 
-void CreaturePalettePanel::SelectCreature(size_t index)
-{
+void CreaturePalettePanel::SelectCreature(size_t index) {
 	// Save the old g_settings
 	ASSERT(creature_list->GetCount() >= index);
 
-	if(creature_list->GetCount() > 0) {
+	if (creature_list->GetCount() > 0) {
 		creature_list->SetSelection(index);
 	}
 
 	SelectCreatureBrush();
 }
 
-void CreaturePalettePanel::SelectCreature(std::string name)
-{
-	if(creature_list->GetCount() > 0) {
-		if(!creature_list->SetStringSelection(wxstr(name))) {
+void CreaturePalettePanel::SelectCreature(std::string name) {
+	if (creature_list->GetCount() > 0) {
+		if (!creature_list->SetStringSelection(wxstr(name))) {
 			creature_list->SetSelection(0);
 		}
 	}
@@ -236,9 +273,8 @@ void CreaturePalettePanel::SelectCreature(std::string name)
 	SelectCreatureBrush();
 }
 
-void CreaturePalettePanel::SelectCreatureBrush()
-{
-	if(creature_list->GetCount() > 0) {
+void CreaturePalettePanel::SelectCreatureBrush() {
+	if (creature_list->GetCount() > 0) {
 		creature_brush_button->Enable(true);
 		creature_brush_button->SetValue(true);
 		spawn_brush_button->SetValue(false);
@@ -248,53 +284,329 @@ void CreaturePalettePanel::SelectCreatureBrush()
 	}
 }
 
-void CreaturePalettePanel::SelectSpawnBrush()
-{
-	//g_gui.house_exit_brush->setHouse(house);
+void CreaturePalettePanel::SelectSpawnBrush() {
+	// g_gui.house_exit_brush->setHouse(house);
 	creature_brush_button->SetValue(false);
 	spawn_brush_button->SetValue(true);
 }
 
-void CreaturePalettePanel::OnTilesetChange(wxCommandEvent& event)
-{
+void CreaturePalettePanel::OnTilesetChange(wxCommandEvent& event) {
 	SelectTileset(event.GetSelection());
 	g_gui.ActivatePalette(GetParentPalette());
 	g_gui.SelectBrush();
 }
 
-void CreaturePalettePanel::OnListBoxChange(wxCommandEvent& event)
-{
+void CreaturePalettePanel::OnListBoxChange(wxCommandEvent& event) {
+	// Get the selected brush before updating
+	Brush* old_brush = g_gui.GetCurrentBrush();
+	
+	// Update selection
 	SelectCreature(event.GetSelection());
 	g_gui.ActivatePalette(GetParentPalette());
+	
+	// Get the newly selected brush
+	Brush* new_brush = g_gui.GetCurrentBrush();
+	
+	// If we selected the same brush, first set to nullptr then reselect
+	if(old_brush && new_brush && old_brush == new_brush) {
+		g_gui.SelectBrush(nullptr, TILESET_CREATURE);
+	}
+	
+	// Now select the brush (either for the first time or re-selecting)
 	g_gui.SelectBrush();
 }
 
-void CreaturePalettePanel::OnClickCreatureBrushButton(wxCommandEvent& event)
-{
+void CreaturePalettePanel::OnClickCreatureBrushButton(wxCommandEvent& event) {
 	SelectCreatureBrush();
 	g_gui.ActivatePalette(GetParentPalette());
 	g_gui.SelectBrush();
 }
 
-void CreaturePalettePanel::OnClickSpawnBrushButton(wxCommandEvent& event)
-{
+void CreaturePalettePanel::OnClickSpawnBrushButton(wxCommandEvent& event) {
 	SelectSpawnBrush();
 	g_gui.ActivatePalette(GetParentPalette());
 	g_gui.SelectBrush();
 }
 
-void CreaturePalettePanel::OnChangeSpawnTime(wxSpinEvent& event)
-{
+void CreaturePalettePanel::OnClickLoadNPCsButton(wxCommandEvent& event) {
+	wxDirDialog dlg(g_gui.root, "Select NPC folder", "", wxDD_DEFAULT_STYLE | wxDD_DIR_MUST_EXIST);
+	if (dlg.ShowModal() == wxID_OK) {
+		wxString folder = dlg.GetPath();
+		LoadNPCsFromFolder(folder);
+	}
+}
+
+void CreaturePalettePanel::OnClickLoadMonstersButton(wxCommandEvent& event) {
+	wxDirDialog dlg(g_gui.root, "Select Monsters folder", "", wxDD_DEFAULT_STYLE | wxDD_DIR_MUST_EXIST);
+	if (dlg.ShowModal() == wxID_OK) {
+		wxString folder = dlg.GetPath();
+		LoadMonstersFromFolder(folder);
+	}
+}
+
+void CreaturePalettePanel::OnClickPurgeCreaturesButton(wxCommandEvent& event) {
+	// Confirmation dialog
+	long response = wxMessageBox("Are you sure you want to purge all creatures from the palette? This cannot be undone.", 
+		"Confirm Purge", wxYES_NO | wxICON_QUESTION, g_gui.root);
+	
+	if (response == wxYES) {
+		PurgeCreaturePalettes();
+	}
+}
+
+bool CreaturePalettePanel::LoadNPCsFromFolder(const wxString& folder) {
+	// Get all .xml files in the folder
+	wxArrayString files;
+	wxDir::GetAllFiles(folder, &files, "*.xml", wxDIR_FILES);
+	
+	if (files.GetCount() == 0) {
+		wxMessageBox("No XML files found in the selected folder.", "Error", wxOK | wxICON_INFORMATION, g_gui.root);
+		return false;
+	}
+	
+	wxArrayString warnings;
+	int loadedCount = 0;
+	
+	for (size_t i = 0; i < files.GetCount(); ++i) {
+		wxString error;
+		bool ok = g_creatures.importXMLFromOT(FileName(files[i]), error, warnings);
+		if (ok) {
+			loadedCount++;
+		} else {
+			warnings.Add("Failed to load " + files[i] + ": " + error);
+		}
+	}
+	
+	if (!warnings.IsEmpty()) {
+		g_gui.ListDialog("NPC loader messages", warnings);
+	}
+	
+	if (loadedCount > 0) {
+		g_gui.PopupDialog("Success", wxString::Format("Successfully loaded %d NPC files.", loadedCount), wxOK);
+		
+		// Refresh the palette
+		g_gui.RefreshPalettes();
+		
+		// Refresh current tileset and creature list
+		OnUpdate();
+		
+		return true;
+	} else {
+		wxMessageBox("No NPCs could be loaded from the selected folder.", "Error", wxOK | wxICON_INFORMATION, g_gui.root);
+		return false;
+	}
+}
+
+bool CreaturePalettePanel::LoadMonstersFromFolder(const wxString& folder) {
+	// Get all .xml files in the folder
+	wxArrayString files;
+	wxDir::GetAllFiles(folder, &files, "*.xml", wxDIR_FILES);
+	
+	if (files.GetCount() == 0) {
+		wxMessageBox("No XML files found in the selected folder.", "Error", wxOK | wxICON_INFORMATION, g_gui.root);
+		return false;
+	}
+	
+	wxArrayString warnings;
+	int loadedCount = 0;
+	
+	for (size_t i = 0; i < files.GetCount(); ++i) {
+		wxString error;
+		bool ok = g_creatures.importXMLFromOT(FileName(files[i]), error, warnings);
+		if (ok) {
+			loadedCount++;
+		} else {
+			warnings.Add("Failed to load " + files[i] + ": " + error);
+		}
+	}
+	
+	if (!warnings.IsEmpty()) {
+		g_gui.ListDialog("Monster loader messages", warnings);
+	}
+	
+	if (loadedCount > 0) {
+		g_gui.PopupDialog("Success", wxString::Format("Successfully loaded %d monster files.", loadedCount), wxOK);
+		
+		// Refresh the palette
+		g_gui.RefreshPalettes();
+		
+		// Refresh current tileset and creature list
+		OnUpdate();
+		
+		return true;
+	} else {
+		wxMessageBox("No monsters could be loaded from the selected folder.", "Error", wxOK | wxICON_INFORMATION, g_gui.root);
+		return false;
+	}
+}
+
+bool CreaturePalettePanel::PurgeCreaturePalettes() {
+	// Track success
+	bool success = false;
+	
+	// Create vectors to store brushes that need to be removed
+	std::vector<Brush*> brushesToRemove;
+	
+	// Collect creature brushes from the "NPCs" and "Others" tilesets
+	if (g_materials.tilesets.count("NPCs") > 0) {
+		Tileset* npcTileset = g_materials.tilesets["NPCs"];
+		TilesetCategory* npcCategory = npcTileset->getCategory(TILESET_CREATURE);
+		if (npcCategory) {
+			for (BrushVector::iterator it = npcCategory->brushlist.begin(); it != npcCategory->brushlist.end(); ++it) {
+				brushesToRemove.push_back(*it);
+			}
+			npcCategory->brushlist.clear();
+			success = true;
+		}
+	}
+	
+	if (g_materials.tilesets.count("Others") > 0) {
+		Tileset* othersTileset = g_materials.tilesets["Others"];
+		TilesetCategory* othersCategory = othersTileset->getCategory(TILESET_CREATURE);
+		if (othersCategory) {
+			for (BrushVector::iterator it = othersCategory->brushlist.begin(); it != othersCategory->brushlist.end(); ++it) {
+				brushesToRemove.push_back(*it);
+			}
+			othersCategory->brushlist.clear();
+			success = true;
+		}
+	}
+	
+	// Remove creature brushes from g_brushes
+	// We need to collect the keys to remove first to avoid modifying the map during iteration
+	const BrushMap& allBrushes = g_brushes.getMap();
+	std::vector<std::string> brushKeysToRemove;
+	
+	for (BrushMap::const_iterator it = allBrushes.begin(); it != allBrushes.end(); ++it) {
+		if (it->second && it->second->isCreature()) {
+			brushKeysToRemove.push_back(it->first);
+		}
+	}
+	
+	// Now remove the brushes from g_brushes
+	for (std::vector<std::string>::iterator it = brushKeysToRemove.begin(); it != brushKeysToRemove.end(); ++it) {
+		g_brushes.removeBrush(*it);
+	}
+	
+	// Delete the brush objects to prevent memory leaks
+	for (std::vector<Brush*>::iterator it = brushesToRemove.begin(); it != brushesToRemove.end(); ++it) {
+		delete *it;
+	}
+	
+	// Clear creature database
+	g_creatures.clear();
+	
+	// Recreate empty tilesets if needed
+	g_materials.createOtherTileset();
+	
+	// Refresh the palette
+	g_gui.RefreshPalettes();
+	
+	// Refresh current tileset and creature list in this panel
+	OnUpdate();
+	
+	if (success) {
+		g_gui.PopupDialog("Success", "All creatures have been purged from the palettes.", wxOK);
+	} else {
+		wxMessageBox("There was a problem purging the creatures.", "Error", wxOK | wxICON_ERROR, g_gui.root);
+	}
+	
+	return success;
+}
+
+void CreaturePalettePanel::OnChangeSpawnTime(wxSpinEvent& event) {
 	g_gui.ActivatePalette(GetParentPalette());
 	g_gui.SetSpawnTime(event.GetPosition());
 }
 
-void CreaturePalettePanel::OnChangeSpawnSize(wxSpinEvent& event)
-{
-	if(!handling_event) {
+void CreaturePalettePanel::OnChangeSpawnSize(wxSpinEvent& event) {
+	if (!handling_event) {
 		handling_event = true;
 		g_gui.ActivatePalette(GetParentPalette());
 		g_gui.SetBrushSize(event.GetPosition());
 		handling_event = false;
+	}
+}
+
+void CreaturePalettePanel::OnClickSearchButton(wxCommandEvent& event) {
+	// Get the text from the search field and filter
+	wxString searchText = search_field->GetValue();
+	FilterCreatures(searchText);
+}
+
+void CreaturePalettePanel::OnSearchFieldText(wxCommandEvent& event) {
+	// Filter as user types
+	FilterCreatures(search_field->GetValue());
+}
+
+void CreaturePalettePanel::OnSearchFieldFocus(wxFocusEvent& event) {
+	// Disable hotkeys when search field receives focus
+	g_gui.DisableHotkeys();
+	event.Skip();
+}
+
+void CreaturePalettePanel::OnSearchFieldKillFocus(wxFocusEvent& event) {
+	// Re-enable hotkeys when search field loses focus
+	g_gui.EnableHotkeys();
+	event.Skip();
+}
+
+void CreaturePalettePanel::OnSearchFieldKeyDown(wxKeyEvent& event) {
+	// Handle Enter key specially
+	if (event.GetKeyCode() == WXK_RETURN) {
+		FilterCreatures(search_field->GetValue());
+	} else if (event.GetKeyCode() == WXK_ESCAPE) {
+		// Clear search field and reset the list on Escape
+		search_field->Clear();
+		FilterCreatures(wxEmptyString);
+		// Set focus back to the map
+		wxWindow* mapCanvas = g_gui.root->FindWindowByName("MapCanvas");
+		if (mapCanvas) {
+			mapCanvas->SetFocus();
+		}
+	} else {
+		// Process the event normally for all other keys
+		event.Skip();
+	}
+}
+
+void CreaturePalettePanel::FilterCreatures(const wxString& search_text) {
+	if (search_text.IsEmpty()) {
+		// Reset to show all creatures
+		int currentSelection = tileset_choice->GetSelection();
+		if (currentSelection != wxNOT_FOUND) {
+			SelectTileset(currentSelection);
+		}
+		return;
+	}
+	
+	// Remember the current selection
+	int index = tileset_choice->GetSelection();
+	if (index == wxNOT_FOUND) return;
+	
+	const TilesetCategory* tsc = reinterpret_cast<const TilesetCategory*>(tileset_choice->GetClientData(index));
+	
+	// Clear the list
+	creature_list->Clear();
+	
+	// Add only creatures that match the search
+	wxString searchLower = search_text.Lower();
+	
+	for (BrushVector::const_iterator iter = tsc->brushlist.begin(); iter != tsc->brushlist.end(); ++iter) {
+		wxString name = wxstr((*iter)->getName()).Lower();
+		if (name.Find(searchLower) != wxNOT_FOUND) {
+			creature_list->Append(wxstr((*iter)->getName()), *iter);
+		}
+	}
+	
+	// Sort the filtered list
+	creature_list->Sort();
+	
+	// Select first result if any
+	if (creature_list->GetCount() > 0) {
+		SelectCreature(0);
+		creature_brush_button->Enable(true);
+	} else {
+		creature_brush_button->Enable(false);
 	}
 }
