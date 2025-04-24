@@ -45,11 +45,13 @@ namespace MenuBar {
 		REPLACE_ITEMS,
 		AUTOMAGIC,
 		SEARCH_ON_MAP_EVERYTHING,
+		SEARCH_ON_MAP_ZONES,
 		SEARCH_ON_MAP_UNIQUE,
 		SEARCH_ON_MAP_ACTION,
 		SEARCH_ON_MAP_CONTAINER,
 		SEARCH_ON_MAP_WRITEABLE,
 		SEARCH_ON_SELECTION_EVERYTHING,
+		SEARCH_ON_SELECTION_ZONES,
 		SEARCH_ON_SELECTION_UNIQUE,
 		SEARCH_ON_SELECTION_ACTION,
 		SEARCH_ON_SELECTION_CONTAINER,
@@ -110,6 +112,7 @@ namespace MenuBar {
 		SHOW_CREATURES,
 		SHOW_SPAWNS,
 		SHOW_SPECIAL,
+		SHOW_ZONES,
 		SHOW_AS_MINIMAP,
 		SHOW_ONLY_COLORS,
 		SHOW_ONLY_MODIFIED,
@@ -237,6 +240,7 @@ public:
 	void OnSearchForItem(wxCommandEvent& event);
 	void OnReplaceItems(wxCommandEvent& event);
 	void OnSearchForStuffOnMap(wxCommandEvent& event);
+	void OnSearchForZonesOnMap(wxCommandEvent& event);
 	void OnSearchForUniqueOnMap(wxCommandEvent& event);
 	void OnSearchForActionOnMap(wxCommandEvent& event);
 	void OnSearchForContainerOnMap(wxCommandEvent& event);
@@ -244,6 +248,7 @@ public:
 
 	// Select menu
 	void OnSearchForStuffOnSelection(wxCommandEvent& event);
+	void OnSearchForZonesOnSelection(wxCommandEvent& event);
 	void OnSearchForUniqueOnSelection(wxCommandEvent& event);
 	void OnSearchForActionOnSelection(wxCommandEvent& event);
 	void OnSearchForContainerOnSelection(wxCommandEvent& event);
@@ -311,7 +316,7 @@ protected:
 	wxObject* LoadItem(pugi::xml_node node, wxMenu* parent, wxArrayString& warnings, wxString& error);
 	// Checks the items in the menus according to the settings (in config)
 	void LoadValues();
-	void SearchItems(bool unique, bool action, bool container, bool writable, bool onSelection = false);
+	void SearchItems(bool unique, bool action, bool container, bool writable, bool zones, bool onSelection = false);
 
 protected:
 	MainFrame* frame;
