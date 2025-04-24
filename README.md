@@ -107,9 +107,6 @@ I often work till late I do not have the time to make commits im the guy that do
 Rookgaard Independence
 https://discord.gg/CavZvnvRey
 
-Rangers Arcani
-https://discord.gg/Wp5wZcCczu
-
 TIBIA TRADE:
 https://discord.gg/BtrYU3tn7a
 
