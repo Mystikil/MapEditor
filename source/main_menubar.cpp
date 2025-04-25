@@ -121,11 +121,13 @@ MainMenuBar::MainMenuBar(MainFrame* frame) :
 	MAKE_ACTION(FIND_ITEM, wxITEM_NORMAL, OnSearchForItem);
 	MAKE_ACTION(REPLACE_ITEMS, wxITEM_NORMAL, OnReplaceItems);
 	MAKE_ACTION(SEARCH_ON_MAP_EVERYTHING, wxITEM_NORMAL, OnSearchForStuffOnMap);
+	MAKE_ACTION(SEARCH_ON_MAP_ZONES, wxITEM_NORMAL, OnSearchForZonesOnMap);
 	MAKE_ACTION(SEARCH_ON_MAP_UNIQUE, wxITEM_NORMAL, OnSearchForUniqueOnMap);
 	MAKE_ACTION(SEARCH_ON_MAP_ACTION, wxITEM_NORMAL, OnSearchForActionOnMap);
 	MAKE_ACTION(SEARCH_ON_MAP_CONTAINER, wxITEM_NORMAL, OnSearchForContainerOnMap);
 	MAKE_ACTION(SEARCH_ON_MAP_WRITEABLE, wxITEM_NORMAL, OnSearchForWriteableOnMap);
 	MAKE_ACTION(SEARCH_ON_SELECTION_EVERYTHING, wxITEM_NORMAL, OnSearchForStuffOnSelection);
+	MAKE_ACTION(SEARCH_ON_SELECTION_ZONES, wxITEM_NORMAL, OnSearchForZonesOnSelection);
 	MAKE_ACTION(SEARCH_ON_SELECTION_UNIQUE, wxITEM_NORMAL, OnSearchForUniqueOnSelection);
 	MAKE_ACTION(SEARCH_ON_SELECTION_ACTION, wxITEM_NORMAL, OnSearchForActionOnSelection);
 	MAKE_ACTION(SEARCH_ON_SELECTION_CONTAINER, wxITEM_NORMAL, OnSearchForContainerOnSelection);
@@ -198,6 +200,7 @@ MainMenuBar::MainMenuBar(MainFrame* frame) :
 	MAKE_ACTION(SHOW_CREATURES, wxITEM_CHECK, OnChangeViewSettings);
 	MAKE_ACTION(SHOW_SPAWNS, wxITEM_CHECK, OnChangeViewSettings);
 	MAKE_ACTION(SHOW_SPECIAL, wxITEM_CHECK, OnChangeViewSettings);
+	MAKE_ACTION(SHOW_ZONES, wxITEM_CHECK, OnChangeViewSettings);
 	MAKE_ACTION(SHOW_AS_MINIMAP, wxITEM_CHECK, OnChangeViewSettings);
 	MAKE_ACTION(SHOW_ONLY_COLORS, wxITEM_CHECK, OnChangeViewSettings);
 	MAKE_ACTION(SHOW_ONLY_MODIFIED, wxITEM_CHECK, OnChangeViewSettings);
@@ -517,6 +520,7 @@ void MainMenuBar::LoadValues() {
 	CheckItem(SHOW_CREATURES, g_settings.getBoolean(Config::SHOW_CREATURES));
 	CheckItem(SHOW_SPAWNS, g_settings.getBoolean(Config::SHOW_SPAWNS));
 	CheckItem(SHOW_SPECIAL, g_settings.getBoolean(Config::SHOW_SPECIAL_TILES));
+	CheckItem(SHOW_ZONES, g_settings.getBoolean(Config::SHOW_ZONE_AREAS));
 	CheckItem(SHOW_AS_MINIMAP, g_settings.getBoolean(Config::SHOW_AS_MINIMAP));
 	CheckItem(SHOW_ONLY_COLORS, g_settings.getBoolean(Config::SHOW_ONLY_TILEFLAGS));
 	CheckItem(SHOW_ONLY_MODIFIED, g_settings.getBoolean(Config::SHOW_ONLY_MODIFIED_TILES));
@@ -1088,11 +1092,13 @@ void MainMenuBar::OnReplaceItems(wxCommandEvent& WXUNUSED(event)) {
 namespace OnSearchForStuff {
     struct Searcher {
         Searcher() :
+			search_zones(false),
             search_unique(false),
             search_action(false),
             search_container(false),
             search_writeable(false) { }
 
+		bool search_zones;
         bool search_unique;
         bool search_action;
         bool search_container;
@@ -1118,6 +1124,10 @@ namespace OnSearchForStuff {
             Container* container;
             bool shouldAdd = false;
 
+			if (search_zones && item->isGroundTile() && !tile->getZoneIds().empty()) {
+				shouldAdd = true;
+			}
+
             if (search_unique && item->getUniqueID() > 0 && isInRanges(item->getUniqueID(), uniqueRanges)) {
                 shouldAdd = true;
             }
@@ -1136,25 +1146,36 @@ namespace OnSearchForStuff {
             }
         }
 
-        wxString desc(Item* item) {
-            wxString label;
-            if (item->getUniqueID() > 0) {
-                label << "UID:" << item->getUniqueID() << " ";
-            }
+        wxString desc(Tile* tile, Item* item) {
+			wxString label;
+			if (search_zones) {
+				label << "Zone ID: ";
+				size_t zones = tile->getZoneIds().size();
+				for (const auto& zoneId : tile->getZoneIds()) {
+					label << zoneId;
+					if (--zones > 0) {
+						label << "/";
+					}
+				}
+				} else {
+					if (item->getUniqueID() > 0) {
+						label << "UID: " << item->getUniqueID() << " ";
+					}
 
-            if (item->getActionID() > 0) {
-                label << "AID:" << item->getActionID() << " ";
-            }
+				if (item->getActionID() > 0) {
+					label << "AID:" << item->getActionID() << " ";
+				}
 
-            label << wxstr(item->getName());
+				label << wxstr(item->getName());
 
-            if (dynamic_cast<Container*>(item)) {
-                label << " (Container) ";
-            }
+				if (dynamic_cast<Container*>(item)) {
+					label << " (Container) ";
+				}
 
-            if (item->getText().length() > 0) {
-                label << " (Text: " << wxstr(item->getText()) << ") ";
-            }
+				if (item->getText().length() > 0) {
+					label << " (Text: " << wxstr(item->getText()) << ") ";
+				}
+			}
 
             return label;
         }
@@ -1162,7 +1183,9 @@ namespace OnSearchForStuff {
         void sort() {
             if (search_unique || search_action) {
                 std::sort(found.begin(), found.end(), Searcher::compare);
-            }
+            } else if (search_zones) {
+				std::sort(found.begin(), found.end(), Searcher::compareZones);
+			}
         }
 
         static bool compare(const std::pair<Tile*, Item*>& pair1, const std::pair<Tile*, Item*>& pair2) {
@@ -1177,47 +1200,59 @@ namespace OnSearchForStuff {
 
             return false;
         }
+
+		static bool compareZones(const std::pair<Tile*, Item*>& pair1, const std::pair<Tile*, Item*>& pair2) {
+			return pair1.first->getZoneId() < pair2.first->getZoneId();
+		}
     };
 }
 
 void MainMenuBar::OnSearchForStuffOnMap(wxCommandEvent& WXUNUSED(event)) {
-	SearchItems(true, true, true, true);
+	SearchItems(true, true, true, true, false);
+}
+
+void MainMenuBar::OnSearchForZonesOnMap(wxCommandEvent& WXUNUSED(event)) {
+	SearchItems(false, false, false, false, true);
 }
 
 void MainMenuBar::OnSearchForUniqueOnMap(wxCommandEvent& WXUNUSED(event)) {
-	SearchItems(true, false, false, false);
+	SearchItems(true, false, false, false, false);
 }
 
 void MainMenuBar::OnSearchForActionOnMap(wxCommandEvent& WXUNUSED(event)) {
-	SearchItems(false, true, false, false);
+	SearchItems(false, true, false, false, false);
 }
 
 void MainMenuBar::OnSearchForContainerOnMap(wxCommandEvent& WXUNUSED(event)) {
-	SearchItems(false, false, true, false);
+	SearchItems(false, false, true, false, false);
 }
 
 void MainMenuBar::OnSearchForWriteableOnMap(wxCommandEvent& WXUNUSED(event)) {
-	SearchItems(false, false, false, true);
+	SearchItems(false, false, false, true, false);
 }
 
 void MainMenuBar::OnSearchForStuffOnSelection(wxCommandEvent& WXUNUSED(event)) {
-	SearchItems(true, true, true, true, true);
+	SearchItems(true, true, true, true, false, true);
+}
+
+void MainMenuBar::OnSearchForZonesOnSelection(wxCommandEvent& WXUNUSED(event)) {
+	SearchItems(false, false, false, false, true, true);
 }
 
 void MainMenuBar::OnSearchForUniqueOnSelection(wxCommandEvent& WXUNUSED(event)) {
-	SearchItems(true, false, false, false, true);
+	SearchItems(true, false, false, false, false, true);
 }
 
 void MainMenuBar::OnSearchForActionOnSelection(wxCommandEvent& WXUNUSED(event)) {
-	SearchItems(false, true, false, false, true);
+	SearchItems(false, true, false, false, false, true);
 }
 
 void MainMenuBar::OnSearchForContainerOnSelection(wxCommandEvent& WXUNUSED(event)) {
-	SearchItems(false, false, true, false, true);
+	SearchItems(false, false, true, false, false, true);
 }
 
 void MainMenuBar::OnSearchForWriteableOnSelection(wxCommandEvent& WXUNUSED(event)) {
-	SearchItems(false, false, false, true, true);
+	SearchItems(false, false, false, true, false, true);
 }
 
 void MainMenuBar::OnSearchForItemOnSelection(wxCommandEvent& WXUNUSED(event)) {
@@ -2555,6 +2590,7 @@ void MainMenuBar::OnChangeViewSettings(wxCommandEvent& event) {
 
 	g_settings.setInteger(Config::SHOW_SHADE, IsItemChecked(MenuBar::SHOW_SHADE));
 	g_settings.setInteger(Config::SHOW_SPECIAL_TILES, IsItemChecked(MenuBar::SHOW_SPECIAL));
+	g_settings.setInteger(Config::SHOW_ZONE_AREAS, IsItemChecked(MenuBar::SHOW_ZONES));
 	g_settings.setInteger(Config::SHOW_AS_MINIMAP, IsItemChecked(MenuBar::SHOW_AS_MINIMAP));
 	g_settings.setInteger(Config::SHOW_ONLY_TILEFLAGS, IsItemChecked(MenuBar::SHOW_ONLY_COLORS));
 	g_settings.setInteger(Config::SHOW_ONLY_MODIFIED_TILES, IsItemChecked(MenuBar::SHOW_ONLY_MODIFIED));
@@ -2790,8 +2826,8 @@ void MainMenuBar::OnCloseLive(wxCommandEvent& event) {
 	Update();
 }
 
-void MainMenuBar::SearchItems(bool unique, bool action, bool container, bool writable, bool onSelection /* = false */) {
-    if (!unique && !action && !container && !writable) {
+void MainMenuBar::SearchItems(bool unique, bool action, bool container, bool writable, bool zones, bool onSelection /* = false*/) {
+	if (!unique && !action && !container && !writable && !zones) {
         return;
     }
 
@@ -2857,6 +2893,7 @@ void MainMenuBar::SearchItems(bool unique, bool action, bool container, bool wri
         }
 
         OnSearchForStuff::Searcher searcher;
+		searcher.search_zones = zones;
         searcher.search_unique = unique;
         searcher.search_action = action;
         searcher.search_container = container;
@@ -2872,8 +2909,8 @@ void MainMenuBar::SearchItems(bool unique, bool action, bool container, bool wri
 
         SearchResultWindow* result = g_gui.ShowSearchWindow();
         result->Clear();
-        for (const auto& pair : found) {
-            result->AddPosition(searcher.desc(pair.second), pair.first->getPosition());
+		for (std::vector<std::pair<Tile*, Item*>>::iterator iter = found.begin(); iter != found.end(); ++iter) {
+			result->AddPosition(searcher.desc(iter->first, iter->second), iter->first->getPosition());
         }
     }
 }

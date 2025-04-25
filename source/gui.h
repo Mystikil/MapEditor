@@ -457,6 +457,7 @@ public:
 	FlagBrush* rook_brush;
 	FlagBrush* nolog_brush;
 	FlagBrush* pvp_brush;
+	FlagBrush* zone_brush;
 
 protected:
 	//=========================================================================
