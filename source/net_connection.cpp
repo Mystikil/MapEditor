@@ -17,6 +17,9 @@
 
 #include "main.h"
 #include "net_connection.h"
+#include <boost/asio.hpp>
+#include <boost/bind.hpp>
+#include <iostream>
 
 /*
 RME Server-Client Split Roadmap:
@@ -174,15 +177,15 @@ bool NetworkConnection::start() {
 
 	stopped = false;
 	if (!service) {
-		service = new boost::asio::io_service;
+		service = new boost::asio::io_context;
 	}
 
 	thread = std::thread([this]() -> void {
-		boost::asio::io_service& serviceRef = *service;
+		boost::asio::io_context& io_context = *service;
 		try {
 			while (!stopped) {
-				serviceRef.run_one();
-				serviceRef.reset();
+				io_context.run_one();
+				io_context.restart();
 			}
 		} catch (std::exception& e) {
 			std::cout << e.what() << std::endl;
@@ -198,12 +201,14 @@ void NetworkConnection::stop() {
 
 	service->stop();
 	stopped = true;
-	thread.join();
+	if (thread.joinable()) {
+		thread.join();
+	}
 
 	delete service;
 	service = nullptr;
 }
 
-boost::asio::io_service& NetworkConnection::get_service() {
+boost::asio::io_context& NetworkConnection::get_service() {
 	return *service;
 }

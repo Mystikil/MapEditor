@@ -392,6 +392,9 @@ void Settings::IO(IOMode mode) {
 	Int(HOUSE_FLOOR_SCAN, 1);
 	Int(AUTO_DETECT_HOUSE_EXIT, 1);
 
+	// Discord settings
+	Int(DISCORD_DIALOG_SHOWN, 0);
+
 #undef section
 #undef Int
 #undef IntToSave

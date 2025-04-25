@@ -58,7 +58,8 @@ bool LiveServer::bind() {
 	acceptor->open(endpoint.protocol());
 
 	boost::system::error_code error;
-	acceptor->set_option(boost::asio::ip::tcp::no_delay(true), error);
+	boost::asio::ip::tcp::no_delay option(true);
+	acceptor->set_option(option, error);
 	if (error) {
 		setLastError("Error: " + error.message());
 		return false;

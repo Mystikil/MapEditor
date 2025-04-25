@@ -186,6 +186,23 @@ bool Application::OnInit() {
 		g_gui.root->Show();
 	}
 
+	// Show Discord invitation dialog (only if not already shown before)
+	if (g_settings.getInteger(Config::DISCORD_DIALOG_SHOWN) != 1) {
+		wxMessageDialog discordDialog(nullptr, 
+			"Join the Idlers Tavern Discord community!\n\nConnect with other map editors and get support.",
+			"Join Our Community", 
+			wxOK | wxCANCEL | wxICON_INFORMATION);
+		
+		discordDialog.SetOKCancelLabels("Join Discord", "Maybe Later");
+		int result = discordDialog.ShowModal();
+		
+		// Open Discord link regardless of which button was pressed
+		::wxLaunchDefaultBrowser("https://discord.gg/BtHj5YqsSz", wxBROWSER_NEW_WINDOW);
+		
+		// Remember that we've shown the dialog
+		g_settings.setInteger(Config::DISCORD_DIALOG_SHOWN, 1);
+	}
+
 	// Set idle event handling mode
 	wxIdleEvent::SetMode(wxIDLE_PROCESS_SPECIFIED);
 

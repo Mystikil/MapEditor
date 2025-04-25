@@ -15,16 +15,20 @@
 // along with this program. If not, see <http://www.gnu.org/licenses/>.
 //////////////////////////////////////////////////////////////////////
 
-#ifndef _RME_LIVE_CLIENT_H_
-#define _RME_LIVE_CLIENT_H_
+#ifndef RME_LIVE_CLIENT_H_
+#define RME_LIVE_CLIENT_H_
 
 #include "live_socket.h"
+#include <boost/asio.hpp>
 #include "net_connection.h"
 
 #include <set>
+#include <memory>
 
 class DirtyList;
 class MapTab;
+class LiveLogTab;
+class Editor;
 
 class LiveClient : public LiveSocket {
 public:
@@ -33,7 +37,7 @@ public:
 
 	//
 	bool connect(const std::string& address, uint16_t port);
-	void tryConnect(boost::asio::ip::tcp::resolver::iterator endpoint);
+	void tryConnect(boost::asio::ip::tcp::resolver::results_type::iterator endpoint);
 
 	void close();
 	bool handleError(const boost::system::error_code& error);

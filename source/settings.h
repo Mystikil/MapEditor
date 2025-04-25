@@ -206,6 +206,9 @@ namespace Config {
 		HOUSE_FLOOR_SCAN,
 		AUTO_DETECT_HOUSE_EXIT,
 
+		// Discord settings
+		DISCORD_DIALOG_SHOWN,
+
 		LAST,
 	};
 

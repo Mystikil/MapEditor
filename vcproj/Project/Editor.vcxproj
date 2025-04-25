@@ -219,6 +219,7 @@
     <ClCompile Include="..\..\source\borderize_window.cpp" />
     <ClCompile Include="..\..\source\brush_tables.cpp" />
     <ClCompile Include="..\..\source\container_properties_window.cpp" />
+    <ClCompile Include="..\..\source\dark_mode_manager.cpp" />
     <ClCompile Include="..\..\source\find_item_window.cpp" />
     <ClCompile Include="..\..\source\ground_validation_dialog.cpp" />
     <ClCompile Include="..\..\source\hotkey_manager.cpp" />
@@ -250,6 +251,7 @@
     <ClInclude Include="..\..\source\common.h" />
     <ClCompile Include="..\..\source\common.cpp" />
     <ClInclude Include="..\..\source\container_properties_window.h" />
+    <ClInclude Include="..\..\source\dark_mode_manager.h" />
     <ClInclude Include="..\..\source\con_vector.h" />
     <ClInclude Include="..\..\source\creature_brush.h" />
     <ClCompile Include="..\..\source\creature_brush.cpp" />
@@ -430,7 +432,6 @@
     <ClInclude Include="..\..\source\main.h" />
     <ClInclude Include="..\..\source\waypoint_brush.h" />
     <ClCompile Include="..\..\source\waypoint_brush.cpp" />
-    <ClInclude Include="..\..\source\find_item_window.h" />
     <ClInclude Include="..\..\source\welcome_dialog.h" />
   </ItemGroup>
   <ItemGroup>

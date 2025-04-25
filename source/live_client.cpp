@@ -55,13 +55,15 @@ bool LiveClient::connect(const std::string& address, uint16_t port) {
 	
 	// Set socket options for better error detection
 	boost::system::error_code ec;
-	socket->set_option(boost::asio::socket_base::keep_alive(true), ec);
+	boost::asio::socket_base::keep_alive keepalive_option(true);
+	socket->set_option(keepalive_option, ec);
 	if (ec) {
 		logMessage("Warning: Could not set keep_alive option: " + ec.message());
 	}
 	
 	// Set connection timeout options
-	socket->set_option(boost::asio::socket_base::linger(true, 10), ec);
+	boost::asio::socket_base::linger linger_option(true, 10);
+	socket->set_option(linger_option, ec);
 	if (ec) {
 		logMessage("Warning: Could not set linger option: " + ec.message());
 	}
@@ -69,15 +71,17 @@ bool LiveClient::connect(const std::string& address, uint16_t port) {
 	// Log connection attempt
 	logMessage(wxString::Format("Attempting to connect to %s:%d...", address, port));
 
-	boost::asio::ip::tcp::resolver::query query(address, std::to_string(port));
-	resolver->async_resolve(query, [this](const boost::system::error_code& error, boost::asio::ip::tcp::resolver::iterator endpoint_iterator) -> void {
-		if (error) {
-			wxString errorMsg = wxString::Format("Resolution error: %s", error.message());
-			logMessage(errorMsg);
-		} else {
-			logMessage(wxString::Format("Host resolved. Connecting to endpoint..."));
-			tryConnect(endpoint_iterator);
-		}
+	resolver->async_resolve(
+		address, 
+		std::to_string(port),
+		[this](const boost::system::error_code& error, boost::asio::ip::tcp::resolver::results_type results) -> void {
+			if (error) {
+				wxString errorMsg = wxString::Format("Resolution error: %s", error.message());
+				logMessage(errorMsg);
+			} else {
+				logMessage(wxString::Format("Host resolved. Connecting to endpoint..."));
+				tryConnect(results.begin());
+			}
 	});
 
 	/*
@@ -107,30 +111,36 @@ bool LiveClient::connect(const std::string& address, uint16_t port) {
 	return true;
 }
 
-void LiveClient::tryConnect(boost::asio::ip::tcp::resolver::iterator endpoint_iterator) {
+void LiveClient::tryConnect(boost::asio::ip::tcp::resolver::results_type::iterator endpoint_iterator) {
 	if (stopped) {
 		logMessage("Connection attempt aborted: Connection was stopped.");
 		return;
 	}
 
-	if (endpoint_iterator == boost::asio::ip::tcp::resolver::iterator()) {
+	if (endpoint_iterator == boost::asio::ip::tcp::resolver::results_type::iterator()) {
 		logMessage("Connection attempt failed: No more endpoints to try.");
 		return;
 	}
 
+	auto next_endpoint = endpoint_iterator;
+	next_endpoint++;
+
 	logMessage("Joining server " + endpoint_iterator->host_name() + ":" + endpoint_iterator->service_name() + "...");
 
-	boost::asio::async_connect(*socket, endpoint_iterator, [this](boost::system::error_code error, boost::asio::ip::tcp::resolver::iterator endpoint_iterator) -> void {
+	// Connect to a single endpoint
+	socket->async_connect(
+		*endpoint_iterator,
+		[this, next_endpoint](const boost::system::error_code& error) -> void {
 		if (!socket->is_open()) {
 			logMessage(wxString::Format("Connection failed: Socket is not open. Trying next endpoint..."));
-			tryConnect(++endpoint_iterator);
+			tryConnect(next_endpoint);
 		} else if (error) {
 			wxString errorMsg = wxString::Format("Connection error: %s (code: %d)", error.message(), error.value());
 			logMessage(errorMsg);
 			
 			if (handleError(error)) {
 				logMessage("Trying next endpoint...");
-				tryConnect(++endpoint_iterator);
+				tryConnect(next_endpoint);
 			} else {
 				wxTheApp->CallAfter([this]() {
 					logMessage("All connection attempts failed. Closing connection.");
@@ -139,9 +149,11 @@ void LiveClient::tryConnect(boost::asio::ip::tcp::resolver::iterator endpoint_it
 				});
 			}
 		} else {
-			socket->set_option(boost::asio::ip::tcp::no_delay(true), error);
-			if (error) {
-				logMessage(wxString::Format("Warning: Could not set TCP no_delay option: %s", error.message()));
+			boost::system::error_code ec;
+			boost::asio::ip::tcp::no_delay option(true);
+			socket->set_option(option, ec);
+			if (ec) {
+				logMessage(wxString::Format("Warning: Could not set TCP no_delay option: %s", ec.message()));
 				wxTheApp->CallAfter([this]() {
 					close();
 				});

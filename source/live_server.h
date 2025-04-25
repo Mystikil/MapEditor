@@ -15,10 +15,12 @@
 // along with this program. If not, see <http://www.gnu.org/licenses/>.
 //////////////////////////////////////////////////////////////////////
 
-#ifndef _RME_LIVE_SERVER_H_
-#define _RME_LIVE_SERVER_H_
+#ifndef RME_LIVE_SERVER_H_
+#define RME_LIVE_SERVER_H_
 
 #include "live_socket.h"
+#include <boost/asio.hpp>
+#include <memory>
 #include "net_connection.h"
 #include "action.h"
 
