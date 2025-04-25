@@ -108,6 +108,10 @@ PalettePanel* PaletteWindow::CreateTerrainPalette(wxWindow* parent, const Tilese
 	BrushSizePanel* size_panel = newd BrushSizePanel(panel);
 	size_panel->SetToolbarIconSize(g_settings.getBoolean(Config::USE_LARGE_TERRAIN_TOOLBAR));
 	panel->AddToolPanel(size_panel);
+	
+	ZoneBrushPanel* zone_brush_panel = newd ZoneBrushPanel(panel);
+	zone_brush_panel->SetToolbarIconSize(g_settings.getBoolean(Config::USE_LARGE_TERRAIN_TOOLBAR));
+	panel->AddToolPanel(zone_brush_panel);
 
 	return panel;
 }
