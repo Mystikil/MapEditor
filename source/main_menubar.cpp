@@ -2198,10 +2198,15 @@ void MainMenuBar::OnMapCleanup(wxCommandEvent& WXUNUSED(event)) {
                             g_gui.SetLoadDone(progress);
                         }
                         
-                        if (tile->creature && tile->isBlocking()) {
-                            // Monster is in a blocking tile, remove it
+                        // Check for monsters in invalid locations:
+                        // 1. Blocking tiles
+                        // 2. Tiles without ground
+                        // 3. Empty tiles
+                        if (tile->creature && (tile->isBlocking() || !tile->hasGround() || tile->empty())) {
+                            // Monster is in an invalid location, remove it
                             delete tile->creature;
                             tile->creature = nullptr;
+                            tile->modify(); // Mark as modified for saving
                             removedCount++;
                             return true;
                         }
