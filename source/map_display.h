@@ -137,7 +137,6 @@ protected:
 	bool hasHouseWall(Tile* tile);
 	bool hasDoor(Tile* tile);
 	bool hasStairsOrLadder(Tile* tile);
-	std::map<int, std::set<Position>> identifySeparateHouses(const std::set<Position>& all_walls, int current_floor);
 
 private:
 	enum {

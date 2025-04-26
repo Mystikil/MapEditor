@@ -3549,246 +3549,6 @@ void MapCanvas::OnGenerateIsland(wxCommandEvent& event) {
 	Refresh();
 }
 
-// Helper function to identify separate houses when walls are adjacent
-// Returns a map of wall positions assigned to separate house structures
-std::map<int, std::set<Position>> MapCanvas::identifySeparateHouses(const std::set<Position>& all_walls, int current_floor) {
-    std::map<int, std::set<Position>> house_structures;
-    
-    // If there are no walls, return empty result
-    if (all_walls.empty()) {
-        return house_structures;
-    }
-    
-    // First, get a bounding box of all the walls
-    int min_x = std::numeric_limits<int>::max();
-    int min_y = std::numeric_limits<int>::max();
-    int max_x = std::numeric_limits<int>::min();
-    int max_y = std::numeric_limits<int>::min();
-    
-    for (const Position& pos : all_walls) {
-        min_x = std::min(min_x, pos.x);
-        min_y = std::min(min_y, pos.y);
-        max_x = std::max(max_x, pos.x);
-        max_y = std::max(max_y, pos.y);
-    }
-    
-    // Create a grid representation of the walls
-    int grid_width = max_x - min_x + 3; // Add padding
-    int grid_height = max_y - min_y + 3;
-    std::vector<std::vector<bool>> wall_grid(grid_height, std::vector<bool>(grid_width, false));
-    
-    // Mark walls in the grid
-    for (const Position& wall_pos : all_walls) {
-        int grid_x = wall_pos.x - min_x + 1;
-        int grid_y = wall_pos.y - min_y + 1;
-        if (grid_x >= 0 && grid_x < grid_width && grid_y >= 0 && grid_y < grid_height) {
-            wall_grid[grid_y][grid_x] = true;
-        }
-    }
-    
-    // Identify doors in the walls
-    std::set<Position> door_positions;
-    for (const Position& wall_pos : all_walls) {
-        Tile* tile = editor.map.getTile(wall_pos);
-        if (tile && hasDoor(tile)) {
-            door_positions.insert(wall_pos);
-        }
-    }
-    
-    // Create a grid for visited cells
-    std::vector<std::vector<int>> house_id_grid(grid_height, std::vector<int>(grid_width, 0));
-    int next_house_id = 1;
-    
-    // Function to flood-fill interior regions and identify separate houses
-    auto floodFillInterior = [&](int start_x, int start_y, int house_id) {
-        std::queue<std::pair<int, int>> queue;
-        std::set<Position> house_walls;
-        std::set<Position> house_interiors;
-        
-        queue.push({start_x, start_y});
-        
-        while (!queue.empty()) {
-            auto [x, y] = queue.front();
-            queue.pop();
-            
-            // Skip if out of bounds or already visited or is a wall
-            if (x < 0 || y < 0 || x >= grid_width || y >= grid_height || 
-                house_id_grid[y][x] != 0 || wall_grid[y][x]) {
-                continue;
-            }
-            
-            // Mark this cell as part of the current house
-            house_id_grid[y][x] = house_id;
-            
-            // Add to interiors
-            Position map_pos(x + min_x - 1, y + min_y - 1, current_floor);
-            house_interiors.insert(map_pos);
-            
-            // Check adjacent cells (4-way connectivity)
-            const int dirs[4][2] = {{0, -1}, {1, 0}, {0, 1}, {-1, 0}};
-            for (int d = 0; d < 4; d++) {
-                int nx = x + dirs[d][0];
-                int ny = y + dirs[d][1];
-                
-                // If neighbor is within bounds
-                if (nx >= 0 && ny >= 0 && nx < grid_width && ny < grid_height) {
-                    // If neighbor is a wall, add it to house walls
-                    if (wall_grid[ny][nx]) {
-                        Position wall_pos(nx + min_x - 1, ny + min_y - 1, current_floor);
-                        house_walls.insert(wall_pos);
-                    } 
-                    // Otherwise queue it for flood fill if not visited
-                    else if (house_id_grid[ny][nx] == 0) {
-                        queue.push({nx, ny});
-                    }
-                }
-            }
-            
-            // Also check diagonal cells for walls (to catch corner walls)
-            const int diag_dirs[4][2] = {{-1, -1}, {1, -1}, {-1, 1}, {1, 1}};
-            for (int d = 0; d < 4; d++) {
-                int nx = x + diag_dirs[d][0];
-                int ny = y + diag_dirs[d][1];
-                
-                // If neighbor is within bounds and is a wall
-                if (nx >= 0 && ny >= 0 && nx < grid_width && ny < grid_height && wall_grid[ny][nx]) {
-                    Position wall_pos(nx + min_x - 1, ny + min_y - 1, current_floor);
-                    house_walls.insert(wall_pos);
-                }
-            }
-        }
-        
-        // Store the walls for this house
-        if (!house_walls.empty()) {
-            house_structures[house_id] = house_walls;
-            return true;
-        }
-        
-        return false;
-    };
-    
-    // First, try to start flood fill from positions next to doors
-    for (const Position& door_pos : door_positions) {
-        const int dirs[4][2] = {{0, -1}, {1, 0}, {0, 1}, {-1, 0}};
-        
-        for (int d = 0; d < 4; d++) {
-            int door_grid_x = door_pos.x - min_x + 1;
-            int door_grid_y = door_pos.y - min_y + 1;
-            int interior_x = door_grid_x + dirs[d][0];
-            int interior_y = door_grid_y + dirs[d][1];
-            
-            // Check if this position is within bounds and not a wall
-            if (interior_x >= 0 && interior_y >= 0 && interior_x < grid_width && interior_y < grid_height && 
-                !wall_grid[interior_y][interior_x] && house_id_grid[interior_y][interior_x] == 0) {
-                
-                // Check if this is likely an interior space (has at least 2 adjacent walls)
-                int wall_count = 0;
-                for (int dd = 0; dd < 4; dd++) {
-                    int check_x = interior_x + dirs[dd][0];
-                    int check_y = interior_y + dirs[dd][1];
-                    
-                    if (check_x >= 0 && check_y >= 0 && check_x < grid_width && check_y < grid_height && 
-                        wall_grid[check_y][check_x]) {
-                        wall_count++;
-                    }
-                }
-                
-                if (wall_count >= 2) {
-                    floodFillInterior(interior_x, interior_y, next_house_id);
-                    next_house_id++;
-                }
-            }
-        }
-    }
-    
-    // For any large areas that weren't flooded, try to find other interior spaces
-    for (int y = 1; y < grid_height - 1; y++) {
-        for (int x = 1; x < grid_width - 1; x++) {
-            // Skip walls and already processed cells
-            if (wall_grid[y][x] || house_id_grid[y][x] != 0) {
-                continue;
-            }
-            
-            // Check if this is likely an interior space (has walls around it)
-            int wall_count = 0;
-            const int dirs[8][2] = {
-                {-1, -1}, {0, -1}, {1, -1},
-                {-1, 0},           {1, 0},
-                {-1, 1},  {0, 1},  {1, 1}
-            };
-            
-            for (int d = 0; d < 8; d++) {
-                int nx = x + dirs[d][0];
-                int ny = y + dirs[d][1];
-                
-                if (nx >= 0 && ny >= 0 && nx < grid_width && ny < grid_height && wall_grid[ny][nx]) {
-                    wall_count++;
-                }
-            }
-            
-            // If it has enough walls around it, consider it a separate interior space
-            if (wall_count >= 2) {
-                floodFillInterior(x, y, next_house_id);
-                next_house_id++;
-            }
-        }
-    }
-    
-    // If no houses were identified using the interior approach, fall back to the original approach
-    if (house_structures.empty()) {
-        // Track which walls we've processed
-        std::set<Position> processed_walls;
-        int house_id = 1;
-        
-        for (const Position& start_wall : all_walls) {
-            if (processed_walls.count(start_wall) > 0) continue;
-            
-            // Start a new house structure
-            std::set<Position> current_house_walls;
-            std::queue<Position> wall_queue;
-            wall_queue.push(start_wall);
-            
-            // Flood fill to find all connected walls
-            while (!wall_queue.empty()) {
-                Position current = wall_queue.front();
-                wall_queue.pop();
-                
-                if (processed_walls.count(current) > 0) continue;
-                
-                processed_walls.insert(current);
-                current_house_walls.insert(current);
-                
-                // Is this a door?
-                bool is_door = door_positions.count(current) > 0;
-                
-                // Check adjacent positions (including diagonals only for non-doors)
-                for (int y = -1; y <= 1; y++) {
-                    for (int x = -1; x <= 1; x++) {
-                        // For doors, only consider cardinal directions (up, down, left, right)
-                        if (is_door && (std::abs(x) + std::abs(y) != 1)) continue;
-                        
-                        if (x == 0 && y == 0) continue;
-                        
-                        Position next(current.x + x, current.y + y, current.z);
-                        
-                        // Only add unprocessed walls that are part of the original wall set
-                        if (processed_walls.count(next) == 0 && all_walls.count(next) > 0) {
-                            wall_queue.push(next);
-                        }
-                    }
-                }
-            }
-            
-            // Save this house structure if it has walls
-            if (!current_house_walls.empty()) {
-                house_structures[house_id++] = current_house_walls;
-            }
-        }
-    }
-    
-    return house_structures;
-}
-
 void MapCanvas::OnCreateHouse(wxCommandEvent& event) {
     int start_map_x = last_click_map_x;
     int start_map_y = last_click_map_y;
@@ -3861,9 +3621,9 @@ void MapCanvas::OnCreateHouse(wxCommandEvent& event) {
                 
                 if (tile && hasDoor(tile)) {
                     door_pos = pos;
-                    found_door = true;
-                    break;
-                }
+                            found_door = true;
+                                break;
+                        }
             }
             if (found_door) break;
         }
@@ -3906,7 +3666,7 @@ void MapCanvas::OnCreateHouse(wxCommandEvent& event) {
         current_floor_data.wall_positions.insert(current);
         
         // Check for door exits
-        Tile* tile = editor.map.getTile(current);
+            Tile* tile = editor.map.getTile(current);
         if (tile && hasDoor(tile)) {
             // Check outside the door
             const int dirs[4][2] = {{0,-1}, {1,0}, {0,1}, {-1,0}};
@@ -3920,7 +3680,7 @@ void MapCanvas::OnCreateHouse(wxCommandEvent& event) {
                 // Found a potential exit
                 current_floor_data.exit_pos = exit_pos;
                 current_floor_data.has_exit = true;
-                break;
+                                    break;
             }
         }
         
@@ -3947,43 +3707,11 @@ void MapCanvas::OnCreateHouse(wxCommandEvent& event) {
         }
     }
     
-    // NEW STEP: Partition walls into separate house structures
-    std::map<int, std::set<Position>> house_structures = identifySeparateHouses(current_floor_data.wall_positions, current_floor);
-    
-    // Identify which structure contains the clicked position
-    int target_structure_id = 0;
-    Position clicked_pos(start_map_x, start_map_y, current_floor);
-    
-    // Find the closest wall to the clicked position
-    Position closest_wall;
-    int min_distance = std::numeric_limits<int>::max();
-    
-    for (const Position& wall_pos : current_floor_data.wall_positions) {
-        int distance = std::abs(wall_pos.x - clicked_pos.x) + std::abs(wall_pos.y - clicked_pos.y);
-        if (distance < min_distance) {
-            min_distance = distance;
-            closest_wall = wall_pos;
-        }
-    }
-    
-    // Find which structure the closest wall belongs to
-    for (const auto& [id, walls] : house_structures) {
-        if (walls.count(closest_wall) > 0) {
-            target_structure_id = id;
-            break;
-        }
-    }
-    
-    // If we found a valid structure, update the wall positions
-    if (target_structure_id > 0 && house_structures.count(target_structure_id) > 0) {
-        current_floor_data.wall_positions = house_structures[target_structure_id];
-    }
-    
     // Step 4: Calculate bounding box of house walls
-    int min_x = std::numeric_limits<int>::max();
-    int min_y = std::numeric_limits<int>::max();
-    int max_x = std::numeric_limits<int>::min();
-    int max_y = std::numeric_limits<int>::min();
+            int min_x = std::numeric_limits<int>::max();
+            int min_y = std::numeric_limits<int>::max();
+            int max_x = std::numeric_limits<int>::min();
+            int max_y = std::numeric_limits<int>::min();
             
     for (const Position& pos : current_floor_data.wall_positions) {
         min_x = std::min(min_x, pos.x);
@@ -4240,35 +3968,6 @@ void MapCanvas::OnCreateHouse(wxCommandEvent& event) {
                             }
                         }
                         
-                        // Apply house structure separation for this floor too
-                        std::map<int, std::set<Position>> floor_house_structures = identifySeparateHouses(floor_data.wall_positions, check_floor);
-                        
-                        // Find which structure best matches walls from the previously processed floor
-                        int best_structure_id = 0;
-                        int max_matching_walls = 0;
-                        
-                        for (const auto& [id, walls] : floor_house_structures) {
-                            int matching_count = 0;
-                            
-                            // Count walls that match vertically with the processed floor
-                            for (const Position& wall : walls) {
-                                Position check_wall(wall.x, wall.y, processed_floor);
-                                if (house_floors[processed_floor].wall_positions.count(check_wall) > 0) {
-                                    matching_count++;
-                                }
-                            }
-                            
-                            if (matching_count > max_matching_walls) {
-                                max_matching_walls = matching_count;
-                                best_structure_id = id;
-                            }
-                        }
-                        
-                        // If we found a matching structure, update walls for this floor
-                        if (best_structure_id > 0 && floor_house_structures.count(best_structure_id) > 0) {
-                            floor_data.wall_positions = floor_house_structures[best_structure_id];
-                        }
-                        
                         // Find interior
                         std::set<Position> floor_visited_interior;
                         std::queue<Position> floor_interior_queue;
@@ -4514,49 +4213,6 @@ void MapCanvas::OnCreateHouse(wxCommandEvent& event) {
         }
     }
     
-    // If no exit was found, try to find one near a door
-    if (exit_position == Position(0, 0, 0)) {
-        for (const auto& [floor_z, floor_data] : house_floors) {
-            if (exit_position != Position(0, 0, 0)) break;
-            
-            // Search for doors in this floor's walls
-            for (const Position& wall : floor_data.wall_positions) {
-                Tile* tile = editor.map.getTile(wall);
-                if (tile && hasDoor(tile)) {
-                    // Found a door, check adjacent tiles for potential exit
-                    const int dirs[4][2] = {{0, -1}, {1, 0}, {0, 1}, {-1, 0}};
-                    
-                    for (int d = 0; d < 4; d++) {
-                        Position check_pos(wall.x + dirs[d][0], wall.y + dirs[d][1], wall.z);
-                        Tile* check_tile = editor.map.getTile(check_pos);
-                        
-                        // Skip if not a valid tile or if it's part of the house or another house
-                        if (!check_tile || all_house_tiles.count(check_pos) > 0 || check_tile->isHouseTile()) {
-                            continue;
-                        }
-                        
-                        // Count how many house tiles are adjacent to this position to determine if it's outside
-                        int adjacent_house_count = 0;
-                        for (int dd = 0; dd < 4; dd++) {
-                            Position adj_pos(check_pos.x + dirs[dd][0], check_pos.y + dirs[dd][1], check_pos.z);
-                            if (all_house_tiles.count(adj_pos) > 0) {
-                                adjacent_house_count++;
-                            }
-                        }
-                        
-                        // If this position has 1-2 adjacent house tiles, it's likely outside
-                        if (adjacent_house_count >= 1 && adjacent_house_count <= 2) {
-                            exit_position = check_pos;
-                            break;
-                        }
-                    }
-                    
-                    if (exit_position != Position(0, 0, 0)) break;
-                }
-            }
-        }
-    }
-    
     if (all_house_tiles.empty() || total_tiles < 4) {
         g_gui.PopupDialog("Error", "Could not detect any valid house area. Please ensure you clicked inside a house with proper walls.", wxOK);
         return;
@@ -4798,5 +4454,3 @@ bool MapCanvas::hasStairsOrLadder(Tile* tile) {
     
     return false;
 }
-
-
