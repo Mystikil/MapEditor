@@ -3107,57 +3107,72 @@ void MapCanvas::OnSelectionToDoodad(wxCommandEvent& WXUNUSED(event)) {
     
     OutputDebugStringA("COMMENCING TILE INSPECTION! RESISTANCE IS FUTILE!\n");
     
+    // First, analyze what's actually in the selection
     for(auto tile : editor.selection) {
         if(!tile) continue;
         
         Position tilePos(tile->getX(), tile->getY(), tile->getZ());
+        OutputDebugStringA(wxString::Format("\nTile at %d,%d,%d:\n", 
+            tilePos.x, tilePos.y, tilePos.z).c_str());
         
-        // Count ONLY selected non-border items on this tile
-        int selectedItemCount = 0;
-        for(Item* item : tile->items) {
-            if(item && item->isSelected() && !item->isBorder()) {
-                selectedItemCount++;
-            }
-        }
+        // Check if the tile itself is selected (vs just items on the tile)
+        bool tileSelected = editor.selection.getTiles().count(tile) > 0;
         
-        // If tile itself is selected OR we have non-border items selected, do full tile
-        if(tile->isSelected() || selectedItemCount > 0) {
+        // If entire tile is selected, add all its items
+        if(tileSelected) {
             if(tile->ground) {
                 tileItems[tilePos].push_back(tile->ground);
                 totalItems++;
-                OutputDebugStringA(wxString::Format("Adding ground %d from full tile at %d,%d,%d\n", 
+                OutputDebugStringA(wxString::Format("Adding ground %d from selected tile at %d,%d,%d\n", 
                     tile->ground->getID(), tilePos.x, tilePos.y, tilePos.z).c_str());
             }
             
             for(Item* item : tile->items) {
                 if(!item) continue;
-                tileItems[tilePos].push_back(item);
-                totalItems++;
-                OutputDebugStringA(wxString::Format("Adding item %d from full tile at %d,%d,%d\n", 
-                    item->getID(), tilePos.x, tilePos.y, tilePos.z).c_str());
+                if(!item->isBorder()) {
+                    tileItems[tilePos].push_back(item);
+                    totalItems++;
+                    OutputDebugStringA(wxString::Format("Adding item %d from selected tile at %d,%d,%d\n", 
+                        item->getID(), tilePos.x, tilePos.y, tilePos.z).c_str());
+                }
             }
-        }
-        // Otherwise only add specifically selected items (borders)
+        } 
+        // Otherwise, only add individually selected items
         else {
+            // First check if ground is selected
+            if(tile->ground && tile->ground->isSelected()) {
+                tileItems[tilePos].push_back(tile->ground);
+                totalItems++;
+                OutputDebugStringA(wxString::Format("Adding selected ground %d at %d,%d,%d\n",
+                    tile->ground->getID(), tilePos.x, tilePos.y, tilePos.z).c_str());
+            }
+            
+            // Then add selected items
             for(Item* item : tile->items) {
                 if(item && item->isSelected()) {
                     tileItems[tilePos].push_back(item);
                     totalItems++;
-                    OutputDebugStringA(wxString::Format("Adding selected border item %d at %d,%d,%d\n", 
+                    OutputDebugStringA(wxString::Format("Adding selected item %d at %d,%d,%d\n",
                         item->getID(), tilePos.x, tilePos.y, tilePos.z).c_str());
                 }
             }
         }
         
-        tileCount++;
-        
-        // Update min/max positions
-        if(tilePos.x < minPos.x) minPos.x = tilePos.x;
-        if(tilePos.y < minPos.y) minPos.y = tilePos.y;
-        if(tilePos.z < minPos.z) minPos.z = tilePos.z;
-        if(tilePos.x > maxPos.x) maxPos.x = tilePos.x;
-        if(tilePos.y > maxPos.y) maxPos.y = tilePos.y;
-        if(tilePos.z > maxPos.z) maxPos.z = tilePos.z;
+        // Only count this as a tile if we added items from it
+        if(!tileItems[tilePos].empty()) {
+            tileCount++;
+            
+            // Update min/max positions
+            if(tilePos.x < minPos.x) minPos.x = tilePos.x;
+            if(tilePos.y < minPos.y) minPos.y = tilePos.y;
+            if(tilePos.z < minPos.z) minPos.z = tilePos.z;
+            if(tilePos.x > maxPos.x) maxPos.x = tilePos.x;
+            if(tilePos.y > maxPos.y) maxPos.y = tilePos.y;
+            if(tilePos.z > maxPos.z) maxPos.z = tilePos.z;
+        } else {
+            // Remove empty position entry
+            tileItems.erase(tilePos);
+        }
     }
 
     OutputDebugStringA(wxString::Format("MWAHAHAHA! ACQUIRED %d ITEMS FROM %d TILES! THE COLLECTION GROWS!\n", 
@@ -3358,17 +3373,12 @@ void MapCanvas::OnSelectionToDoodad(wxCommandEvent& WXUNUSED(event)) {
         OutputDebugStringA(wxString::Format("Creating tile node at x=%d y=%d z=%d\n", 
             relX, relY, relZ).c_str());
         
-        // Only add selected items to XML
+        // Add all collected items for this position
         for(Item* item : tilePair.second) {
-            if(item && item->isSelected()) {  // Double check selection state
-                wxXmlNode* itemNode = new wxXmlNode(wxXML_ELEMENT_NODE, "item");
-                itemNode->AddAttribute("id", wxString::Format("%d", item->getID()));
-                tileNode->AddChild(itemNode);
-                OutputDebugStringA(wxString::Format("  Adding item id=%d (selected=%s border=%s)\n", 
-                    item->getID(), 
-                    item->isSelected() ? "YES" : "NO",
-                    item->isBorder() ? "YES" : "NO").c_str());
-            }
+            wxXmlNode* itemNode = new wxXmlNode(wxXML_ELEMENT_NODE, "item");
+            itemNode->AddAttribute("id", wxString::Format("%d", item->getID()));
+            tileNode->AddChild(itemNode);
+            OutputDebugStringA(wxString::Format("  Adding item id=%d\n", item->getID()).c_str());
         }
         
         compositeNode->AddChild(tileNode);
@@ -3380,8 +3390,6 @@ void MapCanvas::OnSelectionToDoodad(wxCommandEvent& WXUNUSED(event)) {
     newBrushNode->AddChild(alternateNode);
     doodadsDoc.GetRoot()->AddChild(newBrushNode);
 
-      // ... keep existing doodads.xml creation code ...
-
     // Save doodads.xml
     if(!doodadsDoc.Save(doodadsPathStr)) {
         OutputDebugStringA("THE DOODADS TOME RESISTS OUR CHANGES!\n");
@@ -3389,23 +3397,8 @@ void MapCanvas::OnSelectionToDoodad(wxCommandEvent& WXUNUSED(event)) {
         return;
     }
 
-  
-
-    // Find the selected tileset
-    for(wxXmlNode* node = collectionsRoot->GetChildren(); node; node = node->GetNext()) {
-        if(node->GetName() == "tileset" && node->GetAttribute("name") == selectedTileset) {
-            firstTileset = node;
-            break;
-        }
-    }
-
-    if(!firstTileset) {
-        g_gui.PopupDialog(this, "Error", "Selected tileset not found in collections.xml!", wxOK);
-        return;
-    }
-
     // Find or create collections node in the selected tileset
-   
+    collections = firstTileset->GetChildren();
     if(!collections || collections->GetName() != "collections") {
         OutputDebugStringA("NO COLLECTIONS NODE FOUND! CREATING ONE FROM THE VOID!\n");
         collections = new wxXmlNode(wxXML_ELEMENT_NODE, "collections");
@@ -3480,53 +3473,6 @@ void MapCanvas::OnSelectionToDoodad(wxCommandEvent& WXUNUSED(event)) {
     
     successDoodadDialog->ShowModal();
     successDoodadDialog->Destroy();
-
-    OutputDebugStringA("\n=== STARTING SELECTION ANALYSIS ===\n");
-    
-    // First, let's analyze what's actually in the selection
-    OutputDebugStringA("Pre-processing Selection Analysis:\n");
-      for(auto tile : editor.selection) {
-        if(!tile) continue;
-        
-        Position tilePos(tile->getX(), tile->getY(), tile->getZ());
-        OutputDebugStringA(wxString::Format("\nTile at %d,%d,%d:\n", 
-            tilePos.x, tilePos.y, tilePos.z).c_str());
-        
-        // Check if the tile itself is in selection vs just items
-        OutputDebugStringA(wxString::Format("Tile in selection: %s\n", 
-            editor.selection.getTiles().count(tile) > 0 ? "YES" : "NO").c_str());
-            
-        // Check individual item selection states
-        if(tile->ground) {
-            OutputDebugStringA(wxString::Format("Ground %d selected: %s\n",
-                tile->ground->getID(), tile->ground->isSelected() ? "YES" : "NO").c_str());
-        }
-        
-        for(Item* item : tile->items) {
-            if(!item) continue;
-            OutputDebugStringA(wxString::Format("Item %d selected: %s (Border: %s)\n",
-                item->getID(), 
-                item->isSelected() ? "YES" : "NO",
-                item->isBorder() ? "YES" : "NO").c_str());
-        }
-    }
-    
-    // Now process for brush creation
-    for(auto tile : editor.selection) {
-        if(!tile) continue;
-        
-        Position tilePos(tile->getX(), tile->getY(), tile->getZ());
-        
-        // Only add specifically selected items
-        for(Item* item : tile->items) {
-            if(item && item->isSelected()) {
-                tileItems[tilePos].push_back(item);
-                totalItems++;
-                OutputDebugStringA(wxString::Format("Added selected item %d at %d,%d,%d\n",
-                    item->getID(), tilePos.x, tilePos.y, tilePos.z).c_str());
-            }
-        }
-    }
 }
 
 void MapCanvas::OnFindSimilarItems(wxCommandEvent& WXUNUSED(event)) {
