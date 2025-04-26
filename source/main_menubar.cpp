@@ -2077,6 +2077,18 @@ void MainMenuBar::OnMapCleanup(wxCommandEvent& WXUNUSED(event)) {
     wxCheckBox* cleanInvalid = new wxCheckBox(dialog, wxID_ANY, "Remove Invalid Items");
     optionsSizer->Add(cleanInvalid, 0, wxALL, 5);
     
+    // Add monster cleanup option
+    wxCheckBox* cleanMonsters = new wxCheckBox(dialog, wxID_ANY, "Remove Monsters in Blocking Tiles");
+    optionsSizer->Add(cleanMonsters, 0, wxALL, 5);
+    
+    // Add empty spawn cleanup option
+    wxCheckBox* cleanEmptySpawns = new wxCheckBox(dialog, wxID_ANY, "Remove Empty Spawns");
+    optionsSizer->Add(cleanEmptySpawns, 0, wxALL, 5);
+    
+    // Add problematic items cleanup option
+    wxCheckBox* cleanWheyItems = new wxCheckBox(dialog, wxID_ANY, "Remove Problematic Items (whey/invalid)");
+    optionsSizer->Add(cleanWheyItems, 0, wxALL, 5);
+    
     // ID Range cleanup section
     wxStaticBoxSizer* rangeSizer = new wxStaticBoxSizer(wxVERTICAL, dialog, "Clean Items by ID Range");
     
@@ -2139,7 +2151,8 @@ void MainMenuBar::OnMapCleanup(wxCommandEvent& WXUNUSED(event)) {
 
     // Show dialog and process result
     if (dialog->ShowModal() == wxID_OK) {
-        bool hasOptions = cleanInvalid->GetValue() || useRange->GetValue();
+        bool hasOptions = cleanInvalid->GetValue() || useRange->GetValue() || cleanMonsters->GetValue() || 
+                         cleanEmptySpawns->GetValue() || cleanWheyItems->GetValue();
         if (!hasOptions) {
             g_gui.PopupDialog("Error", "Please select at least one cleanup option!", wxOK);
             dialog->Destroy();
@@ -2152,12 +2165,137 @@ void MainMenuBar::OnMapCleanup(wxCommandEvent& WXUNUSED(event)) {
         g_gui.CreateLoadBar("Cleaning map...");
 
         try {
+            int progressStep = 0;
+            int numOptions = 0;
+            if (cleanInvalid->GetValue()) numOptions++;
+            if (useRange->GetValue()) numOptions++;
+            if (cleanMonsters->GetValue()) numOptions++;
+            if (cleanEmptySpawns->GetValue()) numOptions++;
+            if (cleanWheyItems->GetValue()) numOptions++;
+            int progressIncrement = numOptions > 0 ? 100 / numOptions : 0;
+            
             // Process invalid items if selected
             if (cleanInvalid->GetValue()) {
                 // Update loading bar message but keep the same bar
-                g_gui.SetLoadDone(0, "Removing invalid tiles...");
+                g_gui.SetLoadDone(progressStep, "Removing invalid tiles...");
                 currentMap.cleanInvalidTiles(true);
-                g_gui.SetLoadDone(50); // Set to 50% after invalid tiles
+                progressStep += progressIncrement;
+                g_gui.SetLoadDone(progressStep);
+            }
+
+            // Process monster cleanup if selected
+            if (cleanMonsters->GetValue()) {
+                // Define condition for monsters in blocking tiles
+                struct RemoveMonsterCondition {
+                    int removedCount = 0;
+                    long long totalTiles;
+                    int startProgress;
+                    int endProgress;
+                    
+                    bool operator()(Map& map, Tile* tile, long long done, long long total) {
+                        if (done % 1024 == 0) {
+                            int progress = startProgress + ((done * (endProgress - startProgress)) / totalTiles);
+                            g_gui.SetLoadDone(progress);
+                        }
+                        
+                        if (tile->creature && tile->isBlocking()) {
+                            // Monster is in a blocking tile, remove it
+                            delete tile->creature;
+                            tile->creature = nullptr;
+                            removedCount++;
+                            return true;
+                        }
+                        return false;
+                    }
+                } monsterCondition;
+                
+                monsterCondition.totalTiles = currentMap.getTileCount();
+                monsterCondition.startProgress = progressStep;
+                monsterCondition.endProgress = progressStep + progressIncrement;
+                
+                g_gui.SetLoadDone(progressStep, "Removing monsters in blocking tiles...");
+                
+                // Need to iterate through all map tiles
+                long long total = currentMap.getTileCount();
+                long long done = 0;
+                for (MapIterator mit = currentMap.begin(); mit != currentMap.end(); ++mit) {
+                    if (Tile* tile = (*mit)->get()) {
+                        monsterCondition(currentMap, tile, done, total);
+                    }
+                    done++;
+                }
+                
+                totalCount += monsterCondition.removedCount;
+                progressStep += progressIncrement;
+                g_gui.SetLoadDone(progressStep);
+            }
+            
+            // Process empty spawn cleanup if selected
+            if (cleanEmptySpawns->GetValue()) {
+                // Define condition for empty spawns
+                struct RemoveEmptySpawnCondition {
+                    int removedCount = 0;
+                    long long totalTiles;
+                    int startProgress;
+                    int endProgress;
+                    
+                    bool operator()(Map& map, Tile* tile, long long done, long long total) {
+                        if (done % 1024 == 0) {
+                            int progress = startProgress + ((done * (endProgress - startProgress)) / totalTiles);
+                            g_gui.SetLoadDone(progress);
+                        }
+                        
+                        if (tile->spawn) {
+                            // Check if there are no monsters in the spawn radius
+                            bool hasMonster = false;
+                            Position pos = tile->getPosition();
+                            int radius = tile->spawn->getSize();
+                            
+                            for (int x = -radius; x <= radius && !hasMonster; ++x) {
+                                for (int y = -radius; y <= radius && !hasMonster; ++y) {
+                                    Tile* checkTile = map.getTile(pos.x + x, pos.y + y, pos.z);
+                                    if (checkTile && checkTile->creature) {
+                                        hasMonster = true;
+                                        break;
+                                    }
+                                }
+                            }
+                            
+                            if (!hasMonster) {
+                                // No monsters in spawn radius, remove it properly
+                                map.removeSpawn(tile); // Remove from map's spawn registry
+                                delete tile->spawn;
+                                tile->spawn = nullptr;
+                                tile->deselect(); // Make sure tile is not selected
+                                tile->update();  // Update tile to refresh display state
+                                tile->modify(); // Mark as modified for saving
+                                removedCount++;
+                                return true;
+                            }
+                        }
+                        return false;
+                    }
+                } spawnCondition;
+                
+                spawnCondition.totalTiles = currentMap.getTileCount();
+                spawnCondition.startProgress = progressStep;
+                spawnCondition.endProgress = progressStep + progressIncrement;
+                
+                g_gui.SetLoadDone(progressStep, "Removing empty spawns...");
+                
+                // Need to iterate through all map tiles
+                long long total = currentMap.getTileCount();
+                long long done = 0;
+                for (MapIterator mit = currentMap.begin(); mit != currentMap.end(); ++mit) {
+                    if (Tile* tile = (*mit)->get()) {
+                        spawnCondition(currentMap, tile, done, total);
+                    }
+                    done++;
+                }
+                
+                totalCount += spawnCondition.removedCount;
+                progressStep += progressIncrement;
+                g_gui.SetLoadDone(progressStep);
             }
 
             // Process ID range cleanup if selected
@@ -2218,7 +2356,7 @@ void MainMenuBar::OnMapCleanup(wxCommandEvent& WXUNUSED(event)) {
                     condition.ignoredIds = ignoredIds;
                     condition.ignoredRanges = ignoredRanges;
                     condition.totalTiles = currentMap.getTileCount();
-                    condition.startProgress = cleanInvalid->GetValue() ? 50 : 0;
+                    condition.startProgress = progressStep;
                     condition.endProgress = 100;
 
                     // Update loading bar message but keep the same bar
@@ -2226,6 +2364,63 @@ void MainMenuBar::OnMapCleanup(wxCommandEvent& WXUNUSED(event)) {
                     int64_t count = RemoveItemOnMap(currentMap, condition, false);
                     totalCount += count;
                 }
+            }
+
+            // Process whey items cleanup if selected
+            if (cleanWheyItems->GetValue()) {
+                // Define condition for whey items (ID 53)
+                struct RemoveWheyItemsCondition {
+                    int removedCount = 0;
+                    long long totalTiles;
+                    int startProgress;
+                    int endProgress;
+                    
+                    bool operator()(Map& map, Item* item, long long removed, long long done) {
+                        if (done % 1024 == 0) {
+                            int progress = startProgress + ((done * (endProgress - startProgress)) / totalTiles);
+                            g_gui.SetLoadDone(progress);
+                        }
+                        
+                        // Check for problematic items
+                        std::string name = item->getName();
+                        
+                        // Original check for "whey" items
+                        if (name == "whey") {
+                            removedCount++;
+                            return true;
+                        }
+                        
+                       
+                        
+                        // Check for items with ID 0 - these are invalid
+                        if (item->getID() == 0) {
+                            removedCount++;
+                            return true;
+                        }
+                        
+                        return false;
+                    }
+                } wheyCondition;
+                
+                wheyCondition.totalTiles = currentMap.getTileCount();
+                wheyCondition.startProgress = progressStep;
+                wheyCondition.endProgress = progressStep + progressIncrement;
+                
+                g_gui.SetLoadDone(progressStep, "Removing problematic items...");
+                int64_t count = RemoveItemOnMap(currentMap, wheyCondition, false);
+                
+                // Update tiles after removing items to ensure proper state
+                for (MapIterator it = currentMap.begin(); it != currentMap.end(); ++it) {
+                    Tile* tile = (*it)->get();
+                    if (tile) {
+                        tile->update();
+                    }
+                }
+                
+                totalCount += count;
+                
+                progressStep += progressIncrement;
+                g_gui.SetLoadDone(progressStep);
             }
 
             // Ensure progress bar reaches 100%
