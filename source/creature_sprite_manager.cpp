@@ -15,6 +15,67 @@
 // along with this program. If not, see <http://www.gnu.org/licenses/>.
 //////////////////////////////////////////////////////////////////////
 
+/*
+ * PROPOSED ENHANCEMENT: DYNAMIC MULTI-CELL SPRITE ALLOCATION IN PALETTE
+ * 
+ * Current implementation limitation:
+ * Currently, each creature is assigned to a single grid cell in the palette,
+ * regardless of its natural size. This forces larger creatures (64x64, 96x96)
+ * to be scaled down to fit in the standard grid, losing detail.
+ * 
+ * Proposed solution:
+ * Allow larger sprites to occupy multiple grid cells based on their natural dimensions.
+ * 
+ * Implementation steps:
+ * 
+ * 1. Modify the CreatureSeamlessGridPanel class:
+ *    - Add a 'sprite_cell_span' map that stores how many cells each sprite occupies 
+ *      (both horizontally and vertically)
+ *    - E.g., a 32x32 sprite has span 1x1, a 64x64 has span 2x2, a 96x96 has span 3x3
+ * 
+ * 2. Update the RecalculateGrid method:
+ *    - Consider sprite spans when calculating the grid layout
+ *    - Adjust cell positions so large sprites don't overlap
+ *    - Create a 2D grid map that tracks which cells are occupied
+ * 
+ * 3. Update the GetSpriteIndexAt method:
+ *    - Map x,y coordinates to the correct sprite, considering spans
+ *    - Handle click events anywhere within a sprite's area
+ * 
+ * 4. Update the DrawItemsToPanel method:
+ *    - Calculate each sprite's position based on its span
+ *    - Draw larger sprites across multiple grid cells
+ *    - Consider a staggered grid for more efficient space usage
+ * 
+ * 5. Modify sprite placement algorithm:
+ *    - Implement a bin-packing algorithm for optimal space usage
+ *    - Consider a simple grid-based approach:
+ *      a. Sort sprites by size (largest first)
+ *      b. For each sprite, find the first available grid position
+ *      c. Mark the cells it occupies as taken
+ * 
+ * 6. Update highlighting and selection:
+ *    - Highlight/select the entire area occupied by a sprite
+ *    - Use a special border style to indicate multi-cell sprites
+ * 
+ * 7. Grid navigation improvements:
+ *    - Add keyboard navigation that respects sprite boundaries
+ *    - Ensure tabbing and arrow keys work logically with varying sprite sizes
+ * 
+ * Implementation example for determining cell span:
+ * 
+ * int GetCellSpan(int naturalSize) {
+ *     if (naturalSize <= 32) return 1;
+ *     if (naturalSize <= 64) return 2;
+ *     if (naturalSize <= 96) return 3;
+ *     return (naturalSize + 31) / 32; // Round up to nearest cell
+ * }
+ * 
+ * The end result would be a more space-efficient grid where larger creatures
+ * get more screen real estate, showing them in their full detailed glory
+ * without being constrained to a standard grid cell.
+ */
+
 #include "main.h"
 #include "creature_sprite_manager.h"
 #include "creatures.h"
