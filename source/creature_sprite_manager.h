@@ -31,6 +31,9 @@ public:
     // Get or create a bitmap for a specific creature looktype
     wxBitmap* getSpriteBitmap(int looktype, int width = 32, int height = 32);
     
+    // Get or create a bitmap for a specific creature with outfit colors
+    wxBitmap* getSpriteBitmap(int looktype, int head, int body, int legs, int feet, int width = 32, int height = 32);
+    
     // Pre-generate creature sprites for the palette view
     void generateCreatureSprites(const BrushVector& creatures, int width = 32, int height = 32);
     
@@ -39,10 +42,13 @@ public:
 
 private:
     // Cache of generated creature sprites
-    std::map<int, wxBitmap*> sprite_cache;
+    std::map<std::string, wxBitmap*> sprite_cache;
     
     // Helper to create a bitmap for a specific looktype
     wxBitmap* createSpriteBitmap(int looktype, int width, int height);
+    
+    // Helper to create a bitmap with outfit colors
+    wxBitmap* createSpriteBitmap(int looktype, int head, int body, int legs, int feet, int width, int height);
 };
 
 extern CreatureSpriteManager g_creature_sprites;

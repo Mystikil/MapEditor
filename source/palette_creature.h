@@ -20,7 +20,71 @@
 
 #include "palette_common.h"
 
-// New class for grid view of creature sprites
+// New class for seamless grid view of creature sprites with direct rendering
+class CreatureSeamlessGridPanel : public wxScrolledWindow {
+public:
+	CreatureSeamlessGridPanel(wxWindow* parent);
+	virtual ~CreatureSeamlessGridPanel();
+
+	void Clear();
+	void LoadCreatures(const BrushVector& brushlist);
+	Brush* GetSelectedBrush() const;
+	bool SelectBrush(const Brush* brush);
+	void EnsureVisible(const Brush* brush);
+	void SelectIndex(int index);
+	
+	// Getter for sprite size
+	int GetSpriteSize() const { return sprite_size; }
+	
+	// Drawing handlers
+	void OnPaint(wxPaintEvent& event);
+	void OnSize(wxSizeEvent& event);
+	void OnScroll(wxScrollWinEvent& event);
+	void OnMouseClick(wxMouseEvent& event);
+	void OnMouseMove(wxMouseEvent& event);
+	void OnTimer(wxTimerEvent& event);
+
+	// Creature brushes in this panel
+	BrushVector creatures;
+
+	// Friend class declaration to allow access to protected members
+	friend class CreaturePalettePanel;
+
+protected:
+	void RecalculateGrid();
+	int GetSpriteIndexAt(int x, int y) const;
+	int GetCreatureNaturalSize(CreatureType* ctype) const;
+	void DrawCreature(wxDC& dc, int x, int y, CreatureType* ctype, bool selected = false);
+	void DrawItemsToPanel(wxDC& dc);
+	void UpdateViewableItems();
+	void StartProgressiveLoading();
+
+	int columns;
+	int sprite_size;
+	int selected_index;
+	int hover_index;
+	wxBitmap* buffer;
+	std::map<size_t, int> sprite_dimensions; // Maps creature index to natural size
+	
+	// Viewport and loading management
+	int first_visible_row;
+	int last_visible_row;
+	int visible_rows_margin;
+	int total_rows;
+	bool need_full_redraw;
+	
+	// Progressive loading properties
+	bool use_progressive_loading;
+	bool is_large_tileset;
+	int loading_step;
+	int max_loading_steps;
+	wxTimer* loading_timer;
+	static const int LARGE_TILESET_THRESHOLD = 200;
+
+	DECLARE_EVENT_TABLE();
+};
+
+// Original class for grid view of creature sprites with padding
 class CreatureSpritePanel : public wxScrolledWindow {
 public:
 	CreatureSpritePanel(wxWindow* parent);
@@ -45,6 +109,9 @@ public:
 
 	// Creature brushes in this panel
 	BrushVector creatures;
+
+	// Friend class declaration to allow access to protected members
+	friend class CreaturePalettePanel;
 
 protected:
 	void RecalculateGrid();
@@ -90,6 +157,12 @@ protected:
 	void SelectCreature(std::string name);
 	// Switch between list view and sprite view modes
 	void SetViewMode(bool use_sprites);
+	// Set view style (regular grid vs seamless grid)
+	void SetViewStyle(bool use_seamless);
+	// Set large sprite mode (64x64 vs 32x32)
+	void SetLargeSpriteMode(bool use_large);
+	// Set zoom level for sprites
+	void SetZoomLevel(int zoom_factor);
 
 public:
 	// Event handling
@@ -109,6 +182,9 @@ public:
 	void OnSearchFieldKillFocus(wxFocusEvent& event);
 	void OnSearchFieldKeyDown(wxKeyEvent& event);
 	void OnClickViewToggle(wxCommandEvent& event);
+	void OnClickViewStyleToggle(wxCommandEvent& event);
+	void OnClickLargeSpritesToggle(wxCommandEvent& event);
+	void OnClickZoomButton(wxCommandEvent& event);
 	void OnSpriteSelected(wxCommandEvent& event);
 
 protected:
@@ -122,9 +198,16 @@ protected:
 	wxChoice* tileset_choice;
 	SortableListBox* creature_list;
 	CreatureSpritePanel* sprite_panel;
+	CreatureSeamlessGridPanel* seamless_panel;
 	wxToggleButton* view_toggle;
+	wxToggleButton* view_style_toggle;
+	wxToggleButton* large_sprites_toggle;
+	wxButton* zoom_button;
 	wxSizer* view_sizer;
 	bool use_sprite_view;
+	bool use_seamless_view;
+	bool use_large_sprites;
+	int zoom_factor;
 	bool handling_event;
 
 	wxTextCtrl* search_field;

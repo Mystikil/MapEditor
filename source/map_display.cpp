@@ -627,7 +627,7 @@ void MapCanvas::OnMouseLeftDoubleClick(wxMouseEvent& event) {
 				action->addChange(newd Change(new_tile));
 				editor.addAction(action);
 			} else {
-				// Cancel!
+				// Cancel!a
 				delete new_tile;
 			}
 			w->Destroy();

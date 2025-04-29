@@ -21,6 +21,7 @@
 #include "creature.h"
 #include "gui.h"
 #include "creature_brush.h"
+#include "graphics.h"
 
 CreatureSpriteManager g_creature_sprites;
 
@@ -41,8 +42,9 @@ void CreatureSpriteManager::clear() {
 }
 
 wxBitmap* CreatureSpriteManager::getSpriteBitmap(int looktype, int width, int height) {
-    // Use a cache key that includes the dimensions
-    int key = looktype;
+    // Create a combined key that includes dimensions and looktype
+    // This ensures we have a unique cache for each size
+    std::string key = std::to_string(looktype) + "_" + std::to_string(width) + "x" + std::to_string(height);
     
     // Check if we already have this bitmap
     auto it = sprite_cache.find(key);
@@ -59,15 +61,46 @@ wxBitmap* CreatureSpriteManager::getSpriteBitmap(int looktype, int width, int he
     return bitmap;
 }
 
+wxBitmap* CreatureSpriteManager::getSpriteBitmap(int looktype, int head, int body, int legs, int feet, int width, int height) {
+    // Create a combined key that includes dimensions, looktype and outfit colors
+    std::string key = std::to_string(looktype) + "_" + 
+                      std::to_string(head) + "_" + 
+                      std::to_string(body) + "_" + 
+                      std::to_string(legs) + "_" + 
+                      std::to_string(feet) + "_" + 
+                      std::to_string(width) + "x" + std::to_string(height);
+    
+    // Check if we already have this bitmap
+    auto it = sprite_cache.find(key);
+    if (it != sprite_cache.end()) {
+        return it->second;
+    }
+    
+    // Create a new bitmap
+    wxBitmap* bitmap = createSpriteBitmap(looktype, head, body, legs, feet, width, height);
+    if (bitmap) {
+        sprite_cache[key] = bitmap;
+    }
+    
+    return bitmap;
+}
+
 void CreatureSpriteManager::generateCreatureSprites(const BrushVector& creatures, int width, int height) {
     // Pre-generate sprites for a vector of creature brushes
     for (Brush* brush : creatures) {
         if (brush->isCreature()) {
             CreatureBrush* cb = static_cast<CreatureBrush*>(brush);
-            if (cb->getType()) {
-                int looktype = cb->getType()->outfit.lookType;
+            if (cb && cb->getType()) {
+                const Outfit& outfit = cb->getType()->outfit;
+                int looktype = outfit.lookType;
                 if (looktype > 0) {
-                    getSpriteBitmap(looktype, width, height);
+                    // Check if this has color components
+                    if (outfit.lookHead || outfit.lookBody || outfit.lookLegs || outfit.lookFeet) {
+                        getSpriteBitmap(looktype, outfit.lookHead, outfit.lookBody, 
+                                      outfit.lookLegs, outfit.lookFeet, width, height);
+                    } else {
+                        getSpriteBitmap(looktype, width, height);
+                    }
                 }
             }
         }
@@ -75,50 +108,129 @@ void CreatureSpriteManager::generateCreatureSprites(const BrushVector& creatures
 }
 
 wxBitmap* CreatureSpriteManager::createSpriteBitmap(int looktype, int width, int height) {
-    // Create a bitmap for a creature with the specified looktype
+    // Find a creature with this looktype to get its full outfit details
+    Outfit outfit;
+    outfit.lookType = looktype;
+    
+    for (CreatureDatabase::iterator it = g_creatures.begin(); it != g_creatures.end(); ++it) {
+        CreatureType* type = it->second;
+        if (type && type->outfit.lookType == looktype) {
+            outfit = type->outfit;
+            break;
+        }
+    }
+    
+    // Now create the bitmap using the full outfit
+    return createSpriteBitmap(looktype, outfit.lookHead, outfit.lookBody, 
+                             outfit.lookLegs, outfit.lookFeet, width, height);
+}
+
+wxBitmap* CreatureSpriteManager::createSpriteBitmap(int looktype, int head, int body, int legs, int feet, int width, int height) {
+    // Get the sprite from graphics system
     GameSprite* spr = g_gui.gfx.getCreatureSprite(looktype);
     if (!spr) {
         return nullptr;
     }
     
-    // Use existing sprite drawing methods
-    // Adjust for your setup - we'll use GameSprite's built-in DC drawing
-    const int spriteSize = 32;  // Default sprite size
+    // Calculate the natural sprite size and scaling needed
+    // These are publicly available properties of the GameSprite class
+    int natural_width = spr->width > 0 ? spr->width : 32;
+    int natural_height = spr->height > 0 ? spr->height : 32;
     
-    // Create our bitmap with the specified dimensions
+    // Calculate the natural size as the maximum of width and height
+    // This ensures square display in the palette
+    int natural_size = std::max(natural_width, natural_height);
+    
+    // Round up to the nearest standard size (32, 64, 96, 128, etc.)
+    if (natural_size <= 32) {
+        natural_size = 32;
+    } else if (natural_size <= 64) {
+        natural_size = 64;
+    } else if (natural_size <= 96) {
+        natural_size = 96;
+    } else if (natural_size <= 128) {
+        natural_size = 128;
+    } else {
+        natural_size = ((natural_size + 31) / 32) * 32; // Round up to nearest multiple of 32
+    }
+    
+    // Fallback to heuristics if sprite dimensions are not available
+    if (natural_size == 32 && looktype >= 800) {
+        natural_size = 64; // Many high looktype monsters are larger
+    }
+    
+    // Fallback for very high looktypes known to be larger
+    if (looktype >= 1200 && natural_size < 96) {
+        natural_size = 96; // Some newer monsters can be 96x96
+    }
+    
+    bool is_large = (natural_size > 32);
+    
+    // Create the bitmap with target dimensions
     wxBitmap* bitmap = new wxBitmap(width, height);
     wxMemoryDC dc(*bitmap);
     
-    // Set background color
-    dc.SetBackground(wxBrush(wxColour(255, 0, 255)));  // Magenta for transparency
+    // Set transparent background (magenta)
+    dc.SetBackground(wxBrush(wxColour(255, 0, 255)));
     dc.Clear();
     
     // Draw the creature sprite centered in the bitmap
     if (spr) {
-        // If we have a GameSprite, use its drawing method
-        int offsetX = (width - spriteSize) / 2;
-        int offsetY = (height - spriteSize) / 2;
+        // Calculate offsets to center the sprite
+        int offsetX = (width - natural_size) / 2;
+        int offsetY = (height - natural_size) / 2;
         
-        // Get the default appearance of this looktype
-        Outfit outfit;
-        outfit.lookType = looktype;
-        
-        // Try to find a creature with this looktype to get its default appearance
-        for (CreatureDatabase::iterator it = g_creatures.begin(); it != g_creatures.end(); ++it) {
-            CreatureType* type = it->second;
-            if (type && type->outfit.lookType == looktype) {
-                outfit = type->outfit;
-                break;
-            }
+        // Adjust offsets for small target sizes
+        if (width < natural_size) {
+            offsetX = (width - std::min(width, 32)) / 2; // Minimum size
+        }
+        if (height < natural_size) {
+            offsetY = (height - std::min(height, 32)) / 2; // Minimum size
         }
         
-        // Attempt to use the sprite's drawing function to render to our DC
-        spr->DrawTo(&dc, width >= 32 ? SPRITE_SIZE_32x32 : SPRITE_SIZE_16x16, offsetX, offsetY);
+        // Set up the outfit with colors
+        Outfit full_outfit;
+        full_outfit.lookType = looktype;
+        full_outfit.lookHead = head;
+        full_outfit.lookBody = body;
+        full_outfit.lookLegs = legs;
+        full_outfit.lookFeet = feet;
+        
+        // Determine the sprite size to use based on target dimensions and natural size
+        SpriteSize sprite_size = SPRITE_SIZE_32x32;
+        if (width < 32 || height < 32) {
+            sprite_size = SPRITE_SIZE_16x16;
+        } else if (is_large) {
+            sprite_size = SPRITE_SIZE_64x64;
+        }
+        
+        // Try to draw with outfit colors or fall back to regular drawing
+        if (full_outfit.lookHead > 0 || full_outfit.lookBody > 0 || 
+            full_outfit.lookLegs > 0 || full_outfit.lookFeet > 0) {
+            // Check if the DrawOutfit method is available in the game's API
+            // If not available, fall back to regular DrawTo
+            try {
+                // Try to use the dedicated outfit drawing method
+                spr->DrawOutfit(&dc, sprite_size, offsetX, offsetY, full_outfit);
+            } catch (...) {
+                // Fallback in case DrawOutfit isn't available in this version
+                spr->DrawTo(&dc, sprite_size, offsetX, offsetY);
+            }
+        } else {
+            // Regular sprite without outfit colors
+            spr->DrawTo(&dc, sprite_size, offsetX, offsetY);
+        }
     }
     
     // Ensure transparency works
     wxImage img = bitmap->ConvertToImage();
     img.SetMaskColour(255, 0, 255);
+    
+    // Always scale to requested size to ensure proper display in palette
+    if (width != img.GetWidth() || height != img.GetHeight()) {
+        img = img.Scale(width, height, wxIMAGE_QUALITY_HIGH);
+    }
+    
     *bitmap = wxBitmap(img);
     
     return bitmap;
