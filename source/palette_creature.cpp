@@ -34,6 +34,8 @@
 #define PALETTE_PURGE_CREATURES_BUTTON 1954
 #define PALETTE_SEARCH_BUTTON 1955
 #define PALETTE_SEARCH_FIELD 1956
+#define PALETTE_GRID_VIEW_CHECKBOX 1957
+#define PALETTE_ENLARGE_SPRITES_CHECKBOX 1958
 
 // ============================================================================
 // Creature palette
@@ -50,6 +52,8 @@ EVT_BUTTON(PALETTE_LOAD_MONSTERS_BUTTON, CreaturePalettePanel::OnClickLoadMonste
 EVT_BUTTON(PALETTE_PURGE_CREATURES_BUTTON, CreaturePalettePanel::OnClickPurgeCreaturesButton)
 EVT_BUTTON(PALETTE_SEARCH_BUTTON, CreaturePalettePanel::OnClickSearchButton)
 EVT_TEXT(PALETTE_SEARCH_FIELD, CreaturePalettePanel::OnSearchFieldText)
+EVT_CHECKBOX(PALETTE_GRID_VIEW_CHECKBOX, CreaturePalettePanel::OnGridViewToggle)
+EVT_CHECKBOX(PALETTE_ENLARGE_SPRITES_CHECKBOX, CreaturePalettePanel::OnEnlargeSpritesToggle)
 
 EVT_SPINCTRL(PALETTE_CREATURE_SPAWN_TIME, CreaturePalettePanel::OnChangeSpawnTime)
 EVT_SPINCTRL(PALETTE_CREATURE_SPAWN_SIZE, CreaturePalettePanel::OnChangeSpawnSize)
@@ -57,7 +61,8 @@ END_EVENT_TABLE()
 
 CreaturePalettePanel::CreaturePalettePanel(wxWindow* parent, wxWindowID id) :
 	PalettePanel(parent, id),
-	handling_event(false) {
+	handling_event(false),
+	enlarged_sprites(false) {
 	wxSizer* topsizer = newd wxBoxSizer(wxVERTICAL);
 
 	wxSizer* sidesizer = newd wxStaticBoxSizer(wxVERTICAL, this, "Creatures");
@@ -73,12 +78,22 @@ CreaturePalettePanel::CreaturePalettePanel(wxWindow* parent, wxWindowID id) :
 	searchSizer->Add(search_button, 0, wxLEFT, 5);
 	sidesizer->Add(searchSizer, 0, wxEXPAND | wxTOP, 5);
 	
+	// Add view options
+	wxSizer* viewOptionsSizer = newd wxBoxSizer(wxHORIZONTAL);
+	grid_view_checkbox = newd wxCheckBox(this, PALETTE_GRID_VIEW_CHECKBOX, "Grid View");
+	viewOptionsSizer->Add(grid_view_checkbox, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 10);
+	
+	enlarge_sprites_checkbox = newd wxCheckBox(this, PALETTE_ENLARGE_SPRITES_CHECKBOX, "Large Sprites");
+	viewOptionsSizer->Add(enlarge_sprites_checkbox, 0, wxALIGN_CENTER_VERTICAL);
+	
+	sidesizer->Add(viewOptionsSizer, 0, wxEXPAND | wxTOP, 5);
+	
 	// Connect the focus events to disable hotkeys during typing
 	search_field->Connect(wxEVT_SET_FOCUS, wxFocusEventHandler(CreaturePalettePanel::OnSearchFieldFocus), nullptr, this);
 	search_field->Connect(wxEVT_KILL_FOCUS, wxFocusEventHandler(CreaturePalettePanel::OnSearchFieldKillFocus), nullptr, this);
 	// Connect key down event to handle key presses in the search field
 	search_field->Connect(wxEVT_KEY_DOWN, wxKeyEventHandler(CreaturePalettePanel::OnSearchFieldKeyDown), nullptr, this);
-
+	
 	creature_list = newd SortableListBox(this, PALETTE_CREATURE_LISTBOX);
 	sidesizer->Add(creature_list, 1, wxEXPAND | wxTOP, 5);
 	
@@ -202,7 +217,60 @@ void CreaturePalettePanel::OnUpdate() {
 	tileset_choice->Clear();
 	g_materials.createOtherTileset();
 
+	// Initialize checkbox states based on the current style setting
+	wxString currentStyle = wxstr(g_settings.getString(Config::PALETTE_CREATURE_STYLE));
+	bool isGridView = currentStyle.Contains("grid");
+	bool isLargeSprites = currentStyle.Contains("large");
+	
+	grid_view_checkbox->SetValue(isGridView);
+	enlarge_sprites_checkbox->SetValue(isLargeSprites);
+	enlarged_sprites = isLargeSprites;
+
+	// Create an "All Creatures" tileset that contains all creatures
+	Tileset* allCreatures = nullptr;
+	TilesetCategory* allCreaturesCategory = nullptr;
+	
+	// Check if the "All Creatures" tileset already exists, if not create it
+	if (g_materials.tilesets.count("All Creatures") > 0) {
+		allCreatures = g_materials.tilesets["All Creatures"];
+		allCreaturesCategory = allCreatures->getCategory(TILESET_CREATURE);
+		allCreaturesCategory->brushlist.clear();
+	} else {
+		allCreatures = newd Tileset(g_brushes, "All Creatures");
+		g_materials.tilesets["All Creatures"] = allCreatures;
+		allCreaturesCategory = allCreatures->getCategory(TILESET_CREATURE);
+	}
+
+	// Track added creatures to avoid duplicates
+	std::set<std::string> addedCreatures;
+
+	// Collect all creature brushes from all tilesets
 	for (TilesetContainer::const_iterator iter = g_materials.tilesets.begin(); iter != g_materials.tilesets.end(); ++iter) {
+		if (iter->first == "All Creatures") continue;  // Skip ourselves to avoid duplication
+		
+		const TilesetCategory* tsc = iter->second->getCategory(TILESET_CREATURE);
+		if (tsc && tsc->size() > 0) {
+			// Add all creature brushes from this category to the All Creatures category
+			for (BrushVector::const_iterator brushIter = tsc->brushlist.begin(); brushIter != tsc->brushlist.end(); ++brushIter) {
+				if ((*brushIter)->isCreature()) {
+					// Only add if not already added (avoid duplicates)
+					std::string creatureName = (*brushIter)->getName();
+					if (addedCreatures.count(creatureName) == 0) {
+						allCreaturesCategory->brushlist.push_back(*brushIter);
+						addedCreatures.insert(creatureName);
+					}
+				}
+			}
+		}
+	}
+
+	// Add the "All Creatures" tileset first
+	tileset_choice->Append(wxstr(allCreatures->name), allCreaturesCategory);
+
+	// Add the rest of the tilesets as before
+	for (TilesetContainer::const_iterator iter = g_materials.tilesets.begin(); iter != g_materials.tilesets.end(); ++iter) {
+		if (iter->first == "All Creatures") continue;  // Skip since we already added it
+
 		const TilesetCategory* tsc = iter->second->getCategory(TILESET_CREATURE);
 		if (tsc && tsc->size() > 0) {
 			tileset_choice->Append(wxstr(iter->second->name), const_cast<TilesetCategory*>(tsc));
@@ -447,7 +515,16 @@ bool CreaturePalettePanel::PurgeCreaturePalettes() {
 	// Create vectors to store brushes that need to be removed
 	std::vector<Brush*> brushesToRemove;
 	
-	// Collect creature brushes from the "NPCs" and "Others" tilesets
+	// Collect creature brushes from the "NPCs", "Others", and "All Creatures" tilesets
+	if (g_materials.tilesets.count("All Creatures") > 0) {
+		Tileset* allCreaturesTileset = g_materials.tilesets["All Creatures"];
+		TilesetCategory* allCreaturesCategory = allCreaturesTileset->getCategory(TILESET_CREATURE);
+		if (allCreaturesCategory) {
+			allCreaturesCategory->brushlist.clear();
+			success = true;
+		}
+	}
+	
 	if (g_materials.tilesets.count("NPCs") > 0) {
 		Tileset* npcTileset = g_materials.tilesets["NPCs"];
 		TilesetCategory* npcCategory = npcTileset->getCategory(TILESET_CREATURE);
@@ -592,10 +669,22 @@ void CreaturePalettePanel::FilterCreatures(const wxString& search_text) {
 	// Add only creatures that match the search
 	wxString searchLower = search_text.Lower();
 	
+	// Used to track seen creature names to avoid duplicates (except for All Creatures category)
+	std::set<std::string> seenCreatures;
+	bool isAllCreaturesCategory = (tileset_choice->GetString(index) == "All Creatures");
+	
 	for (BrushVector::const_iterator iter = tsc->brushlist.begin(); iter != tsc->brushlist.end(); ++iter) {
 		wxString name = wxstr((*iter)->getName()).Lower();
+		std::string creatureName = (*iter)->getName();
+		
+		// For "All Creatures" category, don't add duplicates
+		if (!isAllCreaturesCategory && seenCreatures.count(creatureName) > 0) {
+			continue;
+		}
+		
 		if (name.Find(searchLower) != wxNOT_FOUND) {
-			creature_list->Append(wxstr((*iter)->getName()), *iter);
+			creature_list->Append(wxstr(creatureName), *iter);
+			seenCreatures.insert(creatureName);
 		}
 	}
 	
@@ -609,4 +698,67 @@ void CreaturePalettePanel::FilterCreatures(const wxString& search_text) {
 	} else {
 		creature_brush_button->Enable(false);
 	}
+}
+
+void CreaturePalettePanel::OnGridViewToggle(wxCommandEvent& event) {
+	// Save the setting to config
+	bool isGridView = event.IsChecked();
+	bool isLargeSprites = enlarge_sprites_checkbox->GetValue();
+	
+	// Set appropriate display style based on checkbox states
+	wxString style = isGridView ? 
+		(isLargeSprites ? "grid_large" : "grid") : 
+		(isLargeSprites ? "large_icons" : "listbox");
+	
+	g_settings.setString(Config::PALETTE_CREATURE_STYLE, nstr(style));
+	
+	// Refresh the current tileset and creature list
+	SelectTileset(tileset_choice->GetSelection());
+	g_gui.RefreshView();
+}
+
+void CreaturePalettePanel::OnEnlargeSpritesToggle(wxCommandEvent& event) {
+	// Update enlarged_sprites flag
+	enlarged_sprites = event.IsChecked();
+	bool isGridView = grid_view_checkbox->GetValue();
+	
+	// Set appropriate display style based on checkbox states
+	wxString style = isGridView ? 
+		(enlarged_sprites ? "grid_large" : "grid") : 
+		(enlarged_sprites ? "large_icons" : "listbox");
+	
+	g_settings.setString(Config::PALETTE_CREATURE_STYLE, nstr(style));
+	
+	// Toggle the sprite size
+	ToggleSpriteSize(enlarged_sprites);
+	
+	// Refresh the view
+	g_gui.RefreshView();
+}
+
+void CreaturePalettePanel::ToggleSpriteSize(bool enlarge) {
+	// Update the sprite size based on the enlarged flag
+	if (enlarge) {
+		// Set to large sprites (64x64)
+		// The SortableListBox used for creatures doesn't directly support changing the icon size
+		// Instead, we'll apply CSS-like styling to show larger icons
+		// This is handled in the list's drawing code based on our settings
+		
+		// Store setting
+		enlarged_sprites = true;
+	} else {
+		// Set to normal sprites (32x32)
+		enlarged_sprites = false;
+	}
+	
+	// Save the setting to persist across sessions
+	wxString style = grid_view_checkbox->GetValue() ? 
+		(enlarged_sprites ? "grid_large" : "grid") : 
+		(enlarged_sprites ? "large_icons" : "listbox");
+	
+	g_settings.setString(Config::PALETTE_CREATURE_STYLE, nstr(style));
+	
+	// Force a full refresh of the creature list
+	SelectTileset(tileset_choice->GetSelection());
+	Refresh();
 }

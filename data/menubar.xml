@@ -168,6 +168,7 @@
 	<menu name="Window">
 		<item name="Minimap" hotkey="M" action="WIN_MINIMAP" help="Displays the minimap window." />
 		<item name="New Palette" action="NEW_PALETTE" help="Creates a new palette." />
+		<item name="New Palette View" action="NEW_DETACHED_PALETTE" help="Creates a new palette view." />
 		<menu name="Palette">
 			<item name="Terrain" hotkey="T" action="SELECT_TERRAIN" help="Select the Terrain palette." />
 			<item name="Doodad" hotkey="D" action="SELECT_DOODAD" help="Select the Doodad palette." />

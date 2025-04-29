@@ -65,6 +65,8 @@ public:
 	void OnSearchFieldFocus(wxFocusEvent& event);
 	void OnSearchFieldKillFocus(wxFocusEvent& event);
 	void OnSearchFieldKeyDown(wxKeyEvent& event);
+	void OnGridViewToggle(wxCommandEvent& event);
+	void OnEnlargeSpritesToggle(wxCommandEvent& event);
 
 protected:
 	void SelectCreatureBrush();
@@ -72,6 +74,7 @@ protected:
 	bool LoadNPCsFromFolder(const wxString& folder);
 	bool LoadMonstersFromFolder(const wxString& folder);
 	bool PurgeCreaturePalettes();
+	void ToggleSpriteSize(bool enlarge);
 
 	wxChoice* tileset_choice;
 	SortableListBox* creature_list;
@@ -84,8 +87,11 @@ protected:
 	wxSpinCtrl* spawn_size_spin;
 	wxTextCtrl* search_field;
 	wxButton* search_button;
+	wxCheckBox* grid_view_checkbox;
+	wxCheckBox* enlarge_sprites_checkbox;
 
 	bool handling_event;
+	bool enlarged_sprites;
 
 	void FilterCreatures(const wxString& search_text);
 
