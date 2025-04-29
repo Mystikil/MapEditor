@@ -27,6 +27,7 @@
 #include <wx/dir.h>
 #include <wx/filefn.h>
 #include <wx/textdlg.h>
+#include "creature_sprite_manager.h"
 
 // Define the new event ID for the Load NPCs button
 #define PALETTE_LOAD_NPCS_BUTTON 1952
@@ -34,8 +35,7 @@
 #define PALETTE_PURGE_CREATURES_BUTTON 1954
 #define PALETTE_SEARCH_BUTTON 1955
 #define PALETTE_SEARCH_FIELD 1956
-#define PALETTE_GRID_VIEW_CHECKBOX 1957
-#define PALETTE_ENLARGE_SPRITES_CHECKBOX 1958
+#define PALETTE_VIEW_TOGGLE_BUTTON 1957
 
 // ============================================================================
 // Creature palette
@@ -44,16 +44,16 @@ BEGIN_EVENT_TABLE(CreaturePalettePanel, PalettePanel)
 EVT_CHOICE(PALETTE_CREATURE_TILESET_CHOICE, CreaturePalettePanel::OnTilesetChange)
 
 EVT_LISTBOX(PALETTE_CREATURE_LISTBOX, CreaturePalettePanel::OnListBoxChange)
+EVT_COMMAND(wxID_ANY, wxEVT_COMMAND_LISTBOX_SELECTED, CreaturePalettePanel::OnSpriteSelected)
 
 EVT_TOGGLEBUTTON(PALETTE_CREATURE_BRUSH_BUTTON, CreaturePalettePanel::OnClickCreatureBrushButton)
 EVT_TOGGLEBUTTON(PALETTE_SPAWN_BRUSH_BUTTON, CreaturePalettePanel::OnClickSpawnBrushButton)
+EVT_TOGGLEBUTTON(PALETTE_VIEW_TOGGLE_BUTTON, CreaturePalettePanel::OnClickViewToggle)
 EVT_BUTTON(PALETTE_LOAD_NPCS_BUTTON, CreaturePalettePanel::OnClickLoadNPCsButton)
 EVT_BUTTON(PALETTE_LOAD_MONSTERS_BUTTON, CreaturePalettePanel::OnClickLoadMonstersButton)
 EVT_BUTTON(PALETTE_PURGE_CREATURES_BUTTON, CreaturePalettePanel::OnClickPurgeCreaturesButton)
 EVT_BUTTON(PALETTE_SEARCH_BUTTON, CreaturePalettePanel::OnClickSearchButton)
 EVT_TEXT(PALETTE_SEARCH_FIELD, CreaturePalettePanel::OnSearchFieldText)
-EVT_CHECKBOX(PALETTE_GRID_VIEW_CHECKBOX, CreaturePalettePanel::OnGridViewToggle)
-EVT_CHECKBOX(PALETTE_ENLARGE_SPRITES_CHECKBOX, CreaturePalettePanel::OnEnlargeSpritesToggle)
 
 EVT_SPINCTRL(PALETTE_CREATURE_SPAWN_TIME, CreaturePalettePanel::OnChangeSpawnTime)
 EVT_SPINCTRL(PALETTE_CREATURE_SPAWN_SIZE, CreaturePalettePanel::OnChangeSpawnSize)
@@ -62,40 +62,51 @@ END_EVENT_TABLE()
 CreaturePalettePanel::CreaturePalettePanel(wxWindow* parent, wxWindowID id) :
 	PalettePanel(parent, id),
 	handling_event(false),
-	enlarged_sprites(false) {
+	use_sprite_view(false) {
 	wxSizer* topsizer = newd wxBoxSizer(wxVERTICAL);
 
 	wxSizer* sidesizer = newd wxStaticBoxSizer(wxVERTICAL, this, "Creatures");
+	
+	// Add choice and view toggle in one row
+	wxSizer* choiceSizer = newd wxBoxSizer(wxHORIZONTAL);
+	
 	tileset_choice = newd wxChoice(this, PALETTE_CREATURE_TILESET_CHOICE, wxDefaultPosition, wxDefaultSize, (int)0, (const wxString*)nullptr);
-	sidesizer->Add(tileset_choice, 0, wxEXPAND);
+	choiceSizer->Add(tileset_choice, 1, wxEXPAND | wxRIGHT, 5);
+	
+	view_toggle = newd wxToggleButton(this, PALETTE_VIEW_TOGGLE_BUTTON, "Sprite View", wxDefaultPosition, wxDefaultSize);
+	choiceSizer->Add(view_toggle, 0, wxEXPAND);
+	
+	sidesizer->Add(choiceSizer, 0, wxEXPAND);
 
 	// Add search field and button
 	wxSizer* searchSizer = newd wxBoxSizer(wxHORIZONTAL);
 	searchSizer->Add(newd wxStaticText(this, wxID_ANY, "Search:"), 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 5);
 	search_field = newd wxTextCtrl(this, PALETTE_SEARCH_FIELD, wxEmptyString, wxDefaultPosition, wxDefaultSize, wxTE_PROCESS_ENTER);
+	search_field->SetHint("Name or LT:# for looktype");  // Add placeholder text
 	searchSizer->Add(search_field, 1, wxEXPAND);
 	search_button = newd wxButton(this, PALETTE_SEARCH_BUTTON, "Go", wxDefaultPosition, wxDefaultSize, wxBU_EXACTFIT);
 	searchSizer->Add(search_button, 0, wxLEFT, 5);
 	sidesizer->Add(searchSizer, 0, wxEXPAND | wxTOP, 5);
-	
-	// Add view options
-	wxSizer* viewOptionsSizer = newd wxBoxSizer(wxHORIZONTAL);
-	grid_view_checkbox = newd wxCheckBox(this, PALETTE_GRID_VIEW_CHECKBOX, "Grid View");
-	viewOptionsSizer->Add(grid_view_checkbox, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 10);
-	
-	enlarge_sprites_checkbox = newd wxCheckBox(this, PALETTE_ENLARGE_SPRITES_CHECKBOX, "Large Sprites");
-	viewOptionsSizer->Add(enlarge_sprites_checkbox, 0, wxALIGN_CENTER_VERTICAL);
-	
-	sidesizer->Add(viewOptionsSizer, 0, wxEXPAND | wxTOP, 5);
 	
 	// Connect the focus events to disable hotkeys during typing
 	search_field->Connect(wxEVT_SET_FOCUS, wxFocusEventHandler(CreaturePalettePanel::OnSearchFieldFocus), nullptr, this);
 	search_field->Connect(wxEVT_KILL_FOCUS, wxFocusEventHandler(CreaturePalettePanel::OnSearchFieldKillFocus), nullptr, this);
 	// Connect key down event to handle key presses in the search field
 	search_field->Connect(wxEVT_KEY_DOWN, wxKeyEventHandler(CreaturePalettePanel::OnSearchFieldKeyDown), nullptr, this);
+
+	// Create view container that will hold both list and sprite views
+	view_sizer = newd wxBoxSizer(wxVERTICAL);
 	
+	// Create both views
 	creature_list = newd SortableListBox(this, PALETTE_CREATURE_LISTBOX);
-	sidesizer->Add(creature_list, 1, wxEXPAND | wxTOP, 5);
+	sprite_panel = newd CreatureSpritePanel(this);
+	
+	// Add views to sizer (only one will be shown at a time)
+	view_sizer->Add(creature_list, 1, wxEXPAND);
+	view_sizer->Add(sprite_panel, 1, wxEXPAND);
+	sprite_panel->Hide(); // Initially hide the sprite view
+	
+	sidesizer->Add(view_sizer, 1, wxEXPAND | wxTOP, 5);
 	
 	// Add buttons for loading NPCs, monsters, and purging creatures
 	wxSizer* buttonSizer = newd wxBoxSizer(wxHORIZONTAL);
@@ -115,8 +126,6 @@ CreaturePalettePanel::CreaturePalettePanel(wxWindow* parent, wxWindowID id) :
 
 	// Brush selection
 	sidesizer = newd wxStaticBoxSizer(newd wxStaticBox(this, wxID_ANY, "Brushes", wxDefaultPosition, wxSize(150, 200)), wxVERTICAL);
-
-	// sidesizer->Add(180, 1, wxEXPAND);
 
 	wxFlexGridSizer* grid = newd wxFlexGridSizer(3, 10, 10);
 	grid->AddGrowableCol(1);
@@ -154,13 +163,19 @@ void CreaturePalettePanel::SelectFirstBrush() {
 
 Brush* CreaturePalettePanel::GetSelectedBrush() const {
 	if (creature_brush_button->GetValue()) {
-		if (creature_list->GetCount() == 0) {
-			return nullptr;
-		}
-		Brush* brush = reinterpret_cast<Brush*>(creature_list->GetClientData(creature_list->GetSelection()));
-		if (brush && brush->isCreature()) {
-			g_gui.SetSpawnTime(creature_spawntime_spin->GetValue());
-			return brush;
+		if (use_sprite_view) {
+			// Get selection from sprite panel
+			return sprite_panel->GetSelectedBrush();
+		} else {
+			// Get selection from list box
+			if (creature_list->GetCount() == 0) {
+				return nullptr;
+			}
+			Brush* brush = reinterpret_cast<Brush*>(creature_list->GetClientData(creature_list->GetSelection()));
+			if (brush && brush->isCreature()) {
+				g_gui.SetSpawnTime(creature_spawntime_spin->GetValue());
+				return brush;
+			}
 		}
 	} else if (spawn_brush_button->GetValue()) {
 		g_settings.setInteger(Config::CURRENT_SPAWN_RADIUS, spawn_size_spin->GetValue());
@@ -182,7 +197,13 @@ bool CreaturePalettePanel::SelectBrush(const Brush* whatbrush) {
 			// Select first house
 			for (BrushVector::const_iterator iter = tsc->brushlist.begin(); iter != tsc->brushlist.end(); ++iter) {
 				if (*iter == whatbrush) {
-					SelectCreature(whatbrush->getName());
+					if (use_sprite_view) {
+						// Select in sprite view
+						sprite_panel->SelectBrush(whatbrush);
+					} else {
+						// Select in list view
+						SelectCreature(whatbrush->getName());
+					}
 					return true;
 				}
 			}
@@ -196,7 +217,13 @@ bool CreaturePalettePanel::SelectBrush(const Brush* whatbrush) {
 					 ++iter) {
 					if (*iter == whatbrush) {
 						SelectTileset(i);
-						SelectCreature(whatbrush->getName());
+						if (use_sprite_view) {
+							// Select in sprite view
+							sprite_panel->SelectBrush(whatbrush);
+						} else {
+							// Select in list view
+							SelectCreature(whatbrush->getName());
+						}
 						return true;
 					}
 				}
@@ -216,15 +243,6 @@ int CreaturePalettePanel::GetSelectedBrushSize() const {
 void CreaturePalettePanel::OnUpdate() {
 	tileset_choice->Clear();
 	g_materials.createOtherTileset();
-
-	// Initialize checkbox states based on the current style setting
-	wxString currentStyle = wxstr(g_settings.getString(Config::PALETTE_CREATURE_STYLE));
-	bool isGridView = currentStyle.Contains("grid");
-	bool isLargeSprites = currentStyle.Contains("large");
-	
-	grid_view_checkbox->SetValue(isGridView);
-	enlarge_sprites_checkbox->SetValue(isLargeSprites);
-	enlarged_sprites = isLargeSprites;
 
 	// Create an "All Creatures" tileset that contains all creatures
 	Tileset* allCreatures = nullptr;
@@ -296,18 +314,26 @@ void CreaturePalettePanel::SelectTileset(size_t index) {
 	ASSERT(tileset_choice->GetCount() >= index);
 
 	creature_list->Clear();
+	sprite_panel->Clear();
+	
 	if (tileset_choice->GetCount() == 0) {
 		// No tilesets :(
 		creature_brush_button->Enable(false);
 	} else {
 		const TilesetCategory* tsc = reinterpret_cast<const TilesetCategory*>(tileset_choice->GetClientData(index));
-		// Select first house
-		for (BrushVector::const_iterator iter = tsc->brushlist.begin();
-			 iter != tsc->brushlist.end();
-			 ++iter) {
-			creature_list->Append(wxstr((*iter)->getName()), *iter);
+		
+		// Add creatures to appropriate view
+		if (use_sprite_view) {
+			sprite_panel->LoadCreatures(tsc->brushlist);
+		} else {
+			// Add creatures to list view
+			for (BrushVector::const_iterator iter = tsc->brushlist.begin();
+				iter != tsc->brushlist.end();
+				++iter) {
+				creature_list->Append(wxstr((*iter)->getName()), *iter);
+			}
+			creature_list->Sort();
 		}
-		creature_list->Sort();
 		
 		// Apply filter if search field has text
 		if (!search_field->IsEmpty()) {
@@ -321,20 +347,37 @@ void CreaturePalettePanel::SelectTileset(size_t index) {
 }
 
 void CreaturePalettePanel::SelectCreature(size_t index) {
-	// Save the old g_settings
-	ASSERT(creature_list->GetCount() >= index);
-
-	if (creature_list->GetCount() > 0) {
-		creature_list->SetSelection(index);
+	// Select creature by index
+	if (use_sprite_view) {
+		// In sprite view, select by index
+		if (index < sprite_panel->creatures.size()) {
+			sprite_panel->SelectIndex(index);
+		}
+	} else {
+		// In list view, select by index
+		if (creature_list->GetCount() > 0 && index < creature_list->GetCount()) {
+			creature_list->SetSelection(index);
+		}
 	}
 
 	SelectCreatureBrush();
 }
 
 void CreaturePalettePanel::SelectCreature(std::string name) {
-	if (creature_list->GetCount() > 0) {
-		if (!creature_list->SetStringSelection(wxstr(name))) {
-			creature_list->SetSelection(0);
+	if (use_sprite_view) {
+		// In sprite view, find and select brush by name
+		for (size_t i = 0; i < sprite_panel->creatures.size(); ++i) {
+			if (sprite_panel->creatures[i]->getName() == name) {
+				sprite_panel->SelectIndex(i);
+				break;
+			}
+		}
+	} else {
+		// In list view, select by name string
+		if (creature_list->GetCount() > 0) {
+			if (!creature_list->SetStringSelection(wxstr(name))) {
+				creature_list->SetSelection(0);
+			}
 		}
 	}
 
@@ -342,7 +385,15 @@ void CreaturePalettePanel::SelectCreature(std::string name) {
 }
 
 void CreaturePalettePanel::SelectCreatureBrush() {
-	if (creature_list->GetCount() > 0) {
+	bool has_selection = false;
+	
+	if (use_sprite_view) {
+		has_selection = (sprite_panel->GetSelectedBrush() != nullptr);
+	} else {
+		has_selection = (creature_list->GetCount() > 0);
+	}
+	
+	if (has_selection) {
 		creature_brush_button->Enable(true);
 		creature_brush_button->SetValue(true);
 		spawn_brush_button->SetValue(false);
@@ -663,36 +714,81 @@ void CreaturePalettePanel::FilterCreatures(const wxString& search_text) {
 	
 	const TilesetCategory* tsc = reinterpret_cast<const TilesetCategory*>(tileset_choice->GetClientData(index));
 	
-	// Clear the list
-	creature_list->Clear();
-	
-	// Add only creatures that match the search
-	wxString searchLower = search_text.Lower();
+	// Create a filtered list of brushes
+	BrushVector filtered_brushes;
 	
 	// Used to track seen creature names to avoid duplicates (except for All Creatures category)
 	std::set<std::string> seenCreatures;
 	bool isAllCreaturesCategory = (tileset_choice->GetString(index) == "All Creatures");
 	
+	// Convert search text to lowercase for case-insensitive search
+	wxString searchLower = search_text.Lower();
+	
+	// Check if the search is for a looktype (LT:123 format)
+	bool isLooktypeSearch = false;
+	long searchLooktype = 0;
+	
+	if (searchLower.StartsWith("lt:") || searchLower.StartsWith("looktype:")) {
+		wxString lookTypeStr = searchLower.AfterFirst(':').Trim();
+		if (lookTypeStr.ToLong(&searchLooktype)) {
+			isLooktypeSearch = true;
+		}
+	}
+	
 	for (BrushVector::const_iterator iter = tsc->brushlist.begin(); iter != tsc->brushlist.end(); ++iter) {
-		wxString name = wxstr((*iter)->getName()).Lower();
+		if (!(*iter)->isCreature()) continue;
+		
+		CreatureBrush* creatureBrush = dynamic_cast<CreatureBrush*>(*iter);
+		if (!creatureBrush) continue;
+		
 		std::string creatureName = (*iter)->getName();
+		wxString name = wxstr(creatureName).Lower();
 		
 		// For "All Creatures" category, don't add duplicates
 		if (!isAllCreaturesCategory && seenCreatures.count(creatureName) > 0) {
 			continue;
 		}
 		
-		if (name.Find(searchLower) != wxNOT_FOUND) {
-			creature_list->Append(wxstr(creatureName), *iter);
+		bool match = false;
+		
+		// Check if this is a looktype search
+		if (isLooktypeSearch) {
+			// Match by looktype
+			if (creatureBrush->getType() && creatureBrush->getType()->outfit.lookType == searchLooktype) {
+				match = true;
+			}
+		} else {
+			// Standard name search
+			if (name.Find(searchLower) != wxNOT_FOUND) {
+				match = true;
+			}
+		}
+		
+		if (match) {
+			filtered_brushes.push_back(*iter);
 			seenCreatures.insert(creatureName);
 		}
 	}
 	
-	// Sort the filtered list
-	creature_list->Sort();
+	// Apply the filtered list to the appropriate view
+	if (use_sprite_view) {
+		// Update sprite view
+		sprite_panel->Clear();
+		sprite_panel->LoadCreatures(filtered_brushes);
+	} else {
+		// Update list view
+		creature_list->Clear();
+		
+		for (BrushVector::const_iterator iter = filtered_brushes.begin(); iter != filtered_brushes.end(); ++iter) {
+			creature_list->Append(wxstr((*iter)->getName()), *iter);
+		}
+		
+		// Sort the filtered list
+		creature_list->Sort();
+	}
 	
 	// Select first result if any
-	if (creature_list->GetCount() > 0) {
+	if (!filtered_brushes.empty()) {
 		SelectCreature(0);
 		creature_brush_button->Enable(true);
 	} else {
@@ -700,65 +796,470 @@ void CreaturePalettePanel::FilterCreatures(const wxString& search_text) {
 	}
 }
 
-void CreaturePalettePanel::OnGridViewToggle(wxCommandEvent& event) {
-	// Save the setting to config
-	bool isGridView = event.IsChecked();
-	bool isLargeSprites = enlarge_sprites_checkbox->GetValue();
+void CreaturePalettePanel::OnSpriteSelected(wxCommandEvent& event) {
+	Brush* old_brush = g_gui.GetCurrentBrush();
 	
-	// Set appropriate display style based on checkbox states
-	wxString style = isGridView ? 
-		(isLargeSprites ? "grid_large" : "grid") : 
-		(isLargeSprites ? "large_icons" : "listbox");
+	// Update selection
+	SelectCreatureBrush();
+	g_gui.ActivatePalette(GetParentPalette());
 	
-	g_settings.setString(Config::PALETTE_CREATURE_STYLE, nstr(style));
+	// Get the newly selected brush
+	Brush* new_brush = g_gui.GetCurrentBrush();
 	
-	// Refresh the current tileset and creature list
-	SelectTileset(tileset_choice->GetSelection());
-	g_gui.RefreshView();
-}
-
-void CreaturePalettePanel::OnEnlargeSpritesToggle(wxCommandEvent& event) {
-	// Update enlarged_sprites flag
-	enlarged_sprites = event.IsChecked();
-	bool isGridView = grid_view_checkbox->GetValue();
-	
-	// Set appropriate display style based on checkbox states
-	wxString style = isGridView ? 
-		(enlarged_sprites ? "grid_large" : "grid") : 
-		(enlarged_sprites ? "large_icons" : "listbox");
-	
-	g_settings.setString(Config::PALETTE_CREATURE_STYLE, nstr(style));
-	
-	// Toggle the sprite size
-	ToggleSpriteSize(enlarged_sprites);
-	
-	// Refresh the view
-	g_gui.RefreshView();
-}
-
-void CreaturePalettePanel::ToggleSpriteSize(bool enlarge) {
-	// Update the sprite size based on the enlarged flag
-	if (enlarge) {
-		// Set to large sprites (64x64)
-		// The SortableListBox used for creatures doesn't directly support changing the icon size
-		// Instead, we'll apply CSS-like styling to show larger icons
-		// This is handled in the list's drawing code based on our settings
-		
-		// Store setting
-		enlarged_sprites = true;
-	} else {
-		// Set to normal sprites (32x32)
-		enlarged_sprites = false;
+	// If we selected the same brush, first set to nullptr then reselect
+	if(old_brush && new_brush && old_brush == new_brush) {
+		g_gui.SelectBrush(nullptr, TILESET_CREATURE);
 	}
 	
-	// Save the setting to persist across sessions
-	wxString style = grid_view_checkbox->GetValue() ? 
-		(enlarged_sprites ? "grid_large" : "grid") : 
-		(enlarged_sprites ? "large_icons" : "listbox");
+	// Now select the brush (either for the first time or re-selecting)
+	g_gui.SelectBrush();
+}
+
+// New method to switch between list and sprite view
+void CreaturePalettePanel::SetViewMode(bool use_sprites) {
+	// Store original selection
+	Brush* selected_brush = GetSelectedBrush();
 	
-	g_settings.setString(Config::PALETTE_CREATURE_STYLE, nstr(style));
+	// Update mode flag
+	use_sprite_view = use_sprites;
 	
-	// Force a full refresh of the creature list
-	SelectTileset(tileset_choice->GetSelection());
+	// Update UI elements
+	if (use_sprites) {
+		// Switch to sprite view
+		creature_list->Hide();
+		
+		// Load creatures from the current category
+		int index = tileset_choice->GetSelection();
+		if (index != wxNOT_FOUND) {
+			const TilesetCategory* tsc = reinterpret_cast<const TilesetCategory*>(tileset_choice->GetClientData(index));
+			// Pre-generate creature sprites when switching to sprite view
+			int sprite_size = sprite_panel->GetSpriteSize();
+			g_creature_sprites.generateCreatureSprites(tsc->brushlist, sprite_size, sprite_size);
+			sprite_panel->LoadCreatures(tsc->brushlist);
+		}
+		
+		sprite_panel->Show();
+	} else {
+		// Switch to list view
+		sprite_panel->Hide();
+		creature_list->Show();
+	}
+	
+	// Update layout
+	view_sizer->Layout();
+	
+	// Restore selection
+	if (selected_brush) {
+		SelectBrush(selected_brush);
+	}
+}
+
+void CreaturePalettePanel::OnClickViewToggle(wxCommandEvent& event) {
+	SetViewMode(view_toggle->GetValue());
+}
+
+// ============================================================================
+// CreatureSpritePanel - Panel to display creature sprites in a grid
+
+BEGIN_EVENT_TABLE(CreatureSpritePanel, wxScrolledWindow)
+EVT_PAINT(CreatureSpritePanel::OnPaint)
+EVT_SIZE(CreatureSpritePanel::OnSize)
+EVT_LEFT_DOWN(CreatureSpritePanel::OnMouseClick)
+EVT_MOTION(CreatureSpritePanel::OnMouseMove)
+END_EVENT_TABLE()
+
+CreatureSpritePanel::CreatureSpritePanel(wxWindow* parent) : 
+	wxScrolledWindow(parent, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxFULL_REPAINT_ON_RESIZE | wxWANTS_CHARS),
+	columns(0),
+	sprite_size(40),
+	padding(6),
+	selected_index(-1),
+	hover_index(-1),
+	buffer(nullptr) {
+	
+	// Set background color
+	SetBackgroundColour(wxColour(245, 245, 245));
+	
+	// Enable scrolling
+	SetScrollRate(1, 10);
+}
+
+CreatureSpritePanel::~CreatureSpritePanel() {
+	delete buffer;
+}
+
+void CreatureSpritePanel::Clear() {
+	creatures.clear();
+	selected_index = -1;
+	hover_index = -1;
 	Refresh();
+}
+
+void CreatureSpritePanel::LoadCreatures(const BrushVector& brushlist) {
+	// Clear any existing creatures
+	creatures.clear();
+	selected_index = -1;
+	hover_index = -1;
+	
+	// Copy valid creature brushes
+	for (BrushVector::const_iterator iter = brushlist.begin(); iter != brushlist.end(); ++iter) {
+		if ((*iter)->isCreature()) {
+			creatures.push_back(*iter);
+		}
+	}
+	
+	// Select first creature if any
+	if (!creatures.empty()) {
+		selected_index = 0;
+	}
+	
+	// Calculate layout and refresh
+	RecalculateGrid();
+	Refresh();
+}
+
+void CreatureSpritePanel::RecalculateGrid() {
+	// Get the client size of the panel
+	int panel_width, panel_height;
+	GetClientSize(&panel_width, &panel_height);
+	
+	// Calculate number of columns based on available width
+	columns = std::max(1, (panel_width - padding) / (sprite_size + padding));
+	
+	// Calculate number of rows
+	int rows = creatures.empty() ? 0 : (creatures.size() + columns - 1) / columns;
+	
+	// Set virtual size for scrolling
+	int virtual_height = rows * (sprite_size + padding) + padding;
+	SetVirtualSize(panel_width, virtual_height);
+	
+	// Recreate buffer with new size if needed
+	if (buffer) {
+		delete buffer;
+		buffer = nullptr;
+	}
+	
+	if (panel_width > 0 && panel_height > 0) {
+		buffer = new wxBitmap(panel_width, panel_height);
+	}
+}
+
+void CreatureSpritePanel::OnPaint(wxPaintEvent& event) {
+	wxPaintDC dc(this);
+	DoPrepareDC(dc);
+	
+	// Check if we need to redraw the buffer
+	if (!buffer || buffer->GetWidth() != dc.GetSize().GetWidth() || buffer->GetHeight() != dc.GetSize().GetHeight()) {
+		if (buffer) {
+			delete buffer;
+		}
+		buffer = new wxBitmap(dc.GetSize().GetWidth(), dc.GetSize().GetHeight());
+	}
+	
+	wxMemoryDC memDC;
+	memDC.SelectObject(*buffer);
+	
+	// Fill background
+	memDC.SetBackground(wxBrush(GetBackgroundColour()));
+	memDC.Clear();
+	
+	// Get visible region
+	int x_start, y_start;
+	GetViewStart(&x_start, &y_start);
+	int width, height;
+	GetClientSize(&width, &height);
+	
+	// Calculate first and last visible row
+	int first_row = std::max(0, y_start / (sprite_size + padding));
+	int last_row = std::min((int)((creatures.size() + columns - 1) / columns), 
+						   (y_start + height) / (sprite_size + padding) + 1);
+	
+	// Draw visible sprites
+	for (int row = first_row; row < last_row; ++row) {
+		for (int col = 0; col < columns; ++col) {
+			int index = row * columns + col;
+			if (index < (int)creatures.size()) {
+				int x = padding + col * (sprite_size + padding);
+				int y = padding + row * (sprite_size + padding);
+				
+				CreatureType* ctype = static_cast<CreatureBrush*>(creatures[index])->getType();
+				DrawSprite(memDC, x, y, ctype, index == selected_index);
+			}
+		}
+	}
+	
+	// Draw to screen
+	dc.Blit(0, 0, width, height, &memDC, 0, 0);
+}
+
+void CreatureSpritePanel::DrawSprite(wxDC& dc, int x, int y, CreatureType* ctype, bool selected) {
+	// Check if we have a valid creature type
+	if (!ctype) return;
+	
+	// Draw the sprite box background
+	dc.SetBrush(wxBrush(wxColour(240, 240, 240)));
+	dc.SetPen(wxPen(wxColour(180, 180, 180)));
+	dc.DrawRectangle(x, y, sprite_size, sprite_size);
+	
+	// Check if creature has a looktype
+	if (ctype->outfit.lookType != 0) {
+		// Get the sprite bitmap if available
+		wxBitmap* bitmap = g_creature_sprites.getSpriteBitmap(ctype->outfit.lookType, sprite_size, sprite_size);
+		
+		if (bitmap) {
+			// Draw the actual creature sprite
+			dc.DrawBitmap(*bitmap, x, y, true);
+			
+			// Draw creature name at the bottom
+			wxString name = wxstr(ctype->name);
+			if (name.length() > 15) {
+				name = name.Left(12) + "...";
+			}
+			
+			// Add a semi-transparent background for the name text
+			dc.SetBrush(wxBrush(wxColour(0, 0, 0, 180)));
+			dc.SetPen(*wxTRANSPARENT_PEN);
+			dc.DrawRectangle(x, y + sprite_size - 14, sprite_size, 14);
+			
+			// Draw the name text
+			dc.SetTextForeground(wxColour(255, 255, 255));
+			dc.SetFont(wxFont(7, wxFONTFAMILY_DEFAULT, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL));
+			dc.DrawLabel(name, wxRect(x, y + sprite_size - 14, sprite_size, 14), wxALIGN_CENTER);
+			
+			// Draw looktype in top-right corner
+			wxString lookinfo = wxString::Format("%d", ctype->outfit.lookType);
+			
+			// Semi-transparent background for looktype
+			if (ctype->isNpc) {
+				dc.SetBrush(wxBrush(wxColour(200, 150, 100, 180)));
+			} else {
+				dc.SetBrush(wxBrush(wxColour(100, 150, 200, 180)));
+			}
+			dc.DrawRectangle(x + sprite_size - 24, y, 24, 14);
+			
+			// Draw the looktype text
+			dc.SetTextForeground(wxColour(255, 255, 255));
+			dc.SetFont(wxFont(6, wxFONTFAMILY_DEFAULT, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL));
+			dc.DrawLabel(lookinfo, wxRect(x + sprite_size - 24, y, 24, 14), wxALIGN_CENTER);
+		} else {
+			// No sprite found, draw a warning placeholder
+			dc.SetBrush(wxBrush(wxColour(255, 200, 200)));
+			dc.SetPen(wxPen(wxColour(180, 100, 100)));
+			dc.DrawRectangle(x, y, sprite_size, sprite_size);
+			
+			wxString name = wxstr(ctype->name);
+			if (name.length() > 12) {
+				name = name.Left(9) + "...";
+			}
+			
+			dc.SetTextForeground(wxColour(200, 0, 0));
+			dc.SetFont(wxFont(7, wxFONTFAMILY_DEFAULT, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL));
+			dc.DrawLabel(name, wxRect(x, y + sprite_size/2, sprite_size, sprite_size/2), wxALIGN_CENTER);
+			
+			wxString lookinfo = wxString::Format("LT: %d", ctype->outfit.lookType);
+			dc.DrawLabel(lookinfo, wxRect(x, y, sprite_size, sprite_size/2), wxALIGN_CENTER);
+			
+			// "Missing" text
+			dc.SetTextForeground(wxColour(200, 0, 0));
+			dc.DrawLabel("Missing", wxRect(x, y+6, sprite_size, 12), wxALIGN_CENTER);
+		}
+	} else if (ctype->outfit.lookItem != 0) {
+		// Draw as an item
+		dc.SetBrush(wxBrush(wxColour(230, 230, 200)));
+		dc.SetPen(wxPen(wxColour(180, 180, 150)));
+		dc.DrawRectangle(x, y, sprite_size, sprite_size);
+		
+		wxString name = wxstr(ctype->name);
+		if (name.length() > 12) {
+			name = name.Left(9) + "...";
+		}
+		
+		dc.SetTextForeground(wxColour(0, 0, 0));
+		dc.DrawLabel(name, wxRect(x, y + sprite_size/2, sprite_size, sprite_size/2), wxALIGN_CENTER);
+		
+		wxString itemText = wxString::Format("Item: %d", ctype->outfit.lookItem);
+		dc.DrawLabel(itemText, wxRect(x, y, sprite_size, sprite_size/2), wxALIGN_CENTER);
+	} else {
+		// No looktype or lookitem, draw placeholder
+		dc.SetBrush(wxBrush(wxColour(200, 200, 200)));
+		dc.SetPen(wxPen(wxColour(100, 100, 100)));
+		dc.DrawRectangle(x, y, sprite_size, sprite_size);
+		
+		// Draw creature name
+		wxString name = wxstr(ctype->name);
+		if (name.length() > 10) {
+			name = name.Left(7) + "...";
+		}
+		
+		dc.SetTextForeground(wxColour(0, 0, 0));
+		dc.SetFont(wxFont(7, wxFONTFAMILY_DEFAULT, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL));
+		dc.DrawLabel(name, wxRect(x, y, sprite_size, sprite_size), wxALIGN_CENTER);
+		
+		// "No sprite" text
+		dc.SetTextForeground(wxColour(80, 80, 80));
+		dc.DrawLabel("No sprite", wxRect(x, y+sprite_size-14, sprite_size, 14), wxALIGN_CENTER);
+	}
+	
+	// Draw selection or hover highlight
+	if (selected) {
+		dc.SetPen(wxPen(wxColour(0, 0, 200), 2));
+		dc.SetBrush(*wxTRANSPARENT_BRUSH);
+		dc.DrawRectangle(x - 1, y - 1, sprite_size + 2, sprite_size + 2);
+	} else if ((int)creatures.size() > hover_index && hover_index >= 0 && 
+			   GetSpriteIndexAt(x, y) >= 0 && GetSpriteIndexAt(x, y) == hover_index) {
+		dc.SetPen(wxPen(wxColour(200, 200, 0), 1));
+		dc.SetBrush(*wxTRANSPARENT_BRUSH);
+		dc.DrawRectangle(x - 1, y - 1, sprite_size + 2, sprite_size + 2);
+	}
+}
+
+void CreatureSpritePanel::OnSize(wxSizeEvent& event) {
+	RecalculateGrid();
+	Refresh();
+}
+
+void CreatureSpritePanel::OnScroll(wxScrollWinEvent& event) {
+	Refresh();
+	event.Skip();
+}
+
+void CreatureSpritePanel::OnMouseClick(wxMouseEvent& event) {
+	// Get the position in scroll coordinates
+	int x, y;
+	CalcUnscrolledPosition(event.GetX(), event.GetY(), &x, &y);
+	
+	// Find which sprite was clicked
+	int index = GetSpriteIndexAt(x, y);
+	
+	if (index >= 0 && index < (int)creatures.size()) {
+		SelectIndex(index);
+		
+		// Send selection event to parent
+		wxCommandEvent selectionEvent(wxEVT_COMMAND_LISTBOX_SELECTED);
+		selectionEvent.SetEventObject(this);
+		GetParent()->GetEventHandler()->ProcessEvent(selectionEvent);
+	}
+}
+
+void CreatureSpritePanel::OnMouseMove(wxMouseEvent& event) {
+	// Get the position in scroll coordinates
+	int x, y;
+	CalcUnscrolledPosition(event.GetX(), event.GetY(), &x, &y);
+	
+	// Find which sprite is under the mouse
+	int index = GetSpriteIndexAt(x, y);
+	
+	if (index != hover_index) {
+		hover_index = index;
+		Refresh();
+	}
+	
+	event.Skip();
+}
+
+int CreatureSpritePanel::GetSpriteIndexAt(int x, int y) const {
+	// Adjust for padding
+	if (x < padding || y < padding) {
+		return -1;
+	}
+	
+	// Calculate row and column
+	int col = (x - padding) / (sprite_size + padding);
+	int row = (y - padding) / (sprite_size + padding);
+	
+	// Check if within sprite bounds
+	int sprite_x = padding + col * (sprite_size + padding);
+	int sprite_y = padding + row * (sprite_size + padding);
+	
+	if (x >= sprite_x && x < sprite_x + sprite_size &&
+		y >= sprite_y && y < sprite_y + sprite_size) {
+		
+		// Convert to index
+		int index = row * columns + col;
+		if (index >= 0 && index < (int)creatures.size()) {
+			return index;
+		}
+	}
+	
+	return -1;
+}
+
+void CreatureSpritePanel::SelectIndex(int index) {
+	if (index >= 0 && index < (int)creatures.size() && index != selected_index) {
+		selected_index = index;
+		Refresh();
+		
+		// Ensure the selected creature is visible
+		if (selected_index >= 0) {
+			int row = selected_index / columns;
+			int col = selected_index % columns;
+			int x = padding + col * (sprite_size + padding);
+			int y = padding + row * (sprite_size + padding);
+			
+			// Scroll to make the selected creature visible
+			int client_width, client_height;
+			GetClientSize(&client_width, &client_height);
+			
+			int x_scroll, y_scroll;
+			GetViewStart(&x_scroll, &y_scroll);
+			
+			// Adjust vertical scroll if needed
+			if (y < y_scroll) {
+				Scroll(-1, y / 10); // / 10 because of scroll rate
+			} else if (y + sprite_size > y_scroll + client_height) {
+				Scroll(-1, (y + sprite_size - client_height) / 10 + 1);
+			}
+		}
+	}
+}
+
+Brush* CreatureSpritePanel::GetSelectedBrush() const {
+	if (selected_index >= 0 && selected_index < (int)creatures.size()) {
+		return creatures[selected_index];
+	}
+	return nullptr;
+}
+
+bool CreatureSpritePanel::SelectBrush(const Brush* brush) {
+	if (!brush || !brush->isCreature()) {
+		return false;
+	}
+	
+	for (size_t i = 0; i < creatures.size(); ++i) {
+		if (creatures[i] == brush) {
+			SelectIndex(i);
+			return true;
+		}
+	}
+	
+	return false;
+}
+
+void CreatureSpritePanel::EnsureVisible(const Brush* brush) {
+	if (!brush || !brush->isCreature()) {
+		return;
+	}
+	
+	for (size_t i = 0; i < creatures.size(); ++i) {
+		if (creatures[i] == brush) {
+			int row = i / columns;
+			int y = padding + row * (sprite_size + padding);
+			
+			int client_height;
+			GetClientSize(nullptr, &client_height);
+			
+			int x_scroll, y_scroll;
+			GetViewStart(&x_scroll, &y_scroll);
+			
+			// Adjust vertical scroll if needed
+			if (y < y_scroll || y + sprite_size > y_scroll + client_height) {
+				Scroll(-1, y / 10); // / 10 because of scroll rate
+			}
+			break;
+		}
+	}
+}
+
+int CreatureSpritePanel::GetSpriteSize() const {
+	return sprite_size;
 }

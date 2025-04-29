@@ -394,6 +394,7 @@
     <ClInclude Include="..\..\source\ground_validation_dialog.h" />
     <ClInclude Include="..\..\source\dark_mode_manager.h" />
     <ClInclude Include="..\..\source\border_editor_window.h" />
+    <ClInclude Include="..\..\source\creature_sprite_manager.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\source\json\json_spirit_reader.cpp">
@@ -697,6 +698,7 @@
     <ClCompile Include="..\..\source\ground_validation_dialog.cpp" />
     <ClCompile Include="..\..\source\dark_mode_manager.cpp" />
     <ClCompile Include="..\..\source\border_editor_window.cpp" />
+    <ClCompile Include="..\..\source\creature_sprite_manager.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="Editor.rc">

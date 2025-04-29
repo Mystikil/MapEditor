@@ -20,6 +20,47 @@
 
 #include "palette_common.h"
 
+// New class for grid view of creature sprites
+class CreatureSpritePanel : public wxScrolledWindow {
+public:
+	CreatureSpritePanel(wxWindow* parent);
+	virtual ~CreatureSpritePanel();
+
+	void Clear();
+	void LoadCreatures(const BrushVector& brushlist);
+	Brush* GetSelectedBrush() const;
+	bool SelectBrush(const Brush* brush);
+	void EnsureVisible(const Brush* brush);
+	void SelectIndex(int index);
+	
+	// Getter for sprite size
+	int GetSpriteSize() const;
+	
+	// Drawing handlers
+	void OnPaint(wxPaintEvent& event);
+	void OnSize(wxSizeEvent& event);
+	void OnScroll(wxScrollWinEvent& event);
+	void OnMouseClick(wxMouseEvent& event);
+	void OnMouseMove(wxMouseEvent& event);
+
+	// Creature brushes in this panel
+	BrushVector creatures;
+
+protected:
+	void RecalculateGrid();
+	int GetSpriteIndexAt(int x, int y) const;
+	void DrawSprite(wxDC& dc, int x, int y, CreatureType* ctype, bool selected = false);
+
+	int columns;
+	int sprite_size;
+	int padding;
+	int selected_index;
+	int hover_index;
+	wxBitmap* buffer;
+
+	DECLARE_EVENT_TABLE();
+};
+
 class CreaturePalettePanel : public PalettePanel {
 public:
 	CreaturePalettePanel(wxWindow* parent, wxWindowID id = wxID_ANY);
@@ -47,6 +88,8 @@ protected:
 	void SelectTileset(size_t index);
 	void SelectCreature(size_t index);
 	void SelectCreature(std::string name);
+	// Switch between list view and sprite view modes
+	void SetViewMode(bool use_sprites);
 
 public:
 	// Event handling
@@ -65,8 +108,8 @@ public:
 	void OnSearchFieldFocus(wxFocusEvent& event);
 	void OnSearchFieldKillFocus(wxFocusEvent& event);
 	void OnSearchFieldKeyDown(wxKeyEvent& event);
-	void OnGridViewToggle(wxCommandEvent& event);
-	void OnEnlargeSpritesToggle(wxCommandEvent& event);
+	void OnClickViewToggle(wxCommandEvent& event);
+	void OnSpriteSelected(wxCommandEvent& event);
 
 protected:
 	void SelectCreatureBrush();
@@ -74,26 +117,26 @@ protected:
 	bool LoadNPCsFromFolder(const wxString& folder);
 	bool LoadMonstersFromFolder(const wxString& folder);
 	bool PurgeCreaturePalettes();
-	void ToggleSpriteSize(bool enlarge);
+	void FilterCreatures(const wxString& search_text);
 
 	wxChoice* tileset_choice;
 	SortableListBox* creature_list;
-	wxToggleButton* creature_brush_button;
-	wxToggleButton* spawn_brush_button;
+	CreatureSpritePanel* sprite_panel;
+	wxToggleButton* view_toggle;
+	wxSizer* view_sizer;
+	bool use_sprite_view;
+	bool handling_event;
+
+	wxTextCtrl* search_field;
+	wxButton* search_button;
 	wxButton* load_npcs_button;
 	wxButton* load_monsters_button;
 	wxButton* purge_creatures_button;
+	
 	wxSpinCtrl* creature_spawntime_spin;
 	wxSpinCtrl* spawn_size_spin;
-	wxTextCtrl* search_field;
-	wxButton* search_button;
-	wxCheckBox* grid_view_checkbox;
-	wxCheckBox* enlarge_sprites_checkbox;
-
-	bool handling_event;
-	bool enlarged_sprites;
-
-	void FilterCreatures(const wxString& search_text);
+	wxToggleButton* creature_brush_button;
+	wxToggleButton* spawn_brush_button;
 
 	DECLARE_EVENT_TABLE();
 };
