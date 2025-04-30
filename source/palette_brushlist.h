@@ -15,11 +15,32 @@
 // along with this program. If not, see <http://www.gnu.org/licenses/>.
 //////////////////////////////////////////////////////////////////////
 
-#ifndef RME_PALETTE_BRUSHLIST_
-#define RME_PALETTE_BRUSHLIST_
+#ifndef RME_PALETTE_BRUSHLIST_H_
+#define RME_PALETTE_BRUSHLIST_H_
 
-#include "main.h"
+#include <wx/panel.h>
+#include <wx/listctrl.h>
+#include <wx/vscroll.h>
+#include <wx/timer.h>
+#include <wx/dcbuffer.h>
+#include <wx/sizer.h>
+#include <wx/checkbox.h>
+#include <wx/choice.h>
+#include <wx/choicebk.h>
+
+#include <map>
+#include <set>
+#include <vector>
+
+#include "tileset.h"
 #include "palette_common.h"
+
+// Forward declarations
+class ItemPalettePanel;
+class BrushPalettePanel;
+class BrushButton;
+class BrushPanel;
+class BrushBoxInterface;
 
 enum BrushListType {
 	BRUSHLIST_LARGE_ICONS,
@@ -114,7 +135,7 @@ protected:
 	int loading_step;
 	int max_loading_steps;
 	wxTimer* loading_timer;
-	static const int LARGE_TILESET_THRESHOLD = 500; // Number of items considered "large"
+	static const int LARGE_TILESET_THRESHOLD = 1000; // Number of items considered "large"
 
 	DECLARE_EVENT_TABLE();
 };
@@ -226,6 +247,12 @@ public:
 	// Set whether to display item IDs
 	void SetShowItemIDs(bool show) { show_item_ids = show; Refresh(); }
 	bool IsShowingItemIDs() const { return show_item_ids; }
+	
+	// Zoom level control methods
+	int GetZoomLevel() const { return zoom_level; }
+	int IncrementZoom();
+	int DecrementZoom();
+	void SetZoomLevel(int level);
 
 	// Event handling
 	void OnMouseClick(wxMouseEvent& event);
@@ -239,34 +266,50 @@ public:
 protected:
 	void RecalculateGrid();
 	void DrawItemsToPanel(wxDC& dc);
+	void DrawSpriteAt(wxDC& dc, int x, int y, int index);
 	void UpdateViewableItems();
 	void StartProgressiveLoading();
 	int GetSpriteIndexAt(int x, int y) const; // Returns sprite index at screen position
-	void DrawSpriteAt(wxDC& dc, int x, int y, int index); // Helper to draw a sprite at the specified position
-	void SelectIndex(int index); // Helper to select and ensure visibility of an index
+	void SelectIndex(int index);
+	void UpdateGridSize();
+	void ClearSpriteCache(); // Method to clear sprite cache when zoom changes
+	void ManageSpriteCache(); // Method to limit sprite cache size
 
-protected:
+	// Internal struct for caching scaled sprites
+	struct CachedSprite {
+		wxBitmap bitmap;
+		int zoom_level;
+		bool is_valid;
+		
+		CachedSprite() : zoom_level(0), is_valid(false) {}
+	};
+
+	// Map to store scaled sprite bitmaps for better performance
+	std::map<int, CachedSprite> sprite_cache;
+
+private:
 	int columns;
-	int sprite_size;     // Size of each sprite/item
-	int selected_index;  // Currently selected item index
-	int hover_index;     // Index of item under mouse cursor
-	wxBitmap* buffer;
-	bool show_item_ids;  // Whether to show item IDs
-
-	// Viewport and loading management
+	int sprite_size;
+	int zoom_level; // Zoom level (1=32px, 2=64px, etc)
+	int selected_index;
+	int hover_index;
+	bool show_item_ids;
+	
+	// Rendering optimization
 	int first_visible_row;
 	int last_visible_row;
 	int visible_rows_margin;
 	int total_rows;
 	bool need_full_redraw;
 	
-	// Progressive loading properties
+	// Progressive loading for large tilesets
 	bool use_progressive_loading;
 	bool is_large_tileset;
 	int loading_step;
 	int max_loading_steps;
 	wxTimer* loading_timer;
-	static const int LARGE_TILESET_THRESHOLD = 500;
+	wxBitmap* buffer;
+	static const int LARGE_TILESET_THRESHOLD = 1000; // Number of items considered "large"
 
 	DECLARE_EVENT_TABLE();
 };
@@ -286,6 +329,9 @@ public:
 	void SetListType(wxString ltype);
 	// Assigns a tileset to this list
 	void AssignTileset(const TilesetCategory* tileset);
+	
+	// Set whether to display item IDs
+	void SetShowItemIDs(bool show);
 
 	// Select the first brush
 	void SelectFirstBrush();

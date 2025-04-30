@@ -17,6 +17,7 @@
 
 #include "main.h"
 
+#include <set>
 #include "palette_brushlist.h"
 #include "gui.h"
 #include "brush.h"
@@ -580,6 +581,45 @@ void BrushPanel::LoadViewMode() {
 		if (show_ids_toggle) {
 			sgp->SetShowItemIDs(show_ids_toggle->GetValue());
 		}
+		
+		// Add zoom controls to the grid panel
+		wxBoxSizer* zoomSizer = new wxBoxSizer(wxHORIZONTAL);
+		
+		wxStaticText* zoomLabel = new wxStaticText(this, wxID_ANY, "Zoom:");
+		zoomSizer->Add(zoomLabel, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 5);
+		
+		wxButton* zoomOutBtn = new wxButton(this, wxID_ANY, "-", wxDefaultPosition, wxSize(30, -1));
+		zoomSizer->Add(zoomOutBtn, 0, wxRIGHT, 5);
+		
+		wxStaticText* zoomValueLabel = new wxStaticText(this, wxID_ANY, "100%", wxDefaultPosition, wxSize(50, -1), 
+													  wxALIGN_CENTER_HORIZONTAL);
+		zoomSizer->Add(zoomValueLabel, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 5);
+		
+		wxButton* zoomInBtn = new wxButton(this, wxID_ANY, "+", wxDefaultPosition, wxSize(30, -1));
+		zoomSizer->Add(zoomInBtn, 0);
+		
+		// Add the zoom controls above the grid
+		sizer->Add(zoomSizer, 0, wxEXPAND | wxALL, 5);
+		
+		// Set up zoom button event handlers to force immediate refresh
+		zoomOutBtn->Bind(wxEVT_BUTTON, [sgp, zoomValueLabel](wxCommandEvent& event) {
+			int newZoom = sgp->DecrementZoom();
+			zoomValueLabel->SetLabel(wxString::Format("%d%%", newZoom * 100));
+			
+			// Explicitly force layout update and refresh to ensure immediate drawing
+			sgp->GetParent()->Layout();
+			sgp->Update();
+		});
+		
+		zoomInBtn->Bind(wxEVT_BUTTON, [sgp, zoomValueLabel](wxCommandEvent& event) {
+			int newZoom = sgp->IncrementZoom();
+			zoomValueLabel->SetLabel(wxString::Format("%d%%", newZoom * 100));
+			
+			// Explicitly force layout update and refresh to ensure immediate drawing
+			sgp->GetParent()->Layout();
+			sgp->Update();
+		});
+		
 		brushbox = sgp;
 	}
 	// Otherwise use the list type setting
@@ -597,6 +637,45 @@ void BrushPanel::LoadViewMode() {
 				if (show_ids_toggle) {
 					sgp->SetShowItemIDs(show_ids_toggle->GetValue());
 				}
+				
+				// Add zoom controls to the grid panel
+				wxBoxSizer* zoomSizer = new wxBoxSizer(wxHORIZONTAL);
+				
+				wxStaticText* zoomLabel = new wxStaticText(this, wxID_ANY, "Zoom:");
+				zoomSizer->Add(zoomLabel, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 5);
+				
+				wxButton* zoomOutBtn = new wxButton(this, wxID_ANY, "-", wxDefaultPosition, wxSize(30, -1));
+				zoomSizer->Add(zoomOutBtn, 0, wxRIGHT, 5);
+				
+				wxStaticText* zoomValueLabel = new wxStaticText(this, wxID_ANY, "100%", wxDefaultPosition, wxSize(50, -1), 
+														  wxALIGN_CENTER_HORIZONTAL);
+				zoomSizer->Add(zoomValueLabel, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 5);
+				
+				wxButton* zoomInBtn = new wxButton(this, wxID_ANY, "+", wxDefaultPosition, wxSize(30, -1));
+				zoomSizer->Add(zoomInBtn, 0);
+				
+				// Add the zoom controls above the grid
+				sizer->Add(zoomSizer, 0, wxEXPAND | wxALL, 5);
+				
+				// Set up zoom button event handlers to force immediate refresh
+				zoomOutBtn->Bind(wxEVT_BUTTON, [sgp, zoomValueLabel](wxCommandEvent& event) {
+					int newZoom = sgp->DecrementZoom();
+					zoomValueLabel->SetLabel(wxString::Format("%d%%", newZoom * 100));
+					
+					// Explicitly force layout update and refresh to ensure immediate drawing
+					sgp->GetParent()->Layout();
+					sgp->Update();
+				});
+				
+				zoomInBtn->Bind(wxEVT_BUTTON, [sgp, zoomValueLabel](wxCommandEvent& event) {
+					int newZoom = sgp->IncrementZoom();
+					zoomValueLabel->SetLabel(wxString::Format("%d%%", newZoom * 100));
+					
+					// Explicitly force layout update and refresh to ensure immediate drawing
+					sgp->GetParent()->Layout();
+					sgp->Update();
+				});
+				
 				brushbox = sgp;
 				break;
 			}
@@ -695,6 +774,18 @@ void BrushPanel::OnShowItemIDsToggle(wxCommandEvent& event) {
 			// If we're not using a seamless grid panel, reload the view
 			LoadViewMode();
 		}
+	}
+}
+
+void BrushPanel::SetShowItemIDs(bool show) {
+	if (show_ids_toggle) {
+		show_ids_toggle->SetValue(show);
+	}
+	
+	// Update the seamless grid panel if we're using one
+	SeamlessGridPanel* sgp = dynamic_cast<SeamlessGridPanel*>(brushbox);
+	if (sgp) {
+		sgp->SetShowItemIDs(show);
 	}
 }
 
@@ -1131,6 +1222,19 @@ void DirectDrawBrushPanel::StartProgressiveLoading() {
 	// Force full redraw
 	need_full_redraw = true;
 	
+	// Check if this is a small tileset that shouldn't use progressive loading
+	if(tileset->size() < 1000) {
+		// For very small tilesets, just load everything at once
+		loading_step = max_loading_steps; // Mark as fully loaded
+		visible_rows_margin = 30; // Set full margin
+		if(loading_timer->IsRunning()) {
+			loading_timer->Stop();
+		}
+		UpdateViewableItems();
+		Refresh();
+		return;
+	}
+	
 	// Only show a limited number of items initially
 	int itemsToShowInitially = std::min(100, static_cast<int>(tileset->size()));
 	
@@ -1161,9 +1265,11 @@ void DirectDrawBrushPanel::OnTimer(wxTimerEvent& event) {
 	// Force redraw to update progress
 	Refresh();
 	
-	// Stop timer when we've reached max loading steps
-	if (loading_step >= max_loading_steps) {
+	// Stop timer when we've reached max loading steps or loaded all items
+	if (loading_step >= max_loading_steps || static_cast<int>(tileset->size()) <= 1000) {
 		loading_timer->Stop();
+		loading_step = max_loading_steps; // Mark as fully loaded
+		visible_rows_margin = 30; // Ensure full margin
 		need_full_redraw = true;
 		Refresh();
 	}
@@ -1174,7 +1280,7 @@ void DirectDrawBrushPanel::OnScroll(wxScrollWinEvent& event) {
 	UpdateViewableItems();
 	
 	// Reset progressive loading on scroll for large tilesets
-	if (is_large_tileset && use_progressive_loading) {
+	if (is_large_tileset && use_progressive_loading && tileset->size() > 1000) {
 		// Stop any existing timer
 		if (loading_timer && loading_timer->IsRunning()) {
 			loading_timer->Stop();
@@ -1197,6 +1303,11 @@ void DirectDrawBrushPanel::OnScroll(wxScrollWinEvent& event) {
 			UpdateViewableItems();
 			Refresh();
 		}
+	} else {
+		// For small tilesets, always use full view
+		visible_rows_margin = 30;
+		UpdateViewableItems();
+		Refresh();
 	}
 	
 	event.Skip();
@@ -1232,7 +1343,7 @@ void DirectDrawBrushPanel::DrawItemsToPanel(wxDC& dc) {
 	GetClientSize(&width, &height);
 	
 	// Draw loading progress for large datasets during initial load
-	if (is_large_tileset && loading_step < max_loading_steps) {
+	if (is_large_tileset && loading_step < max_loading_steps && tileset->size() > 1000) {
 		// Draw progress bar
 		int progressWidth = width - 40;
 		int progressHeight = 20;
@@ -1354,7 +1465,7 @@ void DirectDrawBrushPanel::OnPaint(wxPaintEvent& event) {
 	dc.SetBackground(wxBrush(GetBackgroundColour()));
 	dc.Clear();
 	
-	// Draw only the visible items
+	// Draw items
 	DrawItemsToPanel(dc);
 }
 
@@ -1494,6 +1605,7 @@ SeamlessGridPanel::SeamlessGridPanel(wxWindow* parent, const TilesetCategory* _t
 	BrushBoxInterface(_tileset),
 	columns(1),
 	sprite_size(32),
+	zoom_level(1), // Add zoom level, default 1x (32px)
 	selected_index(-1),
 	hover_index(-1),
 	buffer(nullptr),
@@ -1522,6 +1634,9 @@ SeamlessGridPanel::SeamlessGridPanel(wxWindow* parent, const TilesetCategory* _t
 		loading_timer = new wxTimer(this);
 		max_loading_steps = 10; // Increase steps for smoother progress indication
 	}
+	
+	// Initialize the sprite cache
+	sprite_cache.clear();
 	
 	// Enable scrolling
 	SetScrollRate(sprite_size, sprite_size);
@@ -1557,18 +1672,42 @@ void SeamlessGridPanel::StartProgressiveLoading() {
 	// Force full redraw
 	need_full_redraw = true;
 	
-	// Only show a limited number of items initially
-	int itemsToShowInitially = std::min(100, static_cast<int>(tileset->size()));
-	
-	// Calculate how many items to add with each loading step
-	int itemsPerStep = (tileset->size() - itemsToShowInitially) / max_loading_steps;
-	if (itemsPerStep < 50) {
-		// For smaller tilesets, load faster
-		max_loading_steps = std::max(3, static_cast<int>(tileset->size() / 50));
+	// Check if this is a small tileset that shouldn't use progressive loading
+	if(tileset->size() < 200) {
+		// For very small tilesets, just load everything at once
+		loading_step = max_loading_steps; // Mark as fully loaded
+		visible_rows_margin = 30; // Set full margin
+		if(loading_timer->IsRunning()) {
+			loading_timer->Stop();
+		}
+		UpdateViewableItems();
+		Refresh();
+		return;
 	}
 	
-	// Start timer for progressive loading
-	loading_timer->Start(200); // 200ms interval for better visual feedback
+	// Adjust batch size based on zoom level - higher zoom means fewer items per batch
+	int zoom_factor = zoom_level * zoom_level; // Square the zoom level for scaling factor
+	
+	// Only show a limited number of items initially, adjusted for zoom level
+	int itemsToShowInitially = std::min(100 / zoom_factor, static_cast<int>(tileset->size()));
+	itemsToShowInitially = std::max(20, itemsToShowInitially); // Ensure minimum batch size
+	
+	// Calculate how many items to add with each loading step, adjusted for zoom level
+	int itemsPerStep = (tileset->size() - itemsToShowInitially) / max_loading_steps;
+	
+	// Scale items per step based on zoom level
+	itemsPerStep = std::max(30, itemsPerStep / zoom_factor);
+	
+	// For smaller tilesets or high zoom levels, adjust loading steps
+	if (itemsPerStep < 50) {
+		// Calculate an appropriate number of steps based on tileset size and zoom level
+		max_loading_steps = std::max(3, static_cast<int>(tileset->size() / (50 / zoom_factor)));
+	}
+	
+	// Start timer for progressive loading with interval based on zoom
+	// Higher zoom levels need slightly more time per frame
+	int interval = 200 + (zoom_level - 1) * 50; // 200ms at zoom 1, +50ms per zoom level
+	loading_timer->Start(interval);
 	
 	// Force initial redraw to show progress
 	Refresh();
@@ -1578,15 +1717,20 @@ void SeamlessGridPanel::OnTimer(wxTimerEvent& event) {
 	// Progressively increase the visible margin
 	loading_step++;
 	
+	// Gradually increase the margin with each step
+	visible_rows_margin = std::min(3 + loading_step * 5, 30);
+	
 	// Update viewable items with new margin
 	UpdateViewableItems();
 	
 	// Force redraw to update progress
 	Refresh();
 	
-	// Stop timer when we've reached max loading steps
-	if (loading_step >= max_loading_steps) {
+	// Stop timer when we've reached max loading steps or loaded all items
+	if (loading_step >= max_loading_steps || static_cast<int>(tileset->size()) <= 1000) {
 		loading_timer->Stop();
+		loading_step = max_loading_steps; // Mark as fully loaded
+		visible_rows_margin = 30; // Ensure full margin
 		need_full_redraw = true;
 		Refresh();
 	}
@@ -1614,34 +1758,20 @@ void SeamlessGridPanel::UpdateViewableItems() {
 	}
 }
 
-void SeamlessGridPanel::RecalculateGrid() {
-	// Calculate columns based on client width
-	int width;
-	GetClientSize(&width, nullptr);
-	columns = std::max(1, width / sprite_size);
-	
-	// Calculate total rows needed
-	total_rows = (tileset->size() + columns - 1) / columns;  // Ceiling division
-	int virtual_height = total_rows * sprite_size;
-	
-	// Set virtual size for scrolling
-	SetVirtualSize(width, virtual_height);
-	
-	// Update which items are currently visible
-	UpdateViewableItems();
-	
-	need_full_redraw = true;
-}
-
 void SeamlessGridPanel::DrawItemsToPanel(wxDC& dc) {
 	if(!tileset || tileset->size() == 0) return;
+	
+	// Check if we need to manage cache size
+	if (need_full_redraw) {
+		ManageSpriteCache();
+	}
 	
 	// Calculate client area size
 	int width, height;
 	GetClientSize(&width, &height);
 	
 	// Draw loading progress for large datasets during initial load
-	if (loading_step < max_loading_steps) {
+	if (loading_step < max_loading_steps && tileset->size() > 1000) {
 		// Draw progress bar
 		int progressWidth = width - 40;
 		int progressHeight = 20;
@@ -1659,9 +1789,11 @@ void SeamlessGridPanel::DrawItemsToPanel(wxDC& dc) {
 		dc.SetPen(wxPen(wxColor(0, 100, 0)));
 		dc.DrawRectangle(progressX, progressY, progressWidth * progress, progressHeight);
 		
-		// Progress text
-		wxString loadingMsg = wxString::Format("Loading %zu items... (%d%%)", 
-			tileset->size(), 
+		// Progress text - show different messages based on zoom level
+		wxString zoomInfo = zoom_level > 1 ? wxString::Format(" (Zoom %dx)", zoom_level) : "";
+		wxString loadingMsg = wxString::Format("Loading %zu items%s... (%d%%)", 
+			tileset->size(),
+			zoomInfo,
 			static_cast<int>((loading_step + 1) * 100 / max_loading_steps));
 		
 		wxSize textSize = dc.GetTextExtent(loadingMsg);
@@ -1709,6 +1841,9 @@ void SeamlessGridPanel::DrawItemsToPanel(wxDC& dc) {
 			}
 		}
 	}
+	
+	// Reset full redraw flag
+	need_full_redraw = false;
 }
 
 void SeamlessGridPanel::DrawSpriteAt(wxDC& dc, int x, int y, int index) {
@@ -1716,36 +1851,133 @@ void SeamlessGridPanel::DrawSpriteAt(wxDC& dc, int x, int y, int index) {
 	Brush* brush = tileset->brushlist[index];
 	if (!brush) return;
 	
-	// Draw background for selected/hover items
+	// Draw background for selected/hover items with semi-transparency
 	if (index == selected_index) {
-		dc.SetBrush(wxBrush(wxColor(120, 120, 200)));
+		// Use transparent background for selection
+		wxColor selectColor(120, 120, 200, 180); // More transparent blue
+		dc.SetBrush(wxBrush(selectColor));
 		dc.SetPen(wxPen(wxColor(80, 80, 160), 2));
 		dc.DrawRectangle(x, y, sprite_size, sprite_size);
 	} else if (index == hover_index) {
-		dc.SetBrush(wxBrush(wxColor(200, 200, 255, 128)));
-		dc.SetPen(wxPen(wxColor(150, 150, 230, 200), 1));
+		// Use even more transparent background for hover
+		wxColor hoverColor(200, 200, 255, 120); // Very transparent light blue
+		dc.SetBrush(wxBrush(hoverColor));
+		dc.SetPen(wxPen(wxColor(150, 150, 230, 180), 1));
 		dc.DrawRectangle(x, y, sprite_size, sprite_size);
 	}
 	
-	// Draw item sprite
-	Sprite* sprite = g_gui.gfx.getSprite(brush->getLookID());
-	if (sprite) {
-		sprite->DrawTo(&dc, SPRITE_SIZE_32x32, x, y);
+	// Check if we have the sprite already cached at current zoom level
+	bool need_to_create_sprite = true;
+	
+	if (sprite_cache.count(index) > 0 && sprite_cache[index].is_valid) {
+		// Check if the cached sprite is at the current zoom level
+		if (sprite_cache[index].zoom_level == zoom_level) {
+			// Use the cached sprite bitmap
+			dc.DrawBitmap(sprite_cache[index].bitmap, x, y, true);
+			need_to_create_sprite = false;
+		}
+	}
+	
+	// If not in cache or wrong zoom level, create and cache it
+	if (need_to_create_sprite) {
+		Sprite* sprite = g_gui.gfx.getSprite(brush->getLookID());
+		if (sprite) {
+			// Create appropriate sized bitmap based on zoom level
+			if (zoom_level == 1) {
+				// For 1x zoom, create a standard 32x32 bitmap
+				wxBitmap bmp(32, 32);
+				wxMemoryDC memDC(bmp);
+				memDC.SetBackground(*wxTRANSPARENT_BRUSH);
+				memDC.Clear();
+				
+				// Draw to the memory DC
+				sprite->DrawTo(&memDC, SPRITE_SIZE_32x32, 0, 0);
+				memDC.SelectObject(wxNullBitmap);
+				
+				// Store in cache
+				CachedSprite cached;
+				cached.bitmap = bmp;
+				cached.zoom_level = zoom_level;
+				cached.is_valid = true;
+				sprite_cache[index] = cached;
+				
+				// Draw to screen
+				dc.DrawBitmap(bmp, x, y, true);
+			} 
+			else if (zoom_level == 2) {
+				// For 2x zoom (64x64), create a 64x64 bitmap
+				wxBitmap bmp(64, 64);
+				wxMemoryDC memDC(bmp);
+				memDC.SetBackground(*wxTRANSPARENT_BRUSH);
+				memDC.Clear();
+				
+				// Draw to the memory DC with 64x64 size
+				sprite->DrawTo(&memDC, SPRITE_SIZE_64x64, 0, 0);
+				memDC.SelectObject(wxNullBitmap);
+				
+				// Store in cache
+				CachedSprite cached;
+				cached.bitmap = bmp;
+				cached.zoom_level = zoom_level;
+				cached.is_valid = true;
+				sprite_cache[index] = cached;
+				
+				// Draw to screen
+				dc.DrawBitmap(bmp, x, y, true);
+			} 
+			else {
+				// For other zoom levels (3x, 4x), create a scaled bitmap
+				// First draw at 32x32
+				wxBitmap temp_bmp(32, 32);
+				wxMemoryDC temp_dc(temp_bmp);
+				temp_dc.SetBackground(*wxTRANSPARENT_BRUSH);
+				temp_dc.Clear();
+				
+				// Draw the sprite to the temp DC
+				sprite->DrawTo(&temp_dc, SPRITE_SIZE_32x32, 0, 0);
+				temp_dc.SelectObject(wxNullBitmap); // Deselect to finalize drawing
+				
+				// Convert to image, scale, and draw
+				wxImage img = temp_bmp.ConvertToImage();
+				img.SetMaskColour(255, 0, 255); // Keep transparency
+				img = img.Rescale(sprite_size, sprite_size, wxIMAGE_QUALITY_HIGH);
+				
+				wxBitmap scaled(img);
+				
+				// Store in cache
+				CachedSprite cached;
+				cached.bitmap = scaled;
+				cached.zoom_level = zoom_level;
+				cached.is_valid = true;
+				sprite_cache[index] = cached;
+				
+				// Draw to screen
+				dc.DrawBitmap(scaled, x, y, true);
+			}
+		}
 	}
 	
 	// For RAW brushes, draw the ID if enabled
 	if (show_item_ids && brush->isRaw()) {
 		RAWBrush* raw = static_cast<RAWBrush*>(brush);
-		wxString label = wxString::Format("%d", raw->getItemID());
+		
+		// Scale the font size based on zoom level
+		wxFont font = dc.GetFont();
+		font.SetPointSize(std::max(8, 8 + (zoom_level - 1) * 2));
+		dc.SetFont(font);
 		
 		// Draw with semi-transparent background for better readability
-		wxSize textSize = dc.GetTextExtent(label);
-		dc.SetBrush(wxBrush(wxColor(0, 0, 0, 128)));
+		wxSize textSize = dc.GetTextExtent(wxString::Format("%d", raw->getItemID()));
+		int textHeight = std::max(14, 14 + (zoom_level - 1) * 4);
+		
+		// More transparent background for ID text
+		wxColor bgColor(0, 0, 0, 140); // Semi-transparent black
+		dc.SetBrush(wxBrush(bgColor));
 		dc.SetPen(wxPen(wxColor(0, 0, 0, 0)));
-		dc.DrawRectangle(x, y + sprite_size - 14, textSize.GetWidth() + 4, 14);
+		dc.DrawRectangle(x, y + sprite_size - textHeight, textSize.GetWidth() + 4, textHeight);
 		
 		dc.SetTextForeground(wxColor(255, 255, 255));
-		dc.DrawText(label, x + 2, y + sprite_size - 14);
+		dc.DrawText(wxString::Format("%d", raw->getItemID()), x + 2, y + sprite_size - textHeight);
 	}
 }
 
@@ -1767,12 +1999,31 @@ void SeamlessGridPanel::OnSize(wxSizeEvent& event) {
 	event.Skip();
 }
 
+void SeamlessGridPanel::RecalculateGrid() {
+	// Calculate columns based on client width
+	int width;
+	GetClientSize(&width, nullptr);
+	columns = std::max(1, width / sprite_size);
+	
+	// Calculate total rows needed
+	total_rows = (tileset->size() + columns - 1) / columns;  // Ceiling division
+	int virtual_height = total_rows * sprite_size;
+	
+	// Set virtual size for scrolling
+	SetVirtualSize(width, virtual_height);
+	
+	// Update which items are currently visible
+	UpdateViewableItems();
+	
+	need_full_redraw = true;
+}
+
 void SeamlessGridPanel::OnScroll(wxScrollWinEvent& event) {
 	// Handle scroll events to update visible items
 	UpdateViewableItems();
 	
 	// Reset progressive loading on scroll for large tilesets
-	if (loading_step < max_loading_steps) {
+	if (loading_step < max_loading_steps && tileset->size() > 1000) {
 		// Temporarily use small margin for immediate response
 		visible_rows_margin = 3;
 		UpdateViewableItems();
@@ -1783,7 +2034,7 @@ void SeamlessGridPanel::OnScroll(wxScrollWinEvent& event) {
 		// Restart progressive loading
 		StartProgressiveLoading();
 	} else {
-		// If loading was already complete, just continue with full view
+		// If loading was already complete or it's a small tileset, just continue with full view
 		visible_rows_margin = 30;
 		UpdateViewableItems();
 		Refresh();
@@ -2006,5 +2257,104 @@ void SeamlessGridPanel::OnKeyDown(wxKeyEvent& event) {
 		SetFocus(); // Keep focus for more keyboard input
 	} else {
 		event.Skip(); // Allow other handlers to process the event
+	}
+}
+
+// Add these implementations before the end of the file
+int SeamlessGridPanel::IncrementZoom() {
+	if (zoom_level < 4) { // Max zoom 4x (128px)
+		zoom_level++;
+		UpdateGridSize();
+		
+		// Force a complete redraw of visible items
+		need_full_redraw = true;
+		first_visible_row = 0; // Reset visible rows to force redraw
+		last_visible_row = 0;
+		UpdateViewableItems();
+		Refresh(true); // Force a full refresh
+		
+		return zoom_level;
+	}
+	return zoom_level;
+}
+
+int SeamlessGridPanel::DecrementZoom() {
+	if (zoom_level > 1) { // Min zoom 1x (32px)
+		zoom_level--;
+		UpdateGridSize();
+		
+		// Force a complete redraw of visible items
+		need_full_redraw = true;
+		first_visible_row = 0; // Reset visible rows to force redraw
+		last_visible_row = 0;
+		UpdateViewableItems();
+		Refresh(true); // Force a full refresh
+		
+		return zoom_level;
+	}
+	return zoom_level;
+}
+
+void SeamlessGridPanel::SetZoomLevel(int level) {
+	if (level >= 1 && level <= 4) {
+		zoom_level = level;
+		UpdateGridSize();
+		
+		// Force a complete redraw of visible items
+		need_full_redraw = true;
+		first_visible_row = 0; // Reset visible rows to force redraw
+		last_visible_row = 0;
+		UpdateViewableItems();
+		Refresh(true); // Force a full refresh
+	}
+}
+
+void SeamlessGridPanel::UpdateGridSize() {
+	// Calculate the actual sprite size based on zoom level
+	sprite_size = 32 * zoom_level;
+	
+	// Clear the sprite cache when zoom level changes
+	ClearSpriteCache();
+	
+	// Recalculate grid layout with the new size
+	RecalculateGrid();
+	
+	// Update scroll rate to match the new size
+	SetScrollRate(sprite_size / 4, sprite_size / 4);
+}
+
+// Add ClearSpriteCache method implementation before UpdateGridSize
+void SeamlessGridPanel::ClearSpriteCache() {
+	// Clear the sprite cache when zoom level changes
+	sprite_cache.clear();
+}
+
+// Add this method to limit the sprite cache size
+void SeamlessGridPanel::ManageSpriteCache() {
+	// If the cache gets too large, clear sprites that aren't visible
+	if (sprite_cache.size() > 500) { // Arbitrary limit to prevent excessive memory usage
+		// Get the current visible range
+		int firstIndex = first_visible_row * columns;
+		int lastIndex = (last_visible_row + 1) * columns - 1;
+		lastIndex = std::min(lastIndex, static_cast<int>(tileset->size()) - 1);
+		
+		// Create a set of visible indices for faster lookup
+		std::set<int> visibleIndices;
+		for (int i = firstIndex; i <= lastIndex; ++i) {
+			visibleIndices.insert(i);
+		}
+		
+		// Remove sprites that aren't currently visible
+		std::vector<int> keysToRemove;
+		for (auto& pair : sprite_cache) {
+			if (visibleIndices.find(pair.first) == visibleIndices.end()) {
+				keysToRemove.push_back(pair.first);
+			}
+		}
+		
+		// Remove from cache
+		for (int key : keysToRemove) {
+			sprite_cache.erase(key);
+		}
 	}
 }
