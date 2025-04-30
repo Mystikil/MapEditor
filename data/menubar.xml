@@ -40,9 +40,6 @@
 			<item name="Randomize Map" action="RANDOMIZE_MAP" help="Randomizes all tiles of the entire map." />
 		</menu>
 		<menu name="Other Options">
-			<item name="Remove Items by ID..." action="MAP_REMOVE_ITEMS" help="Removes all items with the selected ID from the map." />
-			<item name="Remove Duplicates..." action="MAP_REMOVE_DUPLICATES" help="Removes all duplicate items from the map." />
-			<item name="Remove all Corpses..." action="MAP_REMOVE_CORPSES" help="Removes all corpses from the map." />
 			<item name="Remove all Unreachable Tiles..." action="MAP_REMOVE_UNREACHABLE_TILES" help="Removes all tiles that cannot be reached (or seen) by the player from the map." />
 			<item name="Clear Invalid Houses" action="CLEAR_INVALID_HOUSES" help="Clears house tiles not belonging to any house." />
 			<item name="Clear Modified State" action="CLEAR_MODIFIED_STATE" help="Clears the modified state from all tiles." />
@@ -142,7 +139,6 @@
 	</menu>
 	<menu name="Navigate">
 		<item name="Go to Previous Position" hotkey="P" action="GOTO_PREVIOUS_POSITION" help="Go to the previous screen center position." />
-		<item name="Go to Position..." hotkey="Ctrl+G" action="GOTO_POSITION" help="Go to a specific XYZ position." />
 		<item name="Jump to Brush..." hotkey="J" action="JUMP_TO_BRUSH" help="Jump to a brush." />
 		<item name="Jump to Item..." hotkey="Ctrl+J" action="JUMP_TO_ITEM_BRUSH" help="Jump to an item brush (RAW palette)." />
 		<separator />
@@ -168,7 +164,7 @@
 	<menu name="Window">
 		<item name="Minimap" hotkey="M" action="WIN_MINIMAP" help="Displays the minimap window." />
 		<item name="New Palette" action="NEW_PALETTE" help="Creates a new palette." />
-		<item name="New Palette View" action="NEW_DETACHED_PALETTE" help="Creates a new palette view." />
+		
 		<menu name="Palette">
 			<item name="Terrain" hotkey="T" action="SELECT_TERRAIN" help="Select the Terrain palette." />
 			<item name="Doodad" hotkey="D" action="SELECT_DOODAD" help="Select the Doodad palette." />
@@ -193,10 +189,29 @@
 		<item name="Extensions..." hotkey="F2" action="EXTENSIONS" help="" />
 		<item name="Goto Website" hotkey="F3" action="GOTO_WEBSITE" help="" />
 		<item name="About..." hotkey="F1" action="ABOUT" help="" />
-		<item name="Hotkeys" hotkey="F6" action="SHOW_HOTKEYS" help="Hotkeys" />
+		
 	</menu>
 	<menu name="Server">
 		<item name="Host Server" action="ID_MENU_SERVER_HOST" help="Host a new server for collaborative mapping" />
 		<item name="Connect to Server" action="ID_MENU_SERVER_CONNECT" help="Connect to an existing map server" />
+	</menu>
+	<menu name="Idler">
+	<!-- all context menus that have been changed from vanilla functionalities -->
+		<item name="Hotkeys" hotkey="F6" action="SHOW_HOTKEYS" help="Hotkeys" />
+		<separator />
+		<item name="Remove Items by ID..." action="MAP_REMOVE_ITEMS" help="Removes all items with the selected ID from the map." />
+			<item name="Remove Duplicates..." action="MAP_REMOVE_DUPLICATES" help="Removes all duplicate items from the map." />
+			<item name="Remove all Corpses..." action="MAP_REMOVE_CORPSES" help="Removes all corpses from the map." />
+		<separator />
+<item name="Go to Position..." hotkey="Ctrl+G" action="GOTO_POSITION" help="Go to a specific XYZ position." />
+		<item name="Edit Towns" hotkey="Ctrl+T" action="EDIT_TOWNS" help="Edit towns." />
+		<item name="Export Minimap..." action="EXPORT_MINIMAP" help="Export minimap to an image file." />
+<item name="Find Item..." hotkey="Ctrl+F" action="FIND_ITEM" help="Find all instances of an item type the map." />
+	<item name="Replace Items..." hotkey="Ctrl+Shift+F" action="REPLACE_ITEMS" help="Replaces all occurrences of one item with another." />
+		<item name="Refresh Items" action="REFRESH_ITEMS" help="Refresh items to fix flags" />
+
+		<!-- clickable buttons that toggle some settings such as select right click RAw toggle button and toggle button to disable map display right click context menu then.-->
+		
+
 	</menu>
 </menubar>
