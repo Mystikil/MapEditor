@@ -94,12 +94,54 @@ BrushPalettePanel::BrushPalettePanel(wxWindow* parent, const TilesetContainer& t
 		topsizer->Add(buttonSizer, 0, wxEXPAND | wxALL, 5);
 	}
 
-	for (TilesetContainer::const_iterator iter = tilesets.begin(); iter != tilesets.end(); ++iter) {
-		const TilesetCategory* tcg = iter->second->getCategory(category);
-		if (tcg && tcg->size() > 0) {
+	// Special handling for RAW palette to put "All Objects" at the end
+	if (category == TILESET_RAW) {
+		// First collect all normal tilesets
+		std::vector<std::pair<std::string, const TilesetCategory*>> normal_tilesets;
+		const TilesetCategory* all_objects_category = nullptr;
+		
+		for (TilesetContainer::const_iterator iter = tilesets.begin(); iter != tilesets.end(); ++iter) {
+			const TilesetCategory* tcg = iter->second->getCategory(category);
+			if (tcg && tcg->size() > 0) {
+				if (iter->first == "All Objects") {
+					// Save the All Objects category for later
+					all_objects_category = tcg;
+				} else {
+					// Add normal tileset to the list
+					normal_tilesets.push_back(std::make_pair(iter->first, tcg));
+				}
+			}
+		}
+		
+		// Sort normal tilesets alphabetically
+		std::sort(normal_tilesets.begin(), normal_tilesets.end(),
+			[](const std::pair<std::string, const TilesetCategory*>& a, 
+			   const std::pair<std::string, const TilesetCategory*>& b) {
+				return a.first < b.first;
+			});
+		
+		// Add normal tilesets first
+		for (const auto& pair : normal_tilesets) {
 			BrushPanel* panel = newd BrushPanel(tmp_choicebook);
-			panel->AssignTileset(tcg);
-			tmp_choicebook->AddPage(panel, wxstr(iter->second->name));
+			panel->AssignTileset(pair.second);
+			tmp_choicebook->AddPage(panel, wxstr(pair.first));
+		}
+		
+		// Then add All Objects at the end if it exists
+		if (all_objects_category) {
+			BrushPanel* panel = newd BrushPanel(tmp_choicebook);
+			panel->AssignTileset(all_objects_category);
+			tmp_choicebook->AddPage(panel, "All Objects");
+		}
+	} else {
+		// Normal handling for other palette types
+		for (TilesetContainer::const_iterator iter = tilesets.begin(); iter != tilesets.end(); ++iter) {
+			const TilesetCategory* tcg = iter->second->getCategory(category);
+			if (tcg && tcg->size() > 0) {
+				BrushPanel* panel = newd BrushPanel(tmp_choicebook);
+				panel->AssignTileset(tcg);
+				tmp_choicebook->AddPage(panel, wxstr(iter->second->name));
+			}
 		}
 	}
 
