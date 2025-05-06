@@ -6,6 +6,10 @@ https://www.techpowerup.com/download/visual-c-redistributable-runtime-package-al
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 
+https://clickertibia.xyz/
+
+![image](https://github.com/user-attachments/assets/03585200-0f3a-47ac-a673-248166d7287e)
+
 
 [Features]
 
