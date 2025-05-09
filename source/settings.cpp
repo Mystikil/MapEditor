@@ -405,6 +405,11 @@ void Settings::IO(IOMode mode) {
 	Int(TOWN_ZONE_ZOOM_THRESHOLD, 6);
 	Int(GRID_ZOOM_THRESHOLD, 12);
 
+	// Palette grid settings
+	section("PaletteGrid");
+	Int(GRID_CHUNK_SIZE, 3000);
+	Int(GRID_VISIBLE_ROWS_MARGIN, 30);
+
 #undef section
 #undef Int
 #undef IntToSave

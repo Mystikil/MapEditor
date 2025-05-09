@@ -20,7 +20,19 @@
 #include <wx/collpane.h>
 
 #include "settings.h"
+#include "gui_ids.h"
 #include "client_version.h"
+
+#include <wx/confbase.h>
+#include <wx/config.h>
+#include <wx/fileconf.h>
+#include <wx/sstream.h>
+#include <wx/wfstream.h>
+#include <wx/statline.h>
+
+#include <iostream>
+#include <string>
+
 #include "editor.h"
 
 #include "gui.h"
@@ -705,6 +717,33 @@ wxNotebookPage* PreferencesWindow::CreateLODPage() {
 	SetWindowToolTip(tmptext, grid_threshold_spin, "When zoomed out beyond this level, the grid won't be displayed.");
 
 	sizer->Add(grid_sizer, 0, wxALL, 5);
+	
+	// Add a separator line
+	wxStaticLine* separator = new wxStaticLine(lod_page, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxLI_HORIZONTAL);
+	sizer->Add(separator, 0, wxEXPAND | wxALL, 5);
+	
+	// Add a section title for palette grid settings
+	sizer->Add(newd wxStaticText(lod_page, wxID_ANY, "Palette Grid Settings"), 0, wxALL, 5);
+	
+	// Create a new grid sizer for palette grid settings
+	wxFlexGridSizer* palette_grid_sizer = newd wxFlexGridSizer(2, 10, 10);
+	palette_grid_sizer->AddGrowableCol(1);
+	
+	// Chunk size setting
+	palette_grid_sizer->Add(tmptext = newd wxStaticText(lod_page, wxID_ANY, "Grid chunk size: "), 0);
+	chunk_size_spin = newd wxSpinCtrl(lod_page, wxID_ANY, i2ws(g_settings.getInteger(Config::GRID_CHUNK_SIZE)), 
+		wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS, 500, 10000, 3000);
+	palette_grid_sizer->Add(chunk_size_spin, 0);
+	SetWindowToolTip(tmptext, chunk_size_spin, "Number of items per chunk in large tilesets. Lower values improve performance but require more navigation.");
+	
+	// Visible rows margin setting
+	palette_grid_sizer->Add(tmptext = newd wxStaticText(lod_page, wxID_ANY, "Visible rows margin: "), 0);
+	visible_rows_margin_spin = newd wxSpinCtrl(lod_page, wxID_ANY, i2ws(g_settings.getInteger(Config::GRID_VISIBLE_ROWS_MARGIN)), 
+		wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS, 5, 100, 30);
+	palette_grid_sizer->Add(visible_rows_margin_spin, 0);
+	SetWindowToolTip(tmptext, visible_rows_margin_spin, "Number of extra rows to load above/below the visible area. Higher values use more memory but reduce flickering.");
+	
+	sizer->Add(palette_grid_sizer, 0, wxALL, 5);
 	sizer->AddSpacer(10);
 
 	sizer->Add(newd wxStaticText(lod_page, wxID_ANY, "Higher values = better performance, less detail."), 0, wxLEFT | wxBOTTOM, 5);
@@ -880,6 +919,10 @@ void PreferencesWindow::Apply() {
 	g_settings.setInteger(Config::SHADE_ZOOM_THRESHOLD, shade_threshold_spin->GetValue());
 	g_settings.setInteger(Config::TOWN_ZONE_ZOOM_THRESHOLD, town_zone_threshold_spin->GetValue());
 	g_settings.setInteger(Config::GRID_ZOOM_THRESHOLD, grid_threshold_spin->GetValue());
+	
+	// Palette grid settings
+	g_settings.setInteger(Config::GRID_CHUNK_SIZE, chunk_size_spin->GetValue());
+	g_settings.setInteger(Config::GRID_VISIBLE_ROWS_MARGIN, visible_rows_margin_spin->GetValue());
 	
 	// Editor
 	g_settings.setInteger(Config::GROUP_ACTIONS, group_actions_chkbox->GetValue());

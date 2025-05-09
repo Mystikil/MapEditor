@@ -18,6 +18,7 @@
 #include "main.h"
 
 #include <set>
+#include <algorithm> // Add this for std::min
 #include "palette_brushlist.h"
 #include "gui.h"
 #include "brush.h"
@@ -1623,7 +1624,11 @@ SeamlessGridPanel::SeamlessGridPanel(wxWindow* parent, const TilesetCategory* _t
 	is_large_tileset(false),
 	loading_step(0),
 	max_loading_steps(5),
-	loading_timer(nullptr) {
+	loading_timer(nullptr),
+	chunk_size(g_settings.getInteger(Config::GRID_CHUNK_SIZE)),
+	current_chunk(0),
+	total_chunks(1),
+	navigation_panel(nullptr) {
 	
 	SetBackgroundStyle(wxBG_STYLE_PAINT);
 	
@@ -1632,6 +1637,18 @@ SeamlessGridPanel::SeamlessGridPanel(wxWindow* parent, const TilesetCategory* _t
 	
 	// Check if we're dealing with a large tileset
 	is_large_tileset = tileset && tileset->size() > LARGE_TILESET_THRESHOLD;
+	
+	// For extremely large tilesets, use chunking
+	if (tileset && tileset->size() > 10000) {
+		// Calculate total chunks
+		total_chunks = (tileset->size() + chunk_size - 1) / chunk_size;
+		
+		// Create navigation panel for chunk navigation
+		CreateNavigationPanel(parent);
+	}
+	
+	// Get visible rows margin from settings
+	visible_rows_margin = g_settings.getInteger(Config::GRID_VISIBLE_ROWS_MARGIN);
 	
 	// Create loading timer for large tilesets
 	if (is_large_tileset && use_progressive_loading) {
@@ -1819,6 +1836,12 @@ void SeamlessGridPanel::DrawItemsToPanel(wxDC& dc) {
 		for(int row = first_visible_row; row <= last_visible_row; ++row) {
 			for(int col = 0; col < columns; ++col) {
 				int index = row * columns + col;
+				
+				// For chunked mode, adjust the index
+				if (tileset->size() > 10000) {
+					index = current_chunk * chunk_size + index;
+				}
+				
 				if(index >= static_cast<int>(tileset->size()) || index >= maxItemsToDraw) break;
 				
 				int x = col * sprite_size;
@@ -1832,16 +1855,40 @@ void SeamlessGridPanel::DrawItemsToPanel(wxDC& dc) {
 		}
 	} else {
 		// Normal drawing when fully loaded
-		// Only draw items in the visible range
-		for(int row = first_visible_row; row <= last_visible_row; ++row) {
-			for(int col = 0; col < columns; ++col) {
-				int index = row * columns + col;
-				if(index >= static_cast<int>(tileset->size())) break;
-				
-				int x = col * sprite_size;
-				int y = row * sprite_size;
-				
-				DrawSpriteAt(dc, x, y, index);
+		if (tileset->size() > 10000) {
+			// No need to draw chunk header or buttons since we now have a separate navigation panel
+			
+			// Calculate items in current chunk
+			size_t chunk_start = current_chunk * chunk_size;
+			size_t items_in_chunk = std::min(static_cast<size_t>(chunk_size), tileset->size() - chunk_start);
+			
+			// Only draw items in the visible range for this chunk
+			for(int row = first_visible_row; row <= last_visible_row; ++row) {
+				for(int col = 0; col < columns; ++col) {
+					int local_index = row * columns + col;
+					if(local_index >= static_cast<int>(items_in_chunk)) break;
+					
+					int global_index = chunk_start + local_index;
+					
+					int x = col * sprite_size;
+					int y = row * sprite_size;
+					
+					DrawSpriteAt(dc, x, y, global_index);
+				}
+			}
+		} else {
+			// Standard drawing for normal-sized tilesets
+			// Only draw items in the visible range
+			for(int row = first_visible_row; row <= last_visible_row; ++row) {
+				for(int col = 0; col < columns; ++col) {
+					int index = row * columns + col;
+					if(index >= static_cast<int>(tileset->size())) break;
+					
+					int x = col * sprite_size;
+					int y = row * sprite_size;
+					
+					DrawSpriteAt(dc, x, y, index);
+				}
 			}
 		}
 	}
@@ -1852,6 +1899,8 @@ void SeamlessGridPanel::DrawItemsToPanel(wxDC& dc) {
 
 void SeamlessGridPanel::DrawSpriteAt(wxDC& dc, int x, int y, int index) {
 	// Common drawing function to reduce code duplication
+	if (index < 0 || index >= static_cast<int>(tileset->size())) return;
+	
 	Brush* brush = tileset->brushlist[index];
 	if (!brush) return;
 	
@@ -1971,7 +2020,8 @@ void SeamlessGridPanel::DrawSpriteAt(wxDC& dc, int x, int y, int index) {
 		dc.SetFont(font);
 		
 		// Draw with semi-transparent background for better readability
-		wxSize textSize = dc.GetTextExtent(wxString::Format("%d", raw->getItemID()));
+		wxString idText = wxString::Format("%d", raw->getItemID());
+		wxSize textSize = dc.GetTextExtent(idText);
 		int textHeight = std::max(14, 14 + (zoom_level - 1) * 4);
 		
 		// More transparent background for ID text
@@ -1981,7 +2031,7 @@ void SeamlessGridPanel::DrawSpriteAt(wxDC& dc, int x, int y, int index) {
 		dc.DrawRectangle(x, y + sprite_size - textHeight, textSize.GetWidth() + 4, textHeight);
 		
 		dc.SetTextForeground(wxColor(255, 255, 255));
-		dc.DrawText(wxString::Format("%d", raw->getItemID()), x + 2, y + sprite_size - textHeight);
+		dc.DrawText(idText, x + 2, y + sprite_size - textHeight);
 	}
 }
 
@@ -2009,12 +2059,31 @@ void SeamlessGridPanel::RecalculateGrid() {
 	GetClientSize(&width, nullptr);
 	columns = std::max(1, width / sprite_size);
 	
-	// Calculate total rows needed
-	total_rows = (tileset->size() + columns - 1) / columns;  // Ceiling division
-	int virtual_height = total_rows * sprite_size;
-	
-	// Set virtual size for scrolling
-	SetVirtualSize(width, virtual_height);
+	// For extremely large tilesets, use chunking
+	if (tileset && tileset->size() > 10000) {
+		// Calculate items in current chunk
+		size_t chunk_start = current_chunk * chunk_size;
+		size_t items_in_chunk = std::min(static_cast<size_t>(chunk_size), tileset->size() - chunk_start);
+		
+		// Calculate total rows needed for this chunk
+		total_rows = (items_in_chunk + columns - 1) / columns;  // Ceiling division
+		int virtual_height = total_rows * sprite_size;
+		
+		// Add space for chunk separators if not the last chunk
+		if (current_chunk < total_chunks - 1) {
+			virtual_height += 40; // Space for separator
+		}
+		
+		// Set virtual size for scrolling
+		SetVirtualSize(width, virtual_height);
+	} else {
+		// Normal calculation for smaller tilesets
+		total_rows = (tileset->size() + columns - 1) / columns;  // Ceiling division
+		int virtual_height = total_rows * sprite_size;
+		
+		// Set virtual size for scrolling
+		SetVirtualSize(width, virtual_height);
+	}
 	
 	// Update which items are currently visible
 	UpdateViewableItems();
@@ -2069,19 +2138,42 @@ int SeamlessGridPanel::GetSpriteIndexAt(int x, int y) const {
 }
 
 void SeamlessGridPanel::OnMouseClick(wxMouseEvent& event) {
-	int index = GetSpriteIndexAt(event.GetX(), event.GetY());
-	if (index != -1) {
-		selected_index = index;
-		Refresh();
+	// Convert mouse position to logical position (accounting for scrolling)
+	int xPos, yPos;
+	CalcUnscrolledPosition(event.GetX(), event.GetY(), &xPos, &yPos);
+	
+	// Calculate which item was clicked
+	int col = xPos / sprite_size;
+	int row = yPos / sprite_size;
+	
+	// Bounds check
+	if (col >= 0 && col < columns && row >= 0) {
+		int index = row * columns + col;
 		
-		// Notify parent about the selection
-		wxWindow* w = this;
-		while((w = w->GetParent()) && dynamic_cast<PaletteWindow*>(w) == nullptr);
-		if(w) {
-			g_gui.ActivatePalette(static_cast<PaletteWindow*>(w));
+		// For chunked mode, adjust the index
+		if (tileset->size() > 10000) {
+			// Calculate items in current chunk
+			size_t chunk_start = current_chunk * chunk_size;
+			size_t items_in_chunk = std::min(static_cast<size_t>(chunk_size), tileset->size() - chunk_start);
+			
+			if (index >= static_cast<int>(items_in_chunk)) return;
+			
+			index = chunk_start + index;
 		}
 		
-		g_gui.SelectBrush(tileset->brushlist[index], tileset->getType());
+		if (index >= 0 && index < static_cast<int>(tileset->size())) {
+			selected_index = index;
+			Refresh();
+			
+			// Notify parent about the selection
+			wxWindow* w = this;
+			while((w = w->GetParent()) && dynamic_cast<PaletteWindow*>(w) == nullptr);
+			if(w) {
+				g_gui.ActivatePalette(static_cast<PaletteWindow*>(w));
+			}
+			
+			g_gui.SelectBrush(tileset->brushlist[index], tileset->getType());
+		}
 	}
 	
 	event.Skip();
@@ -2335,16 +2427,63 @@ void SeamlessGridPanel::ClearSpriteCache() {
 
 // Add this method to limit the sprite cache size
 void SeamlessGridPanel::ManageSpriteCache() {
-	// If the cache gets too large, clear sprites that aren't visible
-	if (sprite_cache.size() > 500) { // Arbitrary limit to prevent excessive memory usage
+	// For extremely large tilesets, be much more aggressive with cache management
+	if (tileset->size() > 10000) {
+		// Keep only the sprites in the current chunk and visible area
+		size_t chunk_start = current_chunk * chunk_size;
+		size_t chunk_end = std::min(chunk_start + static_cast<size_t>(chunk_size), tileset->size()) - 1;
+		
+		// Get the current visible range
+		int firstVisRow = first_visible_row;
+		int lastVisRow = last_visible_row;
+		
+		// Calculate visible indices
+		int firstIndex = firstVisRow * columns;
+		int lastIndex = (lastVisRow + 1) * columns - 1;
+		
+		// Adjust to global indices
+		firstIndex = chunk_start + firstIndex;
+		lastIndex = chunk_start + lastIndex;
+		
+		// Bound to valid range
+		firstIndex = std::max(static_cast<int>(chunk_start), std::min(firstIndex, static_cast<int>(chunk_end)));
+		lastIndex = std::max(static_cast<int>(chunk_start), std::min(lastIndex, static_cast<int>(chunk_end)));
+		
+		// Create a set of visible indices with a small margin
+		std::set<int> visibleIndices;
+		int margin = columns * 5; // 5 rows margin
+		
+		for (int i = std::max(static_cast<int>(chunk_start), firstIndex - margin); 
+			 i <= std::min(static_cast<int>(chunk_end), lastIndex + margin); ++i) {
+			visibleIndices.insert(i);
+		}
+		
+		// Remove sprites that aren't in the current visible area
+		std::vector<int> keysToRemove;
+		for (auto& pair : sprite_cache) {
+			if (visibleIndices.find(pair.first) == visibleIndices.end()) {
+				keysToRemove.push_back(pair.first);
+			}
+		}
+		
+		// Remove from cache
+		for (int key : keysToRemove) {
+			sprite_cache.erase(key);
+		}
+	}
+	// For large but not extreme tilesets, use moderate cache management
+	else if (sprite_cache.size() > 500) {
 		// Get the current visible range
 		int firstIndex = first_visible_row * columns;
 		int lastIndex = (last_visible_row + 1) * columns - 1;
 		lastIndex = std::min(lastIndex, static_cast<int>(tileset->size()) - 1);
 		
-		// Create a set of visible indices for faster lookup
+		// Create a set of visible indices with a margin
 		std::set<int> visibleIndices;
-		for (int i = firstIndex; i <= lastIndex; ++i) {
+		int margin = columns * 10; // 10 rows margin
+		
+		for (int i = std::max(0, firstIndex - margin); 
+			 i <= std::min(static_cast<int>(tileset->size()) - 1, lastIndex + margin); ++i) {
 			visibleIndices.insert(i);
 		}
 		
@@ -2361,4 +2500,121 @@ void SeamlessGridPanel::ManageSpriteCache() {
 			sprite_cache.erase(key);
 		}
 	}
+}
+
+void SeamlessGridPanel::CreateNavigationPanel(wxWindow* parent) {
+    // Don't create if it already exists
+    if (navigation_panel) return;
+    
+    // Create a panel to hold navigation buttons
+    navigation_panel = new wxPanel(parent, wxID_ANY);
+    wxBoxSizer* nav_sizer = new wxBoxSizer(wxHORIZONTAL);
+    
+    // Create Previous button
+    wxButton* prev_btn = new wxButton(navigation_panel, wxID_ANY, "< Previous", 
+                                     wxDefaultPosition, wxDefaultSize);
+    prev_btn->Bind(wxEVT_BUTTON, &SeamlessGridPanel::OnNavigationButtonClicked, this);
+    prev_btn->SetToolTip("Go to previous chunk of items");
+    prev_btn->SetClientData(reinterpret_cast<void*>(-1)); // -1 means previous
+    
+    // Create chunk info text
+    wxStaticText* chunk_info = new wxStaticText(navigation_panel, wxID_ANY, 
+                                              wxString::Format("Chunk 1/%d", total_chunks),
+                                              wxDefaultPosition, wxSize(100, -1),
+                                              wxALIGN_CENTER);
+    
+    // Create Next button
+    wxButton* next_btn = new wxButton(navigation_panel, wxID_ANY, "Next >", 
+                                     wxDefaultPosition, wxDefaultSize);
+    next_btn->Bind(wxEVT_BUTTON, &SeamlessGridPanel::OnNavigationButtonClicked, this);
+    next_btn->SetToolTip("Go to next chunk of items");
+    next_btn->SetClientData(reinterpret_cast<void*>(1)); // 1 means next
+    
+    // Add buttons to sizer
+    nav_sizer->Add(prev_btn, 0, wxRIGHT, 5);
+    nav_sizer->Add(chunk_info, 1, wxALIGN_CENTER);
+    nav_sizer->Add(next_btn, 0, wxLEFT, 5);
+    
+    navigation_panel->SetSizer(nav_sizer);
+    
+    // Add to parent's sizer right after the zoom controls
+    wxWindow* p = parent;
+    while (p && !dynamic_cast<BrushPanel*>(p)) {
+        p = p->GetParent();
+    }
+    
+    if (p) {
+        BrushPanel* bp = dynamic_cast<BrushPanel*>(p);
+        if (bp) {
+            // Get the sizer from the panel
+            wxSizer* panel_sizer = bp->GetSizer();
+            if (panel_sizer) {
+                // Add the navigation panel to the sizer
+                panel_sizer->Add(navigation_panel, 0, wxEXPAND | wxALL, 5);
+                bp->Layout();
+            }
+        }
+    }
+    
+    // Update button states
+    UpdateNavigationPanel();
+}
+
+void SeamlessGridPanel::UpdateNavigationPanel() {
+    if (!navigation_panel) return;
+    
+    // Update chunk info text
+    wxStaticText* chunk_info = wxDynamicCast(navigation_panel->FindWindow(wxID_ANY), wxStaticText);
+    if (chunk_info) {
+        chunk_info->SetLabel(wxString::Format("Chunk %d/%d", current_chunk + 1, total_chunks));
+    }
+    
+    // Update Previous button state
+    wxButton* prev_btn = nullptr;
+    wxButton* next_btn = nullptr;
+    
+    // Find the buttons
+    wxWindowList& children = navigation_panel->GetChildren();
+    for (wxWindowList::iterator it = children.begin(); it != children.end(); ++it) {
+        wxButton* btn = dynamic_cast<wxButton*>(*it);
+        if (btn) {
+            if (btn->GetLabel().Contains("Previous")) {
+                prev_btn = btn;
+            } else if (btn->GetLabel().Contains("Next")) {
+                next_btn = btn;
+            }
+        }
+    }
+    
+    if (prev_btn) {
+        prev_btn->Enable(current_chunk > 0);
+    }
+    
+    if (next_btn) {
+        next_btn->Enable(current_chunk < total_chunks - 1);
+    }
+}
+
+void SeamlessGridPanel::OnNavigationButtonClicked(wxCommandEvent& event) {
+    wxButton* btn = dynamic_cast<wxButton*>(event.GetEventObject());
+    if (!btn) return;
+    
+    // Get the direction from client data (-1 for previous, 1 for next)
+    intptr_t direction = reinterpret_cast<intptr_t>(btn->GetClientData());
+    
+    if (direction == -1 && current_chunk > 0) {
+        // Go to previous chunk
+        current_chunk--;
+    } else if (direction == 1 && current_chunk < total_chunks - 1) {
+        // Go to next chunk
+        current_chunk++;
+    } else {
+        return; // Invalid direction or at the edge
+    }
+    
+    // Clear cache when changing chunks
+    sprite_cache.clear();
+    RecalculateGrid();
+    UpdateNavigationPanel();
+    Refresh();
 }

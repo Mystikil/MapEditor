@@ -269,23 +269,14 @@ protected:
 	void DrawSpriteAt(wxDC& dc, int x, int y, int index);
 	void UpdateViewableItems();
 	void StartProgressiveLoading();
-	int GetSpriteIndexAt(int x, int y) const; // Returns sprite index at screen position
-	void SelectIndex(int index);
 	void UpdateGridSize();
-	void ClearSpriteCache(); // Method to clear sprite cache when zoom changes
-	void ManageSpriteCache(); // Method to limit sprite cache size
-
-	// Internal struct for caching scaled sprites
-	struct CachedSprite {
-		wxBitmap bitmap;
-		int zoom_level;
-		bool is_valid;
-		
-		CachedSprite() : zoom_level(0), is_valid(false) {}
-	};
-
-	// Map to store scaled sprite bitmaps for better performance
-	std::map<int, CachedSprite> sprite_cache;
+	void ClearSpriteCache();
+	void ManageSpriteCache();
+	int GetSpriteIndexAt(int x, int y) const;
+	void SelectIndex(int index);
+	void CreateNavigationPanel(wxWindow* parent);
+	void UpdateNavigationPanel();
+	void OnNavigationButtonClicked(wxCommandEvent& event);
 
 private:
 	int columns;
@@ -293,6 +284,7 @@ private:
 	int zoom_level; // Zoom level (1=32px, 2=64px, etc)
 	int selected_index;
 	int hover_index;
+	wxBitmap* buffer;
 	bool show_item_ids;
 	
 	// Rendering optimization
@@ -308,8 +300,28 @@ private:
 	int loading_step;
 	int max_loading_steps;
 	wxTimer* loading_timer;
-	wxBitmap* buffer;
+	
+	// Chunking properties
+	int chunk_size;       // Number of items per chunk
+	int current_chunk;    // Current chunk being displayed
+	int total_chunks;     // Total number of chunks
+	wxRect prev_chunk_button; // Rectangle for previous chunk button
+	wxRect next_chunk_button; // Rectangle for next chunk button
+	wxPanel* navigation_panel; // Panel for navigation buttons
+	
+	// Constants
 	static const int LARGE_TILESET_THRESHOLD = 1000; // Number of items considered "large"
+
+	// Cache structure for sprite rendering
+	struct CachedSprite {
+		wxBitmap bitmap;
+		int zoom_level;
+		bool is_valid;
+		
+		CachedSprite() : zoom_level(1), is_valid(false) {}
+	};
+	
+	std::map<int, CachedSprite> sprite_cache;
 
 	DECLARE_EVENT_TABLE();
 };
@@ -349,13 +361,18 @@ public:
 	void OnClickListBoxRow(wxCommandEvent& event);
 	void OnViewModeToggle(wxCommandEvent& event);
 	void OnShowItemIDsToggle(wxCommandEvent& event);
+	
+	// Get the panel's sizer
+	wxSizer* GetSizer() const { return sizer; }
+
+	// Make sizer public so it can be accessed from navigation panel
+	wxSizer* sizer;
 
 protected:
 	void LoadViewMode();
 
 protected:
 	const TilesetCategory* tileset;
-	wxSizer* sizer;
 	BrushBoxInterface* brushbox;
 	bool loaded;
 	BrushListType list_type;

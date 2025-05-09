@@ -218,6 +218,10 @@ namespace Config {
 		TOWN_ZONE_ZOOM_THRESHOLD,
 		GRID_ZOOM_THRESHOLD,
 
+		// Palette grid settings
+		GRID_CHUNK_SIZE,
+		GRID_VISIBLE_ROWS_MARGIN,
+
 		LAST,
 	};
 

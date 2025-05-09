@@ -164,6 +164,10 @@ protected:
 	wxSpinCtrl* town_zone_threshold_spin;
 	wxSpinCtrl* grid_threshold_spin;
 
+	// Palette grid settings
+	wxSpinCtrl* chunk_size_spin;
+	wxSpinCtrl* visible_rows_margin_spin;
+
 	DECLARE_EVENT_TABLE()
 };
 
