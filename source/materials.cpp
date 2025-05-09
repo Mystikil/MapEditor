@@ -299,45 +299,6 @@ void Materials::createOtherTileset() {
 	}
 }
 
-void Materials::createAllObjectsTileset() {
-	// Create or clear the "All Objects" tileset
-	Tileset* allObjects;
-	
-	if (tilesets["All Objects"] != nullptr) {
-		allObjects = tilesets["All Objects"];
-		allObjects->clear();
-	} else {
-		allObjects = newd Tileset(g_brushes, "All Objects");
-		tilesets["All Objects"] = allObjects;
-	}
-	
-	// Add all items with ID >= 100 to the tileset
-	for (int32_t id = 100; id <= g_items.getMaxID(); ++id) {
-		ItemType& it = g_items[id];
-		if (it.id == 0) {
-			continue;
-		}
-		
-		if (!it.isMetaItem()) {
-			Brush* brush;
-			
-			// Create the raw brush if it doesn't exist yet
-			if (it.raw_brush == nullptr) {
-				brush = it.raw_brush = newd RAWBrush(it.id);
-				it.has_raw = true;
-				g_brushes.addBrush(it.raw_brush);
-			} else {
-				brush = it.raw_brush;
-			}
-			
-			brush->flagAsVisible();
-			allObjects->getCategory(TILESET_RAW)->brushlist.push_back(it.raw_brush);
-			
-			// Note: Don't set in_other_tileset flag here to avoid duplicating in the Others tileset
-		}
-	}
-}
-
 bool Materials::unserializeTileset(pugi::xml_node node, wxArrayString& warnings) {
 	pugi::xml_attribute attribute;
 	if (!(attribute = node.attribute("name"))) {

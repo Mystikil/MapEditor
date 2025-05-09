@@ -30,7 +30,6 @@
 
 #include "house_brush.h"
 #include "map.h"
-#include "materials.h"
 
 // ============================================================================
 // Palette window
@@ -180,9 +179,6 @@ PalettePanel* PaletteWindow::CreateCreaturePalette(wxWindow* parent, const Tiles
 }
 
 PalettePanel* PaletteWindow::CreateRAWPalette(wxWindow* parent, const TilesetContainer& tilesets) {
-	// Create "All Objects" tileset containing all raw items
-	g_materials.createAllObjectsTileset();
-	
 	BrushPalettePanel* panel = newd BrushPalettePanel(parent, tilesets, TILESET_RAW);
 	panel->SetListType(wxstr(g_settings.getString(Config::PALETTE_RAW_STYLE)));
 
@@ -252,10 +248,6 @@ void PaletteWindow::InvalidateContents() {
 	}
 	if (waypoint_palette) {
 		waypoint_palette->OnUpdate();
-	}
-	// Refresh the "All Objects" tileset for raw items
-	if (raw_palette) {
-		g_materials.createAllObjectsTileset();
 	}
 }
 
