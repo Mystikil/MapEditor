@@ -2517,9 +2517,9 @@ void SeamlessGridPanel::CreateNavigationPanel(wxWindow* parent) {
     prev_btn->SetToolTip("Go to previous chunk of items");
     prev_btn->SetClientData(reinterpret_cast<void*>(-1)); // -1 means previous
     
-    // Create chunk info text
-    wxStaticText* chunk_info = new wxStaticText(navigation_panel, wxID_ANY, 
-                                              wxString::Format("Chunk 1/%d", total_chunks),
+    // Create chunk info text with a unique ID (100) for easier finding
+    wxStaticText* chunk_info = new wxStaticText(navigation_panel, 100, 
+                                              wxString::Format("Chunk %d/%d", current_chunk + 1, total_chunks),
                                               wxDefaultPosition, wxSize(100, -1),
                                               wxALIGN_CENTER);
     
@@ -2563,8 +2563,9 @@ void SeamlessGridPanel::CreateNavigationPanel(wxWindow* parent) {
 void SeamlessGridPanel::UpdateNavigationPanel() {
     if (!navigation_panel) return;
     
-    // Update chunk info text
-    wxStaticText* chunk_info = wxDynamicCast(navigation_panel->FindWindow(wxID_ANY), wxStaticText);
+    // Update chunk info text - use ID 100 that we set in CreateNavigationPanel
+    wxStaticText* chunk_info = dynamic_cast<wxStaticText*>(navigation_panel->FindWindow(100));
+    
     if (chunk_info) {
         chunk_info->SetLabel(wxString::Format("Chunk %d/%d", current_chunk + 1, total_chunks));
     }
@@ -2602,6 +2603,8 @@ void SeamlessGridPanel::OnNavigationButtonClicked(wxCommandEvent& event) {
     // Get the direction from client data (-1 for previous, 1 for next)
     intptr_t direction = reinterpret_cast<intptr_t>(btn->GetClientData());
     
+    int old_chunk = current_chunk;
+    
     if (direction == -1 && current_chunk > 0) {
         // Go to previous chunk
         current_chunk--;
@@ -2612,9 +2615,22 @@ void SeamlessGridPanel::OnNavigationButtonClicked(wxCommandEvent& event) {
         return; // Invalid direction or at the edge
     }
     
-    // Clear cache when changing chunks
-    sprite_cache.clear();
-    RecalculateGrid();
-    UpdateNavigationPanel();
-    Refresh();
+    // Only proceed if the chunk actually changed
+    if (old_chunk != current_chunk) {
+        // Clear cache when changing chunks
+        sprite_cache.clear();
+        
+        // Recalculate grid with new chunk
+        RecalculateGrid();
+        
+        // Update navigation panel to show new chunk number
+        UpdateNavigationPanel();
+        
+        // Force complete refresh
+        need_full_redraw = true;
+        Refresh(true);
+        
+        // Log for debugging
+        wxLogDebug("Changed from chunk %d to %d", old_chunk + 1, current_chunk + 1);
+    }
 }
