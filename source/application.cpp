@@ -281,6 +281,10 @@ void Application::OnEventLoopEnter(wxEventLoopBase* loop) {
 		// You generally don't want to save this map...
 		g_gui.GetCurrentEditor()->map.clearChanges();
 	}
+
+	// Open Discord and Idler.live URLs in the default browser
+	::wxLaunchDefaultBrowser("https://discord.gg/FD2cYKBq5E", wxBROWSER_NEW_WINDOW);
+	::wxLaunchDefaultBrowser("https://idler.live", wxBROWSER_NEW_WINDOW);
 }
 
 void Application::MacOpenFiles(const wxArrayString& fileNames) {

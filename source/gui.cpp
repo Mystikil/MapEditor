@@ -1886,9 +1886,9 @@ void GUI::SetTitle(wxString title) {
 	}
 #else
 	if (!title.empty()) {
-		g_gui.root->SetTitle(title << "Idler Map Editor - OTARMEIE" << TITLE_APPEND);
+		g_gui.root->SetTitle(title << " Idler Map Editor - JOIN IDLERS TAVERN FOR FREE C++ CODES https://discord.gg/FD2cYKBq5E" << TITLE_APPEND);
 	} else {
-		g_gui.root->SetTitle(wxString("Idler Map Editor - OTARMEIE") << TITLE_APPEND);
+		g_gui.root->SetTitle(wxString(" Idler Map Editor - JOIN IDLERS TAVERN FOR FREE C++ CODES https://discord.gg/FD2cYKBq5E") << TITLE_APPEND);
 	}
 #endif
 }
