@@ -94,7 +94,33 @@ PaletteWindow::PaletteWindow(wxWindow* parent, const TilesetContainer& tilesets)
 }
 
 PaletteWindow::~PaletteWindow() {
-	////
+	// Clean up all brushes and caches in each palette panel
+	if (choicebook) {
+		// Ensure each panel type is properly cleaned up
+		if (terrain_palette) {
+			terrain_palette->DestroyAllCaches();
+		}
+		if (doodad_palette) {
+			doodad_palette->DestroyAllCaches();
+		}
+		if (item_palette) {
+			item_palette->DestroyAllCaches();
+		}
+		if (collection_palette) {
+			collection_palette->DestroyAllCaches();
+		}
+		if (raw_palette) {
+			raw_palette->DestroyAllCaches();
+		}
+		
+		// Other palette types may need specific cleanup
+		for (size_t iz = 0; iz < choicebook->GetPageCount(); ++iz) {
+			PalettePanel* panel = dynamic_cast<PalettePanel*>(choicebook->GetPage(iz));
+			if (panel) {
+				panel->InvalidateContents();
+			}
+		}
+	}
 }
 
 PalettePanel* PaletteWindow::CreateTerrainPalette(wxWindow* parent, const TilesetContainer& tilesets) {
@@ -259,11 +285,18 @@ void PaletteWindow::SelectPage(PaletteType id) {
 		return;
 	}
 
+	// First notify the current page that it's being switched out
+	PalettePanel* currentPanel = dynamic_cast<PalettePanel*>(choicebook->GetCurrentPage());
+	if (currentPanel) {
+		currentPanel->OnSwitchOut();
+	}
+
+	// Find and select the new page
 	for (size_t iz = 0; iz < choicebook->GetPageCount(); ++iz) {
 		PalettePanel* panel = dynamic_cast<PalettePanel*>(choicebook->GetPage(iz));
 		if (panel->GetType() == id) {
 			choicebook->SetSelection(iz);
-			// LoadCurrentContents();
+			panel->OnSwitchIn();
 			break;
 		}
 	}

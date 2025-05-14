@@ -108,6 +108,9 @@ public:
 	void OnSize(wxSizeEvent& event);
 	void OnScroll(wxScrollWinEvent& event);
 	void OnTimer(wxTimerEvent& event);
+	
+	// Make timer accessible
+	wxTimer* loading_timer;
 
 protected:
 	void RecalculateGrid();
@@ -134,7 +137,8 @@ protected:
 	bool is_large_tileset;
 	int loading_step;
 	int max_loading_steps;
-	wxTimer* loading_timer;
+	// Moved loading_timer to public section
+
 	static const int LARGE_TILESET_THRESHOLD = 1000; // Number of items considered "large"
 
 	DECLARE_EVENT_TABLE();
@@ -253,6 +257,12 @@ public:
 	int IncrementZoom();
 	int DecrementZoom();
 	void SetZoomLevel(int level);
+	
+	// Move to public section
+	void ClearSpriteCache();
+	
+	// Make timer accessible
+	wxTimer* loading_timer;
 
 	// Event handling
 	void OnMouseClick(wxMouseEvent& event);
@@ -270,7 +280,7 @@ protected:
 	void UpdateViewableItems();
 	void StartProgressiveLoading();
 	void UpdateGridSize();
-	void ClearSpriteCache();
+	// Moved ClearSpriteCache to public section
 	void ManageSpriteCache();
 	int GetSpriteIndexAt(int x, int y) const;
 	void SelectIndex(int index);
@@ -299,7 +309,7 @@ private:
 	bool is_large_tileset;
 	int loading_step;
 	int max_loading_steps;
-	wxTimer* loading_timer;
+	// Moved loading_timer to public section
 	
 	// Chunking properties
 	int chunk_size;       // Number of items per chunk
@@ -370,6 +380,7 @@ public:
 
 protected:
 	void LoadViewMode();
+	void CleanupBrushbox(BrushBoxInterface* box);
 
 protected:
 	const TilesetCategory* tileset;
@@ -417,6 +428,9 @@ public:
 	void OnClickAddItemTileset(wxCommandEvent& event);
 	void OnClickQuickAddItemTileset(wxCommandEvent& event);
 	void OnClickCreateBorder(wxCommandEvent& event);
+	
+	// Properly destroy all caches and resources
+	void DestroyAllCaches();
 
 protected:
 	wxButton* quick_add_button;

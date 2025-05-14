@@ -28,6 +28,24 @@
 #include "materials.h"
 #include "border_editor_window.h"
 
+// Define BrushPanelState class at the top of the file
+class BrushPanelState {
+public:
+	BrushBoxInterface* grid_view;
+	BrushBoxInterface* list_view;
+	wxBoxSizer* zoom_sizer;
+	wxStaticText* zoom_value_label;
+	bool grid_view_shown;
+	
+	BrushPanelState() : grid_view(nullptr), list_view(nullptr), zoom_sizer(nullptr), 
+					   zoom_value_label(nullptr), grid_view_shown(false) {}
+					   
+	~BrushPanelState() {}
+};
+
+// Keep a static map of constructed brush panels by tileset
+std::map<const TilesetCategory*, BrushPanelState> g_brush_panel_cache;
+
 // ============================================================================
 // Brush Palette Panel
 // A common class for terrain/doodad/item/raw palette
@@ -110,7 +128,23 @@ BrushPalettePanel::BrushPalettePanel(wxWindow* parent, const TilesetContainer& t
 }
 
 BrushPalettePanel::~BrushPalettePanel() {
-	////
+	// Ensure all caches are destroyed
+	DestroyAllCaches();
+}
+
+void BrushPalettePanel::DestroyAllCaches() {
+	// Force cleanup of all panels to prevent memory leaks when application exits
+	if (choicebook) {
+		for (size_t iz = 0; iz < choicebook->GetPageCount(); ++iz) {
+			BrushPanel* panel = dynamic_cast<BrushPanel*>(choicebook->GetPage(iz));
+			if (panel) {
+				panel->InvalidateContents();
+			}
+		}
+	}
+	
+	// Clear remembered brushes
+	remembered_brushes.clear();
 }
 
 void BrushPalettePanel::InvalidateContents() {
@@ -230,9 +264,13 @@ void BrushPalettePanel::OnSwitchingPage(wxChoicebookEvent& event) {
 	if (!choicebook) {
 		return;
 	}
+	
+	// Get the old panel and clean it up
 	BrushPanel* old_panel = dynamic_cast<BrushPanel*>(choicebook->GetCurrentPage());
 	if (old_panel) {
 		old_panel->OnSwitchOut();
+		
+		// Store selected brushes for later restoration
 		for (ToolBarList::iterator iter = tool_bars.begin(); iter != tool_bars.end(); ++iter) {
 			Brush* tmp = (*iter)->GetSelectedBrush();
 			if (tmp) {
@@ -241,10 +279,13 @@ void BrushPalettePanel::OnSwitchingPage(wxChoicebookEvent& event) {
 		}
 	}
 
+	// Get the new panel and prepare it
 	wxWindow* page = choicebook->GetPage(event.GetSelection());
 	BrushPanel* panel = dynamic_cast<BrushPanel*>(page);
 	if (panel) {
 		panel->OnSwitchIn();
+		
+		// Restore remembered brush selection if any
 		for (ToolBarList::iterator iter = tool_bars.begin(); iter != tool_bars.end(); ++iter) {
 			(*iter)->SelectBrush(remembered_brushes[panel]);
 		}
@@ -477,7 +518,19 @@ BrushPanel::BrushPanel(wxWindow* parent) :
 }
 
 BrushPanel::~BrushPanel() {
-	////
+	// Cleanup and remove any cached panels for this tileset
+	if (tileset && g_brush_panel_cache.count(tileset) > 0) {
+		BrushPanelState& state = g_brush_panel_cache[tileset];
+		if (state.grid_view) {
+			CleanupBrushbox(state.grid_view);
+			state.grid_view = nullptr;
+		}
+		if (state.list_view) {
+			CleanupBrushbox(state.list_view);
+			state.list_view = nullptr;
+		}
+		g_brush_panel_cache.erase(tileset);
+	}
 }
 
 void BrushPanel::AssignTileset(const TilesetCategory* _tileset) {
@@ -515,10 +568,44 @@ void BrushPanel::SetListType(wxString ltype) {
 	}
 }
 
+void BrushPanel::CleanupBrushbox(BrushBoxInterface* box) {
+	if (!box) return;
+	
+		// Special cleanup for DirectDrawBrushPanel
+	DirectDrawBrushPanel* directPanel = dynamic_cast<DirectDrawBrushPanel*>(box);
+		if (directPanel) {
+			// Make sure any loading timer is stopped
+			if (directPanel->loading_timer) {
+				directPanel->loading_timer->Stop();
+			}
+		}
+		
+		// Special cleanup for SeamlessGridPanel
+	SeamlessGridPanel* gridPanel = dynamic_cast<SeamlessGridPanel*>(box);
+		if (gridPanel) {
+			// Clear sprite cache
+			gridPanel->ClearSpriteCache();
+			// Make sure any loading timer is stopped
+			if (gridPanel->loading_timer) {
+				gridPanel->loading_timer->Stop();
+			}
+		}
+		
+		// Remove from sizer and destroy
+	sizer->Detach(box->GetSelfWindow());
+	box->GetSelfWindow()->Destroy();
+}
+
 void BrushPanel::InvalidateContents() {
+	// First, properly clean up the existing brushbox if it exists
+	if (brushbox) {
+		CleanupBrushbox(brushbox);
+		brushbox = nullptr;
+	}
+	
+	// Now clear the sizer and recreate the UI elements
 	sizer->Clear(true);
 	loaded = false;
-	brushbox = nullptr;
 	
 	// Add the view mode toggle back after clearing
 	view_mode_toggle = new wxCheckBox(this, wxID_ANY, "Grid View");
@@ -566,9 +653,27 @@ void BrushPanel::LoadContents() {
 void BrushPanel::LoadViewMode() {
 	// Remove old brushbox if it exists
 	if (brushbox) {
-		sizer->Detach(brushbox->GetSelfWindow());
-		brushbox->GetSelfWindow()->Destroy();
+		CleanupBrushbox(brushbox);
 		brushbox = nullptr;
+	}
+	
+	// Clear any existing zoom controls before adding new ones
+	wxSizerItemList children = sizer->GetChildren();
+	for (wxSizerItemList::iterator it = children.begin(); it != children.end(); ++it) {
+		wxSizerItem* item = *it;
+		wxWindow* window = item->GetWindow();
+		// Only remove zoom controls and not checkboxes or choice controls
+		if (window && window != view_mode_toggle && window != show_ids_toggle && 
+			(view_type_choice == nullptr || window != view_type_choice) &&
+			dynamic_cast<wxStaticText*>(window) == nullptr) {
+			// Check if it's part of a zoom control group
+			wxString label = window->GetLabel();
+			if (label == "-" || label == "+" || label.EndsWith("%") || 
+				dynamic_cast<wxButton*>(window) != nullptr) {
+				sizer->Detach(window);
+				window->Destroy();
+			}
+		}
 	}
 	
 	// Check if we're using DirectDraw for RAW palette
@@ -764,7 +869,139 @@ void BrushPanel::OnClickListBoxRow(wxCommandEvent& event) {
 }
 
 void BrushPanel::OnViewModeToggle(wxCommandEvent& event) {
-	if (loaded) {
+	if (loaded && tileset) {
+		// First check if we have a cached state for this tileset
+		bool new_grid_view = view_mode_toggle->GetValue();
+		BrushPanelState& state = g_brush_panel_cache[tileset];
+		
+		// If we're switching to grid view and don't have a cached grid view
+		if (new_grid_view && !state.grid_view) {
+			// Store the current list view if it's not already cached
+			if (!state.list_view && brushbox) {
+				state.list_view = brushbox;
+				// Don't detach, just hide until we create the grid view
+				brushbox->GetSelfWindow()->Hide();
+				brushbox = nullptr;
+			}
+			
+			// Create the grid view
+			SeamlessGridPanel* sgp = new SeamlessGridPanel(this, tileset);
+			if (show_ids_toggle) {
+				sgp->SetShowItemIDs(show_ids_toggle->GetValue());
+			}
+			
+			// Create zoom controls
+			state.zoom_sizer = new wxBoxSizer(wxHORIZONTAL);
+			wxStaticText* zoomLabel = new wxStaticText(this, wxID_ANY, "Zoom:");
+			state.zoom_sizer->Add(zoomLabel, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 5);
+			
+			wxButton* zoomOutBtn = new wxButton(this, wxID_ANY, "-", wxDefaultPosition, wxSize(30, -1));
+			state.zoom_sizer->Add(zoomOutBtn, 0, wxRIGHT, 5);
+			
+			state.zoom_value_label = new wxStaticText(this, wxID_ANY, "100%", wxDefaultPosition, wxSize(50, -1), 
+													wxALIGN_CENTER_HORIZONTAL);
+			state.zoom_sizer->Add(state.zoom_value_label, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 5);
+			
+			wxButton* zoomInBtn = new wxButton(this, wxID_ANY, "+", wxDefaultPosition, wxSize(30, -1));
+			state.zoom_sizer->Add(zoomInBtn, 0);
+			
+			// Add the zoom controls above the grid
+			sizer->Add(state.zoom_sizer, 0, wxEXPAND | wxALL, 5);
+			
+			// Set up zoom button handlers
+			zoomOutBtn->Bind(wxEVT_BUTTON, [sgp, this](wxCommandEvent& event) {
+				int newZoom = sgp->DecrementZoom();
+				g_brush_panel_cache[tileset].zoom_value_label->SetLabel(wxString::Format("%d%%", newZoom * 100));
+				
+				// Explicitly force layout update and refresh to ensure immediate drawing
+				sgp->GetParent()->Layout();
+				sgp->Update();
+			});
+			
+			zoomInBtn->Bind(wxEVT_BUTTON, [sgp, this](wxCommandEvent& event) {
+				int newZoom = sgp->IncrementZoom();
+				g_brush_panel_cache[tileset].zoom_value_label->SetLabel(wxString::Format("%d%%", newZoom * 100));
+				
+				// Explicitly force layout update and refresh to ensure immediate drawing
+				sgp->GetParent()->Layout();
+				sgp->Update();
+			});
+			
+			// Add the grid view to the sizer
+			sizer->Add(sgp->GetSelfWindow(), 1, wxEXPAND);
+			
+			// Cache and set the current brush box
+			state.grid_view = sgp;
+			brushbox = sgp;
+			state.grid_view_shown = true;
+		}
+		// If we're switching to list view and don't have a cached list view
+		else if (!new_grid_view && !state.list_view) {
+			// Store the current grid view if it's not cached
+			if (!state.grid_view && brushbox) {
+				state.grid_view = brushbox;
+				
+				// Hide the zoom controls and grid view
+				if (state.zoom_sizer) {
+					state.zoom_sizer->Show(false);
+				}
+				brushbox->GetSelfWindow()->Hide();
+				brushbox = nullptr;
+			}
+			
+			// Create list view according to the list type
+			BrushBoxInterface* list_box = nullptr;
+			switch (list_type) {
+				case BRUSHLIST_LARGE_ICONS:
+					list_box = new BrushIconBox(this, tileset, RENDER_SIZE_32x32);
+					break;
+				case BRUSHLIST_SMALL_ICONS:
+					list_box = new BrushIconBox(this, tileset, RENDER_SIZE_16x16);
+					break;
+				case BRUSHLIST_SEAMLESS_GRID:
+					list_box = new BrushListBox(this, tileset);
+					break;
+				case BRUSHLIST_LISTBOX:
+				default:
+					list_box = new BrushListBox(this, tileset);
+					break;
+			}
+			
+			// Add to sizer
+			sizer->Add(list_box->GetSelfWindow(), 1, wxEXPAND);
+			
+			// Cache and set the current brush box
+			state.list_view = list_box;
+			brushbox = list_box;
+			state.grid_view_shown = false;
+		}
+		// If we're toggling views and already have both views cached
+		else if (state.grid_view && state.list_view) {
+			// Hide the current view
+			brushbox->GetSelfWindow()->Hide();
+			
+			// Show zoom controls if switching to grid view
+			if (new_grid_view && state.zoom_sizer) {
+				state.zoom_sizer->ShowItems(true);
+				brushbox = state.grid_view;
+			} else {
+				// Hide zoom controls if switching to list view
+				if (state.zoom_sizer) {
+					state.zoom_sizer->ShowItems(false);
+				}
+				brushbox = state.list_view;
+			}
+			
+			// Show the new view
+			brushbox->GetSelfWindow()->Show();
+			state.grid_view_shown = new_grid_view;
+		}
+		
+		// Update the layout
+		Layout();
+		Update();
+	} else {
+		// If not loaded yet, load the view mode
 		LoadViewMode();
 	}
 }
@@ -1207,11 +1444,13 @@ DirectDrawBrushPanel::DirectDrawBrushPanel(wxWindow* parent, const TilesetCatego
 DirectDrawBrushPanel::~DirectDrawBrushPanel() {
 	if (buffer) {
 		delete buffer;
+		buffer = nullptr;
 	}
 	
 	if (loading_timer) {
 		loading_timer->Stop();
 		delete loading_timer;
+		loading_timer = nullptr;
 	}
 }
 
@@ -1588,6 +1827,12 @@ void DirectDrawBrushPanel::RecalculateGrid() {
 	// Update which items are currently visible
 	UpdateViewableItems();
 	
+	// Clean up old buffer if it exists
+	if (buffer) {
+		delete buffer;
+		buffer = nullptr;
+	}
+	
 	need_full_redraw = true;
 }
 
@@ -1675,10 +1920,19 @@ SeamlessGridPanel::SeamlessGridPanel(wxWindow* parent, const TilesetCategory* _t
 }
 
 SeamlessGridPanel::~SeamlessGridPanel() {
+	if (buffer) {
+		delete buffer;
+		buffer = nullptr;
+	}
+	
 	if (loading_timer) {
 		loading_timer->Stop();
 		delete loading_timer;
+		loading_timer = nullptr;
 	}
+	
+	// Clear all cached sprites to prevent memory leaks
+	ClearSpriteCache();
 }
 
 void SeamlessGridPanel::StartProgressiveLoading() {
@@ -2088,6 +2342,15 @@ void SeamlessGridPanel::RecalculateGrid() {
 	// Update which items are currently visible
 	UpdateViewableItems();
 	
+	// Clean up old buffer if it exists
+	if (buffer) {
+		delete buffer;
+		buffer = nullptr;
+	}
+	
+	// Limit sprite cache size when grid layout changes
+	ManageSpriteCache();
+	
 	need_full_redraw = true;
 }
 
@@ -2421,7 +2684,16 @@ void SeamlessGridPanel::UpdateGridSize() {
 
 // Add ClearSpriteCache method implementation before UpdateGridSize
 void SeamlessGridPanel::ClearSpriteCache() {
-	// Clear the sprite cache when zoom level changes
+	// Properly free all bitmap resources before clearing the cache
+	for (auto& pair : sprite_cache) {
+		if (pair.second.is_valid && pair.second.bitmap.IsOk()) {
+			// Ensure bitmap data is released
+			pair.second.bitmap = wxBitmap(); // Assign empty bitmap to release resources
+			pair.second.is_valid = false;
+		}
+	}
+	
+	// Clear the sprite cache
 	sprite_cache.clear();
 }
 
