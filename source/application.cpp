@@ -282,11 +282,24 @@ void Application::OnEventLoopEnter(wxEventLoopBase* loop) {
 		g_gui.GetCurrentEditor()->map.clearChanges();
 	}
 
-	// Open Discord and Idler.live URLs in the default browser
-
-	::wxLaunchDefaultBrowser("https://discord.gg/FD2cYKBq5E", wxBROWSER_NEW_WINDOW);
-	::wxLaunchDefaultBrowser("https://idler.live", wxBROWSER_NEW_WINDOW);
-	::wxLaunchDefaultBrowser("https://solitudeots.online", wxBROWSER_NEW_WINDOW);
+	// Check when the URLs were last opened
+	time_t currentTime = time(nullptr);
+	time_t lastOpenTime = static_cast<time_t>(g_settings.getInteger(Config::LAST_WEBSITES_OPEN_TIME));
+	
+	// Calculate difference in days
+	const time_t secondsPerDay = 60 * 60 * 24;
+	const int daysToWait = 7;
+	
+	// If last open time is 0 (never opened) or if 7+ days have passed
+	if (lastOpenTime == 0 || difftime(currentTime, lastOpenTime) > daysToWait * secondsPerDay) {
+		// Open Discord and Idler.live URLs in the default browser
+		::wxLaunchDefaultBrowser("https://discord.gg/FD2cYKBq5E", wxBROWSER_NEW_WINDOW);
+		::wxLaunchDefaultBrowser("https://idler.live", wxBROWSER_NEW_WINDOW);
+		::wxLaunchDefaultBrowser("https://solitudeots.online", wxBROWSER_NEW_WINDOW);
+		
+		// Update the last open time
+		g_settings.setInteger(Config::LAST_WEBSITES_OPEN_TIME, static_cast<int>(currentTime));
+	}
 }
 
 void Application::MacOpenFiles(const wxArrayString& fileNames) {

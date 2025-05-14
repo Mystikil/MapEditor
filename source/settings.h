@@ -222,6 +222,9 @@ namespace Config {
 		GRID_CHUNK_SIZE,
 		GRID_VISIBLE_ROWS_MARGIN,
 
+		// Website link control setting
+		LAST_WEBSITES_OPEN_TIME,
+
 		LAST,
 	};
 
