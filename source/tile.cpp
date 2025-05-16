@@ -56,20 +56,46 @@ Tile::Tile(TileLocation& loc) :
 }
 
 Tile::~Tile() {
+	bool had_items = !items.empty();
+	bool had_ground = ground != nullptr;
+	
+#ifdef __WXDEBUG__
+	if (had_ground) {
+		// Store ground info before deleting it
+		uint16_t ground_id = ground->getID();
+		void* ground_ptr = ground;
+		printf("DEBUG: Tile destructor for %p with ground %p (ID:%d)\n", this, ground_ptr, ground_id);
+		
+		// Get call stack info by adding a breakpoint variable
+		int debug_breakpoint_for_ground_deletion = 1;
+	}
+#endif
+
 	while (!items.empty()) {
 		delete items.back();
 		items.pop_back();
 	}
 	delete creature;
-	// printf("%d,%d,%d,%p\n", tilePos.x, tilePos.y, tilePos.z, ground);
 	delete ground;
 	delete spawn;
+	
+#ifdef __WXDEBUG__
+	if (had_ground) {
+		printf("DEBUG: Ground %p deleted\n", ground);
+	}
+#endif
 }
 
 Tile* Tile::deepCopy(BaseMap& map) {
 	Tile* copy = map.allocator.allocateTile(location);
 	copy->flags = flags;
 	copy->house_id = house_id;
+	
+#ifdef __WXDEBUG__
+	printf("DEBUG: deepCopy - Creating copy of tile %p (with ground %p)\n", 
+		this, ground);
+#endif
+	
 	if (spawn) {
 		copy->spawn = spawn->deepCopy();
 	}
@@ -78,7 +104,15 @@ Tile* Tile::deepCopy(BaseMap& map) {
 	}
 	// Spawncount & exits are not transferred on copy!
 	if (ground) {
+#ifdef __WXDEBUG__
+		printf("DEBUG: deepCopy - Copying ground %p with ID %d\n", 
+			ground, ground->getID());
+#endif
 		copy->ground = ground->deepCopy();
+#ifdef __WXDEBUG__
+		printf("DEBUG: deepCopy - Ground copied to %p with ID %d\n", 
+			copy->ground, copy->ground->getID());
+#endif
 	}
 
 	copy->setZoneIds(this);
@@ -90,6 +124,11 @@ Tile* Tile::deepCopy(BaseMap& map) {
 		copy->items.push_back((*it)->deepCopy());
 		++it;
 	}
+
+#ifdef __WXDEBUG__
+	printf("DEBUG: deepCopy - Created tile copy %p (with ground %p)\n", 
+		copy, copy->ground);
+#endif
 
 	return copy;
 }
@@ -253,39 +292,68 @@ void Tile::addItem(Item* item) {
 	if (!item) {
 		return;
 	}
+	
+	// Handle ground tiles
 	if (item->isGroundTile()) {
-		// printf("ADDING GROUND\n");
+#ifdef __WXDEBUG__
+		printf("DEBUG: Adding ground tile ID %d to position %d,%d,%d\n", 
+			item->getID(), getPosition().x, getPosition().y, getPosition().z);
+#endif
+		// Always delete the existing ground first
 		delete ground;
 		ground = item;
+		
+		// Also check for any ground items that might be in the items list
+		// and remove them to prevent stacking issues
+		ItemVector::iterator it = items.begin();
+		while (it != items.end()) {
+			if ((*it)->isGroundTile() || (*it)->getGroundEquivalent() != 0) {
+#ifdef __WXDEBUG__
+				printf("DEBUG: Removing misplaced ground item with ID %d from tile items\n", (*it)->getID());
+#endif
+				delete *it;
+				it = items.erase(it);
+			} else {
+				++it;
+			}
+		}
 		return;
 	}
 
-	ItemVector::iterator it;
-
+	// Handle items with ground equivalents
 	uint16_t gid = item->getGroundEquivalent();
 	if (gid != 0) {
+		// If item has a ground equivalent, replace the ground
 		delete ground;
 		ground = Item::Create(gid);
-		// At the very bottom!
+		
+		// Insert at the very bottom of the stack
+		items.insert(items.begin(), item);
+		
+		if (item->isSelected()) {
+			statflags |= TILESTATE_SELECTED;
+		}
+		return;
+	}
+	
+	// Handle normal items
+	ItemVector::iterator it;
+	if (item->isAlwaysOnBottom()) {
 		it = items.begin();
-	} else {
-		if (item->isAlwaysOnBottom()) {
-			it = items.begin();
-			while (true) {
-				if (it == items.end()) {
-					break;
-				} else if ((*it)->isAlwaysOnBottom()) {
-					if (item->getTopOrder() < (*it)->getTopOrder()) {
-						break;
-					}
-				} else { // Always on top
+		while (true) {
+			if (it == items.end()) {
+				break;
+			} else if ((*it)->isAlwaysOnBottom()) {
+				if (item->getTopOrder() < (*it)->getTopOrder()) {
 					break;
 				}
-				++it;
+			} else { // Always on top
+				break;
 			}
-		} else {
-			it = items.end();
+			++it;
 		}
+	} else {
+		it = items.end();
 	}
 
 	items.insert(it, item);

@@ -2507,44 +2507,82 @@ bool SeamlessGridPanel::SelectBrush(const Brush* whatbrush) {
 }
 
 void SeamlessGridPanel::SelectIndex(int index) {
-	if (!tileset || index < 0 || index >= static_cast<int>(tileset->size())) {
-		return;
-	}
+    if (!tileset || index < 0 || index >= static_cast<int>(tileset->size())) {
+        return;
+    }
 
-	selected_index = index;
-	hover_index = -1;
-	Refresh();
+    // Check if we need to change chunks for large tilesets
+    if (tileset->size() > 10000) {
+        int target_chunk = index / chunk_size;
+        if (target_chunk != current_chunk) {
+            // We need to switch chunks first
+            current_chunk = target_chunk;
+            
+            // Clear cache for new chunk
+            sprite_cache.clear();
+            
+            // Recalculate grid with new chunk
+            RecalculateGrid();
+            
+            // Update navigation panel
+            if (navigation_panel) {
+                UpdateNavigationPanel();
+            }
+            
+            // Force complete refresh
+            need_full_redraw = true;
+        }
+    }
 
-	// Ensure the selected item is visible
-	int row = selected_index / columns;
-	int yPos = row * sprite_size;
+    selected_index = index;
+    hover_index = -1;
 
-	// Get the visible area
-	int xStart, yStart;
-	GetViewStart(&xStart, &yStart);
-	int ppuX, ppuY;
-	GetScrollPixelsPerUnit(&ppuX, &ppuY);
-	yStart *= ppuY;
+    // For chunked mode, calculate the local index within the current chunk
+    int local_index = index;
+    if (tileset->size() > 10000) {
+        size_t chunk_start = current_chunk * chunk_size;
+        local_index = index - static_cast<int>(chunk_start);
+    }
 
-	int clientHeight;
-	GetClientSize(nullptr, &clientHeight);
+    // Calculate row/column for scrolling
+    int row = local_index / columns;
+    int yPos = row * sprite_size;
 
-	// Scroll if necessary
-	if (yPos < yStart) {
-		Scroll(-1, yPos / ppuY);
-		UpdateViewableItems();
-	} else if (yPos + sprite_size > yStart + clientHeight) {
-		Scroll(-1, (yPos + sprite_size - clientHeight) / ppuY + 1);
-		UpdateViewableItems();
-	}
+    // Get the visible area
+    int xStart, yStart;
+    GetViewStart(&xStart, &yStart);
+    int ppuX, ppuY;
+    GetScrollPixelsPerUnit(&ppuX, &ppuY);
+    yStart *= ppuY;
 
-	// Notify parent about the selection
-	wxWindow* w = this;
-	while((w = w->GetParent()) && dynamic_cast<PaletteWindow*>(w) == nullptr);
-	if(w) {
-		g_gui.ActivatePalette(static_cast<PaletteWindow*>(w));
-	}
-	g_gui.SelectBrush(tileset->brushlist[index], tileset->getType());
+    int clientHeight;
+    GetClientSize(nullptr, &clientHeight);
+
+    // Calculate what should be visible
+    int visibleRows = clientHeight / sprite_size;
+    
+    // Scroll to position the selected item properly - aim to center it
+    int targetRow = std::max(0, row - (visibleRows / 2) + 1);
+    
+    // Don't let selection jump to bottom - ensure we don't scroll too far
+    int maxRow = (total_rows - visibleRows) + 1;
+    if (maxRow < 0) maxRow = 0;
+    
+    targetRow = std::min(targetRow, maxRow);
+    
+    // Apply the scroll position
+    Scroll(-1, targetRow * sprite_size / ppuY);
+    
+    UpdateViewableItems();
+    Refresh();
+
+    // Notify parent about the selection
+    wxWindow* w = this;
+    while((w = w->GetParent()) && dynamic_cast<PaletteWindow*>(w) == nullptr);
+    if(w) {
+        g_gui.ActivatePalette(static_cast<PaletteWindow*>(w));
+    }
+    g_gui.SelectBrush(tileset->brushlist[index], tileset->getType());
 }
 
 void SeamlessGridPanel::OnKeyDown(wxKeyEvent& event) {
@@ -2898,11 +2936,21 @@ void SeamlessGridPanel::OnNavigationButtonClicked(wxCommandEvent& event) {
         // Update navigation panel to show new chunk number
         UpdateNavigationPanel();
         
+        // Calculate new chunk bounds
+        size_t new_chunk_start = current_chunk * chunk_size;
+        size_t items_in_new_chunk = std::min(static_cast<size_t>(chunk_size), 
+                                           tileset->size() - new_chunk_start);
+        
+        // Always select the first item in the new chunk
+        selected_index = static_cast<int>(new_chunk_start);
+        hover_index = -1;
+        
+        // Reset scroll position to top
+        Scroll(0, 0);
+        UpdateViewableItems();
+        
         // Force complete refresh
         need_full_redraw = true;
         Refresh(true);
-        
-        // Log for debugging
-        wxLogDebug("Changed from chunk %d to %d", old_chunk + 1, current_chunk + 1);
     }
 }

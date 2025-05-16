@@ -570,26 +570,33 @@ void GroundBrush::draw(BaseMap* map, Tile* tile, void* parameter) {
 		id = border_items.front().id;
 	}
 
-	// For Same Ground Type Border enabled, special handling to ensure ground is on top
-	if (g_settings.getBoolean(Config::SAME_GROUND_TYPE_BORDER)) {
-		// Create the ground item
-		Item* groundItem = Item::Create(id);
-		
-		// If we already have a ground, remove it
-		Item* oldGround = tile->ground;
-		if (oldGround) {
-			tile->ground = nullptr;
-			delete oldGround;
-		}
-		
-		// For Same Ground Type Border enabled, add ground at the top of the stack
-		// This ensures it visually covers other items
-		tile->items.push_back(groundItem);
-		tile->ground = groundItem;
-	} else {
-		// Standard behavior - add to the bottom
-		tile->addItem(Item::Create(id));
+	// Create the ground item
+	Item* groundItem = Item::Create(id);
+	
+	// Always properly handle ground items
+	// First remove any existing ground
+	if (tile->ground) {
+		delete tile->ground;
+		tile->ground = nullptr;
 	}
+	
+	// Also remove any items that should be grounds but were placed incorrectly
+	ItemVector::iterator it = tile->items.begin();
+	while (it != tile->items.end()) {
+		Item* item = *it;
+		if (item && (item->isGroundTile() || item->getGroundEquivalent() != 0)) {
+#ifdef __WXDEBUG__
+			printf("DEBUG: Removing misplaced ground item with ID %d from tile items\n", item->getID());
+#endif
+			delete item;
+			it = tile->items.erase(it);
+		} else {
+			++it;
+		}
+	}
+	
+	// Then set the new ground
+	tile->ground = groundItem;
 }
 
 const GroundBrush::BorderBlock* GroundBrush::getBrushTo(GroundBrush* first, GroundBrush* second) {

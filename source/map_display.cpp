@@ -1331,6 +1331,14 @@ void MapCanvas::OnMousePropertiesRelease(wxMouseEvent& event) {
 	int mouse_map_x, mouse_map_y;
 	ScreenToMap(event.GetX(), event.GetY(), &mouse_map_x, &mouse_map_y);
 
+#ifdef __WXDEBUG__
+	printf("DEBUG: Right-click release at map position %d,%d,%d\n", mouse_map_x, mouse_map_y, floor);
+	Tile* tile = editor.map.getTile(mouse_map_x, mouse_map_y, floor);
+	if (tile && tile->ground) {
+		printf("DEBUG: Tile has ground at %p\n", tile->ground);
+	}
+#endif
+
 	if (g_gui.IsDrawingMode()) {
 		g_gui.SetSelectionMode();
 	}
@@ -1465,7 +1473,33 @@ void MapCanvas::OnMousePropertiesRelease(wxMouseEvent& event) {
 	}
 
 	popup_menu->Update();
+	
+#ifdef __WXDEBUG__
+	// Debug the state of the tiles before showing popup menu
+	int debug_mouse_x, debug_mouse_y;
+	ScreenToMap(event.GetX(), event.GetY(), &debug_mouse_x, &debug_mouse_y);
+	Tile* debug_tile = editor.map.getTile(debug_mouse_x, debug_mouse_y, floor);
+	
+	printf("DEBUG: Before popup menu - Tile at %d,%d,%d: %p\n", 
+		debug_mouse_x, debug_mouse_y, floor, debug_tile);
+	if (debug_tile && debug_tile->ground) {
+		printf("DEBUG: Before popup menu - Tile has ground %p (ID:%d)\n", 
+			debug_tile->ground, debug_tile->ground->getID());
+	}
+#endif
+
 	PopupMenu(popup_menu);
+
+#ifdef __WXDEBUG__
+	// Debug the state of the tiles after showing popup menu
+	debug_tile = editor.map.getTile(debug_mouse_x, debug_mouse_y, floor);
+	printf("DEBUG: After popup menu - Tile at %d,%d,%d: %p\n", 
+		debug_mouse_x, debug_mouse_y, floor, debug_tile);
+	if (debug_tile && debug_tile->ground) {
+		printf("DEBUG: After popup menu - Tile has ground %p (ID:%d)\n", 
+			debug_tile->ground, debug_tile->ground->getID());
+	}
+#endif
 
 	editor.actionQueue->resetTimer();
 	dragging = false;
@@ -1981,7 +2015,20 @@ void MapCanvas::OnBrowseTile(wxCommandEvent& WXUNUSED(event)) {
 		return;
 	}
 	ASSERT(tile->isSelected());
+	
+#ifdef __WXDEBUG__
+	if (tile->ground) {
+		printf("DEBUG: Original tile %p has ground %p before deepCopy\n", tile, tile->ground);
+	}
+#endif
+
 	Tile* new_tile = tile->deepCopy(editor.map);
+
+#ifdef __WXDEBUG__
+	if (new_tile->ground) {
+		printf("DEBUG: New tile %p has ground %p after deepCopy\n", new_tile, new_tile->ground);
+	}
+#endif
 
 	wxDialog* w = new BrowseTileWindow(g_gui.root, new_tile, wxPoint(cursor_x, cursor_y));
 
