@@ -104,6 +104,10 @@ protected:
 	wxSpinCtrl* borderize_drag_threshold_spin;
 	wxSpinCtrl* borderize_paste_threshold_spin;
 
+	wxCheckBox* custom_border_checkbox;
+	wxStaticText* custom_border_id_label;
+	wxSpinCtrl* custom_border_id_spin;
+
 	// Interface
 	wxChoice* terrain_palette_style_choice;
 	wxChoice* collection_palette_style_choice;

@@ -66,6 +66,29 @@ AutomagicSettingsDialog::AutomagicSettingsDialog(wxWindow* parent) :
     borderize_delete_checkbox->Enable(automagic_enabled_checkbox->GetValue());
     settings_sizer->Add(borderize_delete_checkbox, 0, wxALL, 5);
     
+    // Create custom border controls
+    wxBoxSizer* custom_border_sizer = newd wxBoxSizer(wxHORIZONTAL);
+    
+    custom_border_checkbox = newd wxCheckBox(this, wxID_ANY, "Use Custom Border");
+    custom_border_checkbox->SetValue(g_settings.getBoolean(Config::CUSTOM_BORDER_ENABLED));
+    custom_border_checkbox->SetToolTip("Override automatic border selection with a specific border ID");
+    custom_border_checkbox->Enable(automagic_enabled_checkbox->GetValue());
+    custom_border_sizer->Add(custom_border_checkbox, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 5);
+    
+    custom_border_id_label = newd wxStaticText(this, wxID_ANY, "Border ID:");
+    custom_border_id_label->Enable(custom_border_checkbox->GetValue() && automagic_enabled_checkbox->GetValue());
+    custom_border_sizer->Add(custom_border_id_label, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 5);
+    
+    custom_border_id_field = newd wxSpinCtrl(this, wxID_ANY, wxEmptyString, wxDefaultPosition, wxSize(80, -1));
+    custom_border_id_field->SetRange(1, 65535);
+    custom_border_id_field->SetValue(g_settings.getInteger(Config::CUSTOM_BORDER_ID) > 0 ? 
+                                     g_settings.getInteger(Config::CUSTOM_BORDER_ID) : 1);
+    custom_border_id_field->Enable(custom_border_checkbox->GetValue() && automagic_enabled_checkbox->GetValue());
+    custom_border_id_field->SetToolTip("The ID of the border to use when drawing any tile");
+    custom_border_sizer->Add(custom_border_id_field, 0, wxALIGN_CENTER_VERTICAL);
+    
+    settings_sizer->Add(custom_border_sizer, 0, wxALL, 5);
+    
     // Add description text
     wxStaticText* description = newd wxStaticText(this, wxID_ANY, 
         "When 'Same Ground Type Border' is enabled, the editor will:\n"
@@ -79,7 +102,11 @@ AutomagicSettingsDialog::AutomagicSettingsDialog(wxWindow* parent) :
         "- Preserve the structure of buildings and houses\n\n"
         "When 'Layer Carpets' is enabled, the editor will:\n"
         "- Place new carpets on top of existing carpets\n"
-        "- Allow creating multi-layered carpet designs");
+        "- Allow creating multi-layered carpet designs\n\n"
+        "When 'Use Custom Border' is enabled, the editor will:\n"
+        "- Override automatic border selection with the specified border ID\n"
+        "- Apply the same border pattern around any tile you draw\n"
+        "- Ignore terrain type border transitions");
     settings_sizer->Add(description, 0, wxALL, 5);
     
     main_sizer->Add(settings_sizer, 0, wxEXPAND | wxALL, 10);
@@ -121,6 +148,18 @@ bool AutomagicSettingsDialog::IsLayerCarpetsEnabled() const {
     return layer_carpets_checkbox->GetValue();
 }
 
+bool AutomagicSettingsDialog::IsBorderizeDeleteEnabled() const {
+    return borderize_delete_checkbox->GetValue();
+}
+
+bool AutomagicSettingsDialog::IsCustomBorderEnabled() const {
+    return custom_border_checkbox->GetValue();
+}
+
+int AutomagicSettingsDialog::GetCustomBorderId() const {
+    return custom_border_id_field->GetValue();
+}
+
 void AutomagicSettingsDialog::OnClickOK(wxCommandEvent& event) {
     // Save settings
     g_settings.setInteger(Config::USE_AUTOMAGIC, IsAutomagicEnabled() ? 1 : 0);
@@ -128,6 +167,11 @@ void AutomagicSettingsDialog::OnClickOK(wxCommandEvent& event) {
     g_settings.setInteger(Config::SAME_GROUND_TYPE_BORDER, IsSameGroundTypeBorderEnabled() ? 1 : 0);
     g_settings.setInteger(Config::WALLS_REPEL_BORDERS, IsWallsRepelBordersEnabled() ? 1 : 0);
     g_settings.setInteger(Config::LAYER_CARPETS, IsLayerCarpetsEnabled() ? 1 : 0);
+    g_settings.setInteger(Config::BORDERIZE_DELETE, IsBorderizeDeleteEnabled() ? 1 : 0);
+    
+    // Save custom border settings
+    g_settings.setInteger(Config::CUSTOM_BORDER_ENABLED, IsCustomBorderEnabled() ? 1 : 0);
+    g_settings.setInteger(Config::CUSTOM_BORDER_ID, GetCustomBorderId());
     
     // Update status text
     if (IsAutomagicEnabled()) {
@@ -145,14 +189,25 @@ void AutomagicSettingsDialog::OnClickCancel(wxCommandEvent& event) {
 }
 
 void AutomagicSettingsDialog::OnAutomagicCheck(wxCommandEvent& event) {
-    // Enable/disable the Same Ground Type checkbox based on Automagic checkbox
-    same_ground_type_checkbox->Enable(automagic_enabled_checkbox->GetValue());
-    walls_repel_borders_checkbox->Enable(automagic_enabled_checkbox->GetValue());
-    layer_carpets_checkbox->Enable(automagic_enabled_checkbox->GetValue());
-}
-
-void AutomagicSettingsDialog::OnSameGroundTypeCheck(wxCommandEvent& event) {
-    // Nothing to do here, just handle the event
+    // Get the checkbox that triggered the event
+    wxCheckBox* checkbox = dynamic_cast<wxCheckBox*>(event.GetEventObject());
+    
+    // Update all checkbox states based on automagic checkbox
+    bool automagic_enabled = automagic_enabled_checkbox->GetValue();
+    
+    // If this is the automagic checkbox, update all dependent checkboxes
+    if (checkbox == automagic_enabled_checkbox) {
+        same_ground_type_checkbox->Enable(automagic_enabled);
+        walls_repel_borders_checkbox->Enable(automagic_enabled);
+        layer_carpets_checkbox->Enable(automagic_enabled);
+        borderize_delete_checkbox->Enable(automagic_enabled);
+        custom_border_checkbox->Enable(automagic_enabled);
+    }
+    
+    // Always update the custom border fields based on both checkboxes
+    bool custom_border_enabled = custom_border_checkbox->GetValue() && automagic_enabled;
+    custom_border_id_label->Enable(custom_border_enabled);
+    custom_border_id_field->Enable(custom_border_enabled);
 }
 
 void AutomagicSettingsDialog::OnClose(wxCloseEvent& event) {

@@ -235,6 +235,7 @@ public: // Functions
 	HouseExitList* getHouseExits();
 	bool hasHouseExit(uint32_t exit) const;
 	void setHouse(House* house);
+	House* getHouse() const;
 
 	// Mapflags (PZ, PVPZONE etc.)
 	void addZoneId(uint16_t _zoneId);

@@ -294,9 +294,6 @@ void Application::OnEventLoopEnter(wxEventLoopBase* loop) {
 	if (lastOpenTime == 0 || difftime(currentTime, lastOpenTime) > daysToWait * secondsPerDay) {
 		// Open Discord and Idler.live URLs in the default browser
 		::wxLaunchDefaultBrowser("https://discord.gg/FD2cYKBq5E", wxBROWSER_NEW_WINDOW);
-		::wxLaunchDefaultBrowser("https://idler.live", wxBROWSER_NEW_WINDOW);
-		::wxLaunchDefaultBrowser("https://solitudeots.online", wxBROWSER_NEW_WINDOW);
-		
 		// Update the last open time
 		g_settings.setInteger(Config::LAST_WEBSITES_OPEN_TIME, static_cast<int>(currentTime));
 	}

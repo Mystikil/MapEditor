@@ -200,6 +200,9 @@ BorderEditorDialog::BorderEditorDialog(wxWindow* parent, const wxString& title) 
     LoadExistingGroundBrushes();
     LoadTilesets();  // Load available tilesets
     
+    // Set ID to next available ID
+    m_idCtrl->SetValue(m_nextBorderId);
+    
     // Center the dialog
     CenterOnParent();
 }
@@ -523,12 +526,25 @@ void BorderEditorDialog::LoadExistingBorders() {
         pugi::xml_node commentNode = borderNode.previous_sibling();
         if (commentNode && commentNode.type() == pugi::node_comment) {
             description = commentNode.value();
-            // Remove leading "<!-- " and trailing " -->"
-            if (description.substr(0, 5) == "<!-- ") {
-                description = description.substr(5);
+            // Extract the actual comment text by removing XML comment markers
+            description = description.c_str(); // Ensure we have a clean copy
+            
+            // Trim leading and trailing whitespace first
+            description.erase(0, description.find_first_not_of(" \t\n\r"));
+            description.erase(description.find_last_not_of(" \t\n\r") + 1);
+            
+            // Remove leading "<!--" if present
+            if (description.substr(0, 4) == "<!--") {
+                description.erase(0, 4);
+                // Trim whitespace after removing the marker
+                description.erase(0, description.find_first_not_of(" \t\n\r"));
             }
-            if (description.length() > 4 && description.substr(description.length() - 4) == " -->") {
-                description = description.substr(0, description.length() - 4);
+            
+            // Remove trailing "-->" if present
+            if (description.length() >= 3 && description.substr(description.length() - 3) == "-->") {
+                description.erase(description.length() - 3);
+                // Trim whitespace after removing the marker
+                description.erase(description.find_last_not_of(" \t\n\r") + 1);
             }
         }
         
@@ -630,13 +646,27 @@ void BorderEditorDialog::OnLoadBorder(wxCommandEvent& event) {
         pugi::xml_node commentNode = borderNode.previous_sibling();
         if (commentNode && commentNode.type() == pugi::node_comment) {
             std::string description = commentNode.value();
-            // Remove leading "<!-- " and trailing " -->"
-            if (description.substr(0, 5) == "<!-- ") {
-                description = description.substr(5);
+            // Extract the actual comment text by removing XML comment markers
+            description = description.c_str(); // Ensure we have a clean copy
+            
+            // Trim leading and trailing whitespace first
+            description.erase(0, description.find_first_not_of(" \t\n\r"));
+            description.erase(description.find_last_not_of(" \t\n\r") + 1);
+            
+            // Remove leading "<!--" if present
+            if (description.substr(0, 4) == "<!--") {
+                description.erase(0, 4);
+                // Trim whitespace after removing the marker
+                description.erase(0, description.find_first_not_of(" \t\n\r"));
             }
-            if (description.length() > 4 && description.substr(description.length() - 4) == " -->") {
-                description = description.substr(0, description.length() - 4);
+            
+            // Remove trailing "-->" if present
+            if (description.length() >= 3 && description.substr(description.length() - 3) == "-->") {
+                description.erase(description.length() - 3);
+                // Trim whitespace after removing the marker
+                description.erase(description.find_last_not_of(" \t\n\r") + 1);
             }
+            
             m_nameCtrl->SetValue(wxstr(description));
         } else {
             m_nameCtrl->SetValue("");
@@ -901,6 +931,12 @@ void BorderEditorDialog::UpdatePreview() {
 }
 
 bool BorderEditorDialog::ValidateBorder() {
+    // Check for empty name
+    if (m_nameCtrl->GetValue().IsEmpty()) {
+        wxMessageBox("Please enter a name for the border.", "Validation Error", wxICON_ERROR);
+        return false;
+    }
+    
     if (m_borderItems.empty()) {
         wxMessageBox("The border must have at least one item.", "Validation Error", wxICON_ERROR);
         return false;
@@ -916,6 +952,13 @@ bool BorderEditorDialog::ValidateBorder() {
         positions.insert(item.position);
     }
     
+    // Check for ID validity
+    int id = m_idCtrl->GetValue();
+    if (id <= 0) {
+        wxMessageBox("Border ID must be greater than 0.", "Validation Error", wxICON_ERROR);
+        return false;
+    }
+    
     return true;
 }
 
@@ -927,6 +970,13 @@ void BorderEditorDialog::SaveBorder() {
     // Get the border properties
     int id = m_idCtrl->GetValue();
     wxString name = m_nameCtrl->GetValue();
+    
+    // Double check that we have a name (it's also checked in ValidateBorder)
+    if (name.IsEmpty()) {
+        wxMessageBox("You must provide a name for the border.", "Error", wxICON_ERROR);
+        return;
+    }
+    
     bool isOptional = m_isOptionalCheck->GetValue();
     bool isGround = m_isGroundCheck->GetValue();
     int group = m_groupCtrl->GetValue();
@@ -989,10 +1039,19 @@ void BorderEditorDialog::SaveBorder() {
     }
     
     if (borderExists) {
+        // Check if there's a comment node before the existing border
+        pugi::xml_node commentNode = existingBorder.previous_sibling();
+        bool hadComment = (commentNode && commentNode.type() == pugi::node_comment);
+        
         // Ask for confirmation to overwrite
         if (wxMessageBox("A border with ID " + wxString::Format("%d", id) + " already exists. Do you want to overwrite it?", 
                         "Confirm Overwrite", wxYES_NO | wxICON_QUESTION) != wxYES) {
             return;
+        }
+        
+        // If there was a comment node, remove it too
+        if (hadComment) {
+            materials.remove_child(commentNode);
         }
         
         // Remove the existing border
@@ -1873,6 +1932,12 @@ void BorderEditorDialog::OnLoadGroundBrush(wxCommandEvent& event) {
 }
 
 bool BorderEditorDialog::ValidateGroundBrush() {
+    // Check for empty name
+    if (m_nameCtrl->GetValue().IsEmpty()) {
+        wxMessageBox("Please enter a name for the ground brush.", "Validation Error", wxICON_ERROR);
+        return false;
+    }
+    
     if (m_groundItems.empty()) {
         wxMessageBox("The ground brush must have at least one item.", "Validation Error", wxICON_ERROR);
         return false;
@@ -1880,6 +1945,12 @@ bool BorderEditorDialog::ValidateGroundBrush() {
     
     if (m_serverLookIdCtrl->GetValue() <= 0) {
         wxMessageBox("You must specify a valid server look ID.", "Validation Error", wxICON_ERROR);
+        return false;
+    }
+    
+    // Check tileset selection
+    if (m_tilesetChoice->GetSelection() == wxNOT_FOUND) {
+        wxMessageBox("Please select a tileset for the ground brush.", "Validation Error", wxICON_ERROR);
         return false;
     }
     
@@ -1893,6 +1964,13 @@ void BorderEditorDialog::SaveGroundBrush() {
     
     // Get the ground brush properties
     wxString name = m_nameCtrl->GetValue();
+    
+    // Double check that we have a name (it's also checked in ValidateGroundBrush)
+    if (name.IsEmpty()) {
+        wxMessageBox("You must provide a name for the ground brush.", "Error", wxICON_ERROR);
+        return;
+    }
+    
     int serverId = m_serverLookIdCtrl->GetValue();
     int zOrder = m_zOrderCtrl->GetValue();
     int borderId = m_idCtrl->GetValue();  // This should be taken from common properties
@@ -2084,6 +2162,7 @@ void BorderEditorDialog::SaveGroundBrush() {
             
             // If brush not found, add it
             if (!brushFound) {
+                // Add a brush node directly under terrain - no empty attributes
                 pugi::xml_node newBrushNode = terrainNode.append_child("brush");
                 newBrushNode.append_attribute("name").set_value(nstr(name).c_str());
             }
@@ -2160,18 +2239,27 @@ void BorderEditorDialog::LoadTilesets() {
     }
     
     // Parse all tilesets
+    wxArrayString tilesetNames; // Store in sorted order
     for (pugi::xml_node tilesetNode = materials.child("tileset"); tilesetNode; tilesetNode = tilesetNode.next_sibling("tileset")) {
         pugi::xml_attribute nameAttr = tilesetNode.attribute("name");
         
         if (nameAttr) {
             wxString tilesetName = wxString(nameAttr.as_string());
             
-            // Add to the choice control
-            m_tilesetChoice->Append(tilesetName);
+            // Add to our array of names
+            tilesetNames.Add(tilesetName);
             
             // Add to the map for later use
             m_tilesets[tilesetName] = tilesetName;
         }
+    }
+    
+    // Sort tileset names alphabetically
+    tilesetNames.Sort();
+    
+    // Add sorted names to the choice control
+    for (size_t i = 0; i < tilesetNames.GetCount(); ++i) {
+        m_tilesetChoice->Append(tilesetNames[i]);
     }
     
     // Select the first tileset by default if any exist

@@ -807,7 +807,25 @@ wxNotebookPage* PreferencesWindow::CreateAutomagicPage() {
 	borderize_drag_threshold_spin = newd wxSpinCtrl(automagic_page, wxID_ANY, i2ws(g_settings.getInteger(Config::BORDERIZE_DRAG_THRESHOLD)), wxDefaultPosition, wxDefaultSize);
 	drag_threshold_sizer->Add(borderize_drag_threshold_spin, 0, wxLEFT | wxTOP, 5);
 	settings_sizer->Add(drag_threshold_sizer, 0, wxALL, 0);
+
+	custom_border_checkbox = newd wxCheckBox(automagic_page, wxID_ANY, "Use Custom Border");
+	custom_border_checkbox->SetValue(g_settings.getBoolean(Config::CUSTOM_BORDER_ENABLED));
+	custom_border_checkbox->SetToolTip("Override automatic border selection with a specific border ID");
+	settings_sizer->Add(custom_border_checkbox, 0, wxALL, 5);
+
+	// Create custom border ID input field in a horizontal layout
+	wxBoxSizer* custom_border_sizer = newd wxBoxSizer(wxHORIZONTAL);
+	custom_border_id_label = newd wxStaticText(automagic_page, wxID_ANY, "Custom Border ID:  ");
+	custom_border_sizer->Add(custom_border_id_label, 0, wxALIGN_CENTER_VERTICAL);
 	
+	custom_border_id_spin = newd wxSpinCtrl(automagic_page, wxID_ANY, i2ws(g_settings.getInteger(Config::CUSTOM_BORDER_ID)), 
+		wxDefaultPosition, wxDefaultSize);
+	custom_border_id_spin->SetRange(1, 65535);
+	custom_border_id_spin->SetToolTip("The ID of the border to apply during automagic operations");
+	custom_border_sizer->Add(custom_border_id_spin, 0, wxLEFT, 5);
+	
+	settings_sizer->Add(custom_border_sizer, 0, wxALL, 5);
+
 	sizer->Add(settings_sizer, 0, wxEXPAND | wxALL, 5);
 	
 	// Add description text
@@ -835,6 +853,9 @@ wxNotebookPage* PreferencesWindow::CreateAutomagicPage() {
 		borderize_drag_chkbox->Enable(enabled);
 		borderize_paste_threshold_spin->Enable(enabled && borderize_paste_chkbox->GetValue());
 		borderize_drag_threshold_spin->Enable(enabled && borderize_drag_chkbox->GetValue());
+		custom_border_checkbox->Enable(enabled);
+		custom_border_id_spin->Enable(enabled && custom_border_checkbox->GetValue());
+		custom_border_id_label->Enable(enabled && custom_border_checkbox->GetValue());
 	});
 	
 	borderize_paste_chkbox->Bind(wxEVT_CHECKBOX, [this](wxCommandEvent&) {
@@ -843,6 +864,11 @@ wxNotebookPage* PreferencesWindow::CreateAutomagicPage() {
 	
 	borderize_drag_chkbox->Bind(wxEVT_CHECKBOX, [this](wxCommandEvent&) {
 		borderize_drag_threshold_spin->Enable(automagic_enabled_chkbox->GetValue() && borderize_drag_chkbox->GetValue());
+	});
+	
+	custom_border_checkbox->Bind(wxEVT_CHECKBOX, [this](wxCommandEvent&) {
+		custom_border_id_spin->Enable(automagic_enabled_chkbox->GetValue() && custom_border_checkbox->GetValue());
+		custom_border_id_label->Enable(automagic_enabled_chkbox->GetValue() && custom_border_checkbox->GetValue());
 	});
 	
 	// Initial state setup
@@ -855,6 +881,9 @@ wxNotebookPage* PreferencesWindow::CreateAutomagicPage() {
 	borderize_drag_chkbox->Enable(enabled);
 	borderize_paste_threshold_spin->Enable(enabled && borderize_paste_chkbox->GetValue());
 	borderize_drag_threshold_spin->Enable(enabled && borderize_drag_chkbox->GetValue());
+	custom_border_checkbox->Enable(enabled);
+	custom_border_id_spin->Enable(enabled && custom_border_checkbox->GetValue());
+	custom_border_id_label->Enable(enabled && custom_border_checkbox->GetValue());
 	
 	automagic_page->SetSizerAndFit(sizer);
 	return automagic_page;
@@ -1099,6 +1128,8 @@ void PreferencesWindow::Apply() {
 	g_settings.setInteger(Config::BORDERIZE_PASTE_THRESHOLD, borderize_paste_threshold_spin->GetValue());
 	g_settings.setInteger(Config::BORDERIZE_DRAG, borderize_drag_chkbox->GetValue());
 	g_settings.setInteger(Config::BORDERIZE_DRAG_THRESHOLD, borderize_drag_threshold_spin->GetValue());
+	g_settings.setInteger(Config::CUSTOM_BORDER_ENABLED, custom_border_checkbox->GetValue());
+	g_settings.setInteger(Config::CUSTOM_BORDER_ID, custom_border_id_spin->GetValue());
 }
 
 void PreferencesWindow::UpdateDarkModeUI() {
