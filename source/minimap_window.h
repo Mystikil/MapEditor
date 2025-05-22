@@ -27,6 +27,11 @@
 #include <atomic>
 #include <wx/timer.h>
 #include <wx/pen.h>
+#include <vector>
+#include <wx/combobox.h>
+#include <wx/button.h>
+#include <wx/xml/xml.h>
+#include <wx/checkbox.h>
 
 class MinimapWindow : public wxPanel {
 public:
@@ -81,10 +86,48 @@ public:
 		}
 	}
 
+	// Minimap waypoint support
+	struct MinimapWaypoint {
+		wxString name;
+		Position pos;
+		MinimapWaypoint(const wxString& n, const Position& p) : name(n), pos(p) {}
+	};
+	std::vector<MinimapWaypoint> minimap_waypoints;
+	int selected_minimap_waypoint_idx = -1;
+	wxComboBox* minimap_waypoint_combo = nullptr;
+	wxButton* add_minimap_waypoint_btn = nullptr;
+
+	void UpdateMinimapWaypointCombo();
+	void OnMinimapWaypointSelected(wxCommandEvent& event);
+	void OnAddMinimapWaypoint(wxCommandEvent& event);
+	void TeleportToMinimapWaypoint(int idx);
+
+	// Save/Load buttons for minimap waypoints
+	wxButton* save_minimap_waypoints_btn = nullptr;
+	wxButton* load_minimap_waypoints_btn = nullptr;
+
+	void SaveMinimapWaypointsToXML();
+	void LoadMinimapWaypointsFromXML();
+	void OnSaveMinimapWaypoints(wxCommandEvent& event);
+	void OnLoadMinimapWaypoints(wxCommandEvent& event);
+	void SetMinimapFloor(int floor);
+
 private:
 	BlockMap m_blocks;
 	std::mutex m_mutex;
 	
+	// Empty tile atlas for faster rendering
+	wxBitmap empty_tile_atlas;
+	bool empty_tile_atlas_initialized;
+
+	// Minimap floor (separate from editor floor)
+	int minimap_floor;
+
+	// Button rectangles for header UI
+	wxRect btn_cache;
+	wxRect btn_up;
+	wxRect btn_down;
+
 	// Helper methods
 	uint32_t getBlockIndex(int x, int y) const {
 		return ((x / BLOCK_SIZE) * (65536 / BLOCK_SIZE)) + (y / BLOCK_SIZE);
@@ -119,6 +162,39 @@ private:
 	wxTimer update_timer;
 	int last_start_x;
 	int last_start_y;
+
+	// Helper methods
+	void InitializeEmptyTileAtlas();
+	void DrawEmptyTileAtlas(wxDC& dc, int startX, int startY, int width, int height);
+
+	void DrawHeaderButtons(wxDC& dc, int windowWidth, int headerHeight);
+	void HandleHeaderButtonClick(const wxPoint& pt);
+	void StartCacheCurrentFloor();
+	void BatchCacheFloor(int floor);
+
+	// Block-based cache
+	struct BlockKey {
+		int bx, by, z;
+		bool operator<(const BlockKey& other) const {
+			if (z != other.z) return z < other.z;
+			if (bx != other.bx) return bx < other.bx;
+			return by < other.by;
+		}
+	};
+	std::map<BlockKey, wxBitmap> block_cache;
+
+	// UI: Save cache to disk checkbox
+	wxCheckBox* save_cache_checkbox = nullptr;
+	bool save_cache_to_disk = false;
+
+	// Block cache logic
+	void CacheFilledBlocksForFloor(int floor);
+	void SaveBlockCacheToDisk(int floor);
+	void LoadBlockCacheFromDisk(int floor);
+	void ClearBlockCache();
+	bool IsBlockFilled(int bx, int by, int floor);
+	wxBitmap RenderBlock(int bx, int by, int floor);
+	wxString GetCurrentMapName() const;
 
 	DECLARE_EVENT_TABLE()
 };

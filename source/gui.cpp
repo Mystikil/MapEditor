@@ -1863,10 +1863,9 @@ void GUI::ChangeFloor(int new_floor) {
 
 		if (old_floor != new_floor) {
 			tab->GetCanvas()->ChangeFloor(new_floor);
-			
 			// Only refresh minimap if it's visible - it will use cached blocks for the new floor
 			if (minimap && IsMinimapVisible()) {
-				minimap->Refresh();
+				minimap->SetMinimapFloor(new_floor);
 			}
 		}
 	}

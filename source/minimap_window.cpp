@@ -64,6 +64,10 @@ RELEVANT CODE SECTIONS:
 #include <thread>
 #include <mutex>
 #include <atomic>
+#include <wx/filename.h>
+#include <wx/image.h>
+#include <wx/dir.h>
+#include <wx/ffile.h>
 
 BEGIN_EVENT_TABLE(MinimapWindow, wxPanel)
 	EVT_PAINT(MinimapWindow::OnPaint)
@@ -74,6 +78,7 @@ BEGIN_EVENT_TABLE(MinimapWindow, wxPanel)
 	EVT_CLOSE(MinimapWindow::OnClose)
 	EVT_TIMER(ID_MINIMAP_UPDATE, MinimapWindow::OnDelayedUpdate)
 	EVT_TIMER(ID_RESIZE_TIMER, MinimapWindow::OnResizeTimer)
+
 END_EVENT_TABLE()
 
 MinimapWindow::MinimapWindow(wxWindow* parent) : 
@@ -86,7 +91,8 @@ MinimapWindow::MinimapWindow(wxWindow* parent) :
 	last_floor(0),
 	last_start_x(0),
 	last_start_y(0),
-	is_resizing(false)
+	is_resizing(false),
+	empty_tile_atlas_initialized(false)
 {
 	for (int i = 0; i < 256; ++i) {
 		pens[i] = newd wxPen(wxColor(minimap_color[i].red, minimap_color[i].green, minimap_color[i].blue));
@@ -97,6 +103,31 @@ MinimapWindow::MinimapWindow(wxWindow* parent) :
 	
 	// Initialize the resize timer
 	resize_timer.SetOwner(this, ID_RESIZE_TIMER);
+	
+	// Floor initialization fix
+	if (g_gui.IsEditorOpen()) {
+		minimap_floor = g_gui.GetCurrentFloor();
+	} else {
+		minimap_floor = 7; // Safe default
+	}
+	
+	// Minimap waypoint UI
+	minimap_waypoint_combo = new wxComboBox(this, wxID_ANY, wxEmptyString, wxPoint(-100, -100), wxSize(120, 22));
+	add_minimap_waypoint_btn = new wxButton(this, wxID_ANY, "+", wxPoint(-100, -100), wxSize(28, 22));
+	save_minimap_waypoints_btn = new wxButton(this, wxID_ANY, "Save", wxPoint(-100, -100), wxSize(48, 22));
+	load_minimap_waypoints_btn = new wxButton(this, wxID_ANY, "Load", wxPoint(-100, -100), wxSize(48, 22));
+	minimap_waypoint_combo->Bind(wxEVT_COMBOBOX, &MinimapWindow::OnMinimapWaypointSelected, this);
+	add_minimap_waypoint_btn->Bind(wxEVT_BUTTON, &MinimapWindow::OnAddMinimapWaypoint, this);
+	save_minimap_waypoints_btn->Bind(wxEVT_BUTTON, &MinimapWindow::OnSaveMinimapWaypoints, this);
+	load_minimap_waypoints_btn->Bind(wxEVT_BUTTON, &MinimapWindow::OnLoadMinimapWaypoints, this);
+	UpdateMinimapWaypointCombo();
+	
+	// In constructor, create save_cache_checkbox and bind event
+	save_cache_checkbox = new wxCheckBox(this, wxID_ANY, "Save cache to disk", wxPoint(-100, -100), wxSize(130, 22));
+	save_cache_checkbox->SetValue(false);
+	save_cache_checkbox->Bind(wxEVT_CHECKBOX, [this](wxCommandEvent& event) {
+		save_cache_to_disk = save_cache_checkbox->GetValue();
+	});
 	
 	StartRenderThread();
 	
@@ -320,7 +351,7 @@ void MinimapWindow::OnPaint(wxPaintEvent& event) {
 	
 	int centerX, centerY;
 	canvas->GetScreenCenter(&centerX, &centerY);
-	int floor = g_gui.GetCurrentFloor();
+	int floor = minimap_floor;
 	
 	// Store current state
 	last_center_x = centerX;
@@ -331,7 +362,7 @@ void MinimapWindow::OnPaint(wxPaintEvent& event) {
 	int windowWidth = wxPanel::GetSize().GetWidth();
 	int windowHeight = wxPanel::GetSize().GetHeight();
 	
-	// Draw header with map info (300px high)
+	// Draw header with map info
 	int headerHeight = 30;
 	wxRect headerRect(0, 0, windowWidth, headerHeight);
 	dc.SetBrush(wxBrush(wxColour(40, 40, 40)));
@@ -347,53 +378,118 @@ void MinimapWindow::OnPaint(wxPaintEvent& event) {
 	wxString mapInfo = wxString::Format("Floor: %d | Position: %d,%d", 
 		floor, centerX, centerY);
 	dc.DrawText(mapInfo, 10, 8);
+
+	// Draw separator after position
+	int textWidth, textHeight;
+	dc.GetTextExtent(mapInfo, &textWidth, &textHeight);
+	int sepX = 10 + textWidth + 10;
+	dc.SetTextForeground(wxColour(120, 120, 120));
+	dc.DrawText("|", sepX, 8);
+	int btnStartX = sepX + 15;
+
+	// Draw header buttons in order: DOWN, UP, CACHE, then floor number
+	int btnW = 28, btnH = 22, margin = 4;
+	int y = (headerHeight - btnH) / 2;
+	// Down button
+	btn_down = wxRect(btnStartX, y, btnW, btnH);
+	dc.SetBrush(wxBrush(wxColour(80, 80, 200)));
+	dc.SetPen(*wxBLACK_PEN);
+	dc.DrawRectangle(btn_down);
+	dc.SetTextForeground(*wxWHITE);
+	dc.DrawText("UP", btn_down.x + 7, btn_down.y - 2);
+	// Up button
+	btn_up = wxRect(btnStartX + btnW + margin, y, btnW, btnH);
+	dc.SetBrush(wxBrush(wxColour(80, 80, 200)));
+	dc.DrawRectangle(btn_up);
+	dc.SetTextForeground(*wxWHITE);
+	dc.DrawText("DOWN", btn_up.x + 7, btn_up.y - 2);
+	// Cache button
+	btn_cache = wxRect(btnStartX + 2 * (btnW + margin), y, btnW + 10, btnH);
+	dc.SetBrush(wxBrush(wxColour(60, 180, 60)));
+	dc.DrawRectangle(btn_cache);
+	dc.SetTextForeground(*wxWHITE);
+	dc.DrawText("Cache", btn_cache.x + 2, btn_cache.y + 2);
+	// Floor number display
+	wxString floorStr = wxString::Format("Floor: %d", minimap_floor);
+	dc.SetTextForeground(wxColour(220, 220, 220));
+	int floorTextX = btn_cache.x + btn_cache.width + margin;
+	dc.DrawText(floorStr, floorTextX, 8);
+
+	// Draw separator before waypoint menu
+	int floorTextWidth, floorTextHeight;
+	dc.GetTextExtent(floorStr, &floorTextWidth, &floorTextHeight);
+	int sep2X = floorTextX + floorTextWidth + 10;
+	dc.SetTextForeground(wxColour(120, 120, 120));
+	dc.DrawText("|", sep2X, 8);
+
+	// Minimap waypoint combo and add button
+	int comboX = sep2X + 15;
+	int comboY = y;
+	int comboW = 120;
+	int comboH = btnH;
+	int addBtnW = 28;
+	if (minimap_waypoint_combo && add_minimap_waypoint_btn) {
+		minimap_waypoint_combo->SetSize(comboX, comboY, comboW, comboH);
+		minimap_waypoint_combo->Show();
+		add_minimap_waypoint_btn->SetSize(comboX + comboW + margin, comboY, addBtnW, comboH);
+		add_minimap_waypoint_btn->Show();
+	}
 	
-	// Calculate visible area to draw
-	int startX = centerX - (windowWidth / 2);
-	int startY = centerY - ((windowHeight - headerHeight) / 2);
-	int endX = startX + windowWidth;
-	int endY = startY + (windowHeight - headerHeight);
+	// Draw separator after waypoint menu
+	int sep3X = comboX + comboW + addBtnW + 2 * margin;
+	dc.SetTextForeground(wxColour(120, 120, 120));
+	dc.DrawText("|", sep3X, 8);
+	int saveBtnX = sep3X + 15;
+	int saveBtnW = 48;
+	int loadBtnW = 48;
+	if (save_minimap_waypoints_btn && load_minimap_waypoints_btn) {
+		save_minimap_waypoints_btn->SetSize(saveBtnX, comboY, saveBtnW, comboH);
+		save_minimap_waypoints_btn->Show();
+		load_minimap_waypoints_btn->SetSize(saveBtnX + saveBtnW + margin, comboY, loadBtnW, comboH);
+		load_minimap_waypoints_btn->Show();
+	}
 	
-	// Simple optimization - limit the rendering area to reasonable bounds
-	int mapWidth = editor.map.getWidth();
-	int mapHeight = editor.map.getHeight();
+	// In OnPaint, after the last separator, place the checkbox before Save/Load buttons
+	int sep4X = sep3X + saveBtnW + loadBtnW + 2 * margin;
+	dc.SetTextForeground(wxColour(120, 120, 120));
+	dc.DrawText("|", sep4X, 8);
+	int checkboxX = sep4X + 15;
+	if (save_cache_checkbox) {
+		save_cache_checkbox->SetSize(checkboxX, comboY, 130, comboH);
+		save_cache_checkbox->Show();
+	}
 	
-	startX = std::max(0, startX);
-	startY = std::max(0, startY);
-	endX = std::min(mapWidth, endX);
-	endY = std::min(mapHeight, endY);
-	
-	// Batch drawing by color for better performance
-	std::vector<std::vector<wxPoint>> colorPoints(256);
-	
-	// Iterate over visible area only
-	for (int y = startY; y < endY; ++y) {
-		for (int x = startX; x < endX; ++x) {
-			if (x >= 0 && y >= 0 && x < mapWidth && y < mapHeight) {
-				Tile* tile = editor.map.getTile(x, y, floor);
-				if (tile) {
-					uint8_t color = tile->getMiniMapColor();
-					if (color) {
-						int drawX = x - startX;
-						int drawY = y - startY + headerHeight;
-						colorPoints[color].push_back(wxPoint(drawX, drawY));
-					}
-				}
+	// Draw minimap using cached blocks
+	int padding = 10;
+	int startX = std::max(0, centerX - (windowWidth / 2) - padding);
+	int startY = std::max(0, centerY - ((windowHeight - headerHeight) / 2) - padding);
+	int endX = std::min(editor.map.getWidth(), startX + windowWidth + padding * 2);
+	int endY = std::min(editor.map.getHeight(), startY + (windowHeight - headerHeight) + padding * 2);
+	int blockStartX = startX / BLOCK_SIZE;
+	int blockEndX = (endX + BLOCK_SIZE - 1) / BLOCK_SIZE;
+	int blockStartY = startY / BLOCK_SIZE;
+	int blockEndY = (endY + BLOCK_SIZE - 1) / BLOCK_SIZE;
+	for (int by = blockStartY; by < blockEndY; ++by) {
+		for (int bx = blockStartX; bx < blockEndX; ++bx) {
+			BlockKey key{bx, by, floor};
+			wxBitmap* bmp = nullptr;
+			auto it = block_cache.find(key);
+			if (it != block_cache.end()) {
+				bmp = &it->second;
+			} else if (IsBlockFilled(bx, by, floor)) {
+				wxBitmap rendered = RenderBlock(bx, by, floor);
+				block_cache[key] = rendered;
+				bmp = &block_cache[key];
+			}
+			if (bmp) {
+				int drawX = bx * BLOCK_SIZE - startX;
+				int drawY = by * BLOCK_SIZE - startY + headerHeight;
+				dc.DrawBitmap(*bmp, drawX, drawY, false);
 			}
 		}
 	}
 	
-	// Draw all points for each color at once
-	for (int color = 0; color < 256; ++color) {
-		if (!colorPoints[color].empty()) {
-			dc.SetPen(*pens[color]);
-			for (const wxPoint& pt : colorPoints[color]) {
-				dc.DrawPoint(pt);
-			}
-		}
-	}
-	
-	// Draw a marker for the center position
+	// Draw center marker
 	dc.SetPen(wxPen(wxColour(255, 0, 0), 2));
 	int centerDrawX = windowWidth / 2;
 	int centerDrawY = (windowHeight - headerHeight) / 2 + headerHeight;
@@ -401,7 +497,65 @@ void MinimapWindow::OnPaint(wxPaintEvent& event) {
 	dc.DrawLine(centerDrawX, centerDrawY - 5, centerDrawX, centerDrawY + 5);
 }
 
+void MinimapWindow::HandleHeaderButtonClick(const wxPoint& pt) {
+	if (btn_cache.Contains(pt)) {
+		StartCacheCurrentFloor();
+	} else if (btn_up.Contains(pt)) {
+		minimap_floor = std::min(minimap_floor + 1, 15); // Clamp to max floor
+		needs_update = true;
+		Refresh();
+	} else if (btn_down.Contains(pt)) {
+		minimap_floor = std::max(minimap_floor - 1, 0); // Clamp to min floor
+		needs_update = true;
+		Refresh();
+	}
+}
+
+void MinimapWindow::StartCacheCurrentFloor() {
+	wxString msg = wxString::Format("Caching minimap floor %d...", minimap_floor);
+	g_gui.CreateLoadBar(msg);
+	CacheFilledBlocksForFloor(minimap_floor);
+	if (save_cache_to_disk) {
+		SaveBlockCacheToDisk(minimap_floor);
+	}
+	g_gui.DestroyLoadBar();
+	needs_update = true;
+	Refresh();
+}
+
+void MinimapWindow::BatchCacheFloor(int floor) {
+	if (!g_gui.IsEditorOpen()) return;
+	Editor& editor = *g_gui.GetCurrentEditor();
+	int mapWidth = editor.map.getWidth();
+	int mapHeight = editor.map.getHeight();
+	int totalRows = mapHeight;
+	int doneRows = 0;
+	
+	// For each row, update the minimap cache and progress bar
+	for (int y = 0; y < mapHeight; ++y) {
+		for (int x = 0; x < mapWidth; ++x) {
+			Tile* tile = editor.map.getTile(x, y, floor);
+			// Optionally, update cache here if you have a block-based cache
+			// For now, just access the tile to simulate caching
+			(void)tile;
+		}
+		doneRows++;
+		int percent = int((doneRows / (double)totalRows) * 100.0);
+		g_gui.SetLoadDone(percent, wxString::Format("Caching row %d/%d", doneRows, totalRows));
+		wxYield(); // Keep UI responsive
+	}
+	needs_update = true;
+	Refresh();
+}
+
 void MinimapWindow::OnMouseClick(wxMouseEvent& event) {
+	wxPoint pt(event.GetX(), event.GetY());
+	int headerHeight = 30;
+	if (pt.y < headerHeight) {
+		HandleHeaderButtonClick(pt);
+		return;
+	}
+
 	if (!g_gui.IsEditorOpen())
 		return;
 
@@ -413,7 +567,6 @@ void MinimapWindow::OnMouseClick(wxMouseEvent& event) {
 	
 	int windowWidth = GetSize().GetWidth();
 	int windowHeight = GetSize().GetHeight();
-	int headerHeight = 30; // Match the header height from OnPaint
 	
 	// Calculate the map position clicked
 	int clickX = event.GetX();
@@ -425,8 +578,8 @@ void MinimapWindow::OnMouseClick(wxMouseEvent& event) {
 	// Only process clicks below the header
 	if (event.GetY() > headerHeight) {
 		g_gui.SetScreenCenterPosition(Position(mapX, mapY, g_gui.GetCurrentFloor()));
-		Refresh();
-		g_gui.RefreshView();
+	Refresh();
+	g_gui.RefreshView();
 	}
 }
 
@@ -529,3 +682,244 @@ void MinimapWindow::InitialLoad() {
 	Refresh();
 }
 
+void MinimapWindow::UpdateMinimapWaypointCombo() {
+	if (!minimap_waypoint_combo) return;
+	minimap_waypoint_combo->Clear();
+	for (const auto& wp : minimap_waypoints) {
+		minimap_waypoint_combo->Append(wp.name);
+	}
+	if (selected_minimap_waypoint_idx >= 0 && selected_minimap_waypoint_idx < (int)minimap_waypoints.size()) {
+		minimap_waypoint_combo->SetSelection(selected_minimap_waypoint_idx);
+	}
+}
+
+void MinimapWindow::OnMinimapWaypointSelected(wxCommandEvent& event) {
+	int idx = minimap_waypoint_combo->GetSelection();
+	if (idx >= 0 && idx < (int)minimap_waypoints.size()) {
+		TeleportToMinimapWaypoint(idx);
+	}
+}
+
+void MinimapWindow::OnAddMinimapWaypoint(wxCommandEvent& event) {
+	// Prompt for name
+	wxString name = wxGetTextFromUser("Enter waypoint name:", "Add Minimap Waypoint");
+	if (name.IsEmpty()) return;
+	// Use current minimap position
+	int centerX = last_center_x;
+	int centerY = last_center_y;
+	int floor = minimap_floor;
+	minimap_waypoints.emplace_back(name, Position(centerX, centerY, floor));
+	selected_minimap_waypoint_idx = minimap_waypoints.size() - 1;
+	UpdateMinimapWaypointCombo();
+}
+
+void MinimapWindow::TeleportToMinimapWaypoint(int idx) {
+	if (idx < 0 || idx >= (int)minimap_waypoints.size()) return;
+	const MinimapWaypoint& wp = minimap_waypoints[idx];
+	minimap_floor = wp.pos.z;
+	needs_update = true;
+	Refresh();
+	// Optionally, also move the main view:
+	if (g_gui.IsEditorOpen()) {
+		g_gui.GetCurrentMapTab()->SetScreenCenterPosition(wp.pos);
+	}
+}
+
+void MinimapWindow::SaveMinimapWaypointsToXML() {
+	wxString dataDir = g_gui.GetDataDirectory();
+	wxString filePath = dataDir + wxFileName::GetPathSeparator() + "minimap_waypoints.xml";
+	wxXmlDocument doc;
+	wxXmlNode* root = new wxXmlNode(wxXML_ELEMENT_NODE, "minimap_waypoints");
+	for (const auto& wp : minimap_waypoints) {
+		wxXmlNode* waypoint = new wxXmlNode(wxXML_ELEMENT_NODE, "waypoint");
+		waypoint->AddAttribute("name", wp.name);
+		waypoint->AddAttribute("x", wxString::Format("%d", wp.pos.x));
+		waypoint->AddAttribute("y", wxString::Format("%d", wp.pos.y));
+		waypoint->AddAttribute("floor", wxString::Format("%d", wp.pos.z));
+		root->AddChild(waypoint);
+	}
+	doc.SetRoot(root);
+	doc.Save(filePath);
+}
+
+void MinimapWindow::LoadMinimapWaypointsFromXML() {
+	wxString dataDir = g_gui.GetDataDirectory();
+	wxString filePath = dataDir + wxFileName::GetPathSeparator() + "minimap_waypoints.xml";
+	minimap_waypoints.clear();
+	wxXmlDocument doc;
+	if (doc.Load(filePath)) {
+		wxXmlNode* root = doc.GetRoot();
+		if (root->GetName() == "minimap_waypoints") {
+			wxXmlNode* waypoint = root->GetChildren();
+			while (waypoint) {
+				if (waypoint->GetName() == "waypoint") {
+					wxString name = waypoint->GetAttribute("name");
+					int x = 0, y = 0, floor = 0;
+					waypoint->GetAttribute("x").ToInt(&x);
+					waypoint->GetAttribute("y").ToInt(&y);
+					waypoint->GetAttribute("floor").ToInt(&floor);
+					minimap_waypoints.emplace_back(name, Position(x, y, floor));
+				}
+				waypoint = waypoint->GetNext();
+			}
+			selected_minimap_waypoint_idx = 0;
+			UpdateMinimapWaypointCombo();
+		}
+	}
+}
+
+void MinimapWindow::OnSaveMinimapWaypoints(wxCommandEvent& event) {
+	SaveMinimapWaypointsToXML();
+}
+
+void MinimapWindow::OnLoadMinimapWaypoints(wxCommandEvent& event) {
+	LoadMinimapWaypointsFromXML();
+}
+
+void MinimapWindow::CacheFilledBlocksForFloor(int floor) {
+	if (!g_gui.IsEditorOpen()) return;
+	Editor& editor = *g_gui.GetCurrentEditor();
+	int mapWidth = editor.map.getWidth();
+	int mapHeight = editor.map.getHeight();
+	int numBlocksX = (mapWidth + BLOCK_SIZE - 1) / BLOCK_SIZE;
+	int numBlocksY = (mapHeight + BLOCK_SIZE - 1) / BLOCK_SIZE;
+	int totalBlocks = numBlocksX * numBlocksY;
+	int doneBlocks = 0;
+	block_cache.clear();
+	for (int by = 0; by < numBlocksY; ++by) {
+		for (int bx = 0; bx < numBlocksX; ++bx) {
+			if (IsBlockFilled(bx, by, floor)) {
+				wxBitmap bmp = RenderBlock(bx, by, floor);
+				block_cache[{bx, by, floor}] = bmp;
+			}
+			doneBlocks++;
+			int percent = int((doneBlocks / (double)totalBlocks) * 100.0);
+			g_gui.SetLoadDone(percent, wxString::Format("Caching block %d/%d", doneBlocks, totalBlocks));
+			wxYield();
+		}
+	}
+}
+
+void MinimapWindow::SaveBlockCacheToDisk(int floor) {
+	wxString dataDir = g_gui.GetDataDirectory();
+	wxString mapName = GetCurrentMapName();
+	wxString cacheDir = dataDir + wxFileName::GetPathSeparator() + "cachedmaps" + wxFileName::GetPathSeparator() + mapName;
+	wxFileName::Mkdir(cacheDir, wxS_DIR_DEFAULT, wxPATH_MKDIR_FULL);
+	for (const auto& pair : block_cache) {
+		if (pair.first.z != floor) continue;
+		wxString fileName = wxString::Format("block_%d_%d_%d.bin", pair.first.bx, pair.first.by, pair.first.z);
+		wxString filePath = cacheDir + wxFileName::GetPathSeparator() + fileName;
+		wxFFile file(filePath, "wb");
+		if (!file.IsOpened()) continue;
+		wxImage img = pair.second.ConvertToImage();
+		for (int y = 0; y < BLOCK_SIZE; ++y) {
+			for (int x = 0; x < BLOCK_SIZE; ++x) {
+				unsigned char r = img.GetRed(x, y);
+				unsigned char g = img.GetGreen(x, y);
+				unsigned char b = img.GetBlue(x, y);
+				// Find closest minimap color index
+				uint8_t best = 0;
+				int bestDist = 256*256*3;
+				for (int i = 0; i < 256; ++i) {
+					int dr = int(minimap_color[i].red) - r;
+					int dg = int(minimap_color[i].green) - g;
+					int db = int(minimap_color[i].blue) - b;
+					int dist = dr*dr + dg*dg + db*db;
+					if (dist < bestDist) {
+						bestDist = dist;
+						best = i;
+					}
+				}
+				file.Write(&best, 1);
+			}
+		}
+		file.Close();
+	}
+}
+
+void MinimapWindow::LoadBlockCacheFromDisk(int floor) {
+	wxString dataDir = g_gui.GetDataDirectory();
+	wxString mapName = GetCurrentMapName();
+	wxString cacheDir = dataDir + wxFileName::GetPathSeparator() + "cachedmaps" + wxFileName::GetPathSeparator() + mapName;
+	wxDir dir(cacheDir);
+	wxString filename;
+	bool cont = dir.GetFirst(&filename, wxString::Format("block_*_%d.bin", floor), wxDIR_FILES);
+	while (cont) {
+		wxFileName fn(cacheDir, filename);
+		wxFFile file(fn.GetFullPath(), "rb");
+		if (!file.IsOpened()) { cont = dir.GetNext(&filename); continue; }
+		std::vector<uint8_t> buffer(BLOCK_SIZE * BLOCK_SIZE);
+		if (file.Read(buffer.data(), buffer.size()) == buffer.size()) {
+			int bx = 0, by = 0, z = 0;
+			if (sscanf(filename.mb_str(), "block_%d_%d_%d.bin", &bx, &by, &z) == 3) {
+				wxImage img(BLOCK_SIZE, BLOCK_SIZE);
+				for (int y = 0; y < BLOCK_SIZE; ++y) {
+					for (int x = 0; x < BLOCK_SIZE; ++x) {
+						uint8_t idx = buffer[y * BLOCK_SIZE + x];
+						img.SetRGB(x, y, minimap_color[idx].red, minimap_color[idx].green, minimap_color[idx].blue);
+					}
+				}
+				block_cache[{bx, by, z}] = wxBitmap(img);
+			}
+		}
+		file.Close();
+		cont = dir.GetNext(&filename);
+	}
+}
+
+bool MinimapWindow::IsBlockFilled(int bx, int by, int floor) {
+	if (!g_gui.IsEditorOpen()) return false;
+	Editor& editor = *g_gui.GetCurrentEditor();
+	int startX = bx * BLOCK_SIZE;
+	int startY = by * BLOCK_SIZE;
+	for (int y = 0; y < BLOCK_SIZE; ++y) {
+		for (int x = 0; x < BLOCK_SIZE; ++x) {
+			Tile* tile = editor.map.getTile(startX + x, startY + y, floor);
+			if (tile && tile->getMiniMapColor()) {
+				return true;
+			}
+		}
+	}
+	return false;
+}
+
+wxBitmap MinimapWindow::RenderBlock(int bx, int by, int floor) {
+	if (!g_gui.IsEditorOpen()) return wxBitmap(BLOCK_SIZE, BLOCK_SIZE);
+	Editor& editor = *g_gui.GetCurrentEditor();
+	wxBitmap bitmap(BLOCK_SIZE, BLOCK_SIZE);
+	wxMemoryDC dc(bitmap);
+	dc.SetBackground(*wxBLACK_BRUSH);
+	dc.Clear();
+	int startX = bx * BLOCK_SIZE;
+	int startY = by * BLOCK_SIZE;
+	for (int y = 0; y < BLOCK_SIZE; ++y) {
+		for (int x = 0; x < BLOCK_SIZE; ++x) {
+			Tile* tile = editor.map.getTile(startX + x, startY + y, floor);
+			if (tile) {
+				uint8_t color = tile->getMiniMapColor();
+				if (color) {
+					dc.SetPen(*pens[color]);
+					dc.DrawPoint(x, y);
+				}
+			}
+		}
+	}
+	return bitmap;
+}
+
+wxString MinimapWindow::GetCurrentMapName() const {
+	if (!g_gui.IsEditorOpen()) return "unnamed";
+	Editor* editor = g_gui.GetCurrentEditor();
+	if (!editor) return "unnamed";
+	wxString mapName = editor->map.getName();
+	if (mapName.IsEmpty()) mapName = "unnamed";
+	return mapName;
+}
+
+void MinimapWindow::SetMinimapFloor(int floor) {
+	if (minimap_floor != floor) {
+		minimap_floor = floor;
+		needs_update = true;
+		Refresh();
+	}
+}
