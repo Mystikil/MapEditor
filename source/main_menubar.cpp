@@ -64,8 +64,11 @@
 #include "find_item_window.h"
 #include "settings.h"
 #include "automagic_settings.h"
-
+#include "find_creature_window.h"
+#include "map.h"
+#include "editor.h"
 #include "gui.h"
+#include "border_editor_window.h"
 
 #include <wx/chartype.h>
 
@@ -85,6 +88,7 @@ BEGIN_EVENT_TABLE(MainMenuBar, wxEvtHandler)
 	EVT_MENU(MenuBar::SAVE_AS, MainMenuBar::OnSaveAs)
 	EVT_MENU(MenuBar::GENERATE_MAP, MainMenuBar::OnGenerateMap)
 	EVT_MENU(MenuBar::MAP_MENU_GENERATE_ISLAND, MainMenuBar::OnGenerateIsland)
+	EVT_MENU(MenuBar::FIND_CREATURE, MainMenuBar::OnSearchForCreature)
 END_EVENT_TABLE()
 
 MainMenuBar::MainMenuBar(MainFrame* frame) :
@@ -257,7 +261,9 @@ MainMenuBar::MainMenuBar(MainFrame* frame) :
 	MAKE_ACTION(ABOUT, wxITEM_NORMAL, OnAbout);
 	MAKE_ACTION(SHOW_HOTKEYS, wxITEM_NORMAL, OnShowHotkeys); // Add this line
 	MAKE_ACTION(REFRESH_ITEMS, wxITEM_NORMAL, OnRefreshItems);
-
+	// 669
+	MAKE_ACTION(FIND_CREATURE, wxITEM_NORMAL, OnSearchForCreature);
+	MAKE_ACTION(MAP_CREATE_BORDER, wxITEM_NORMAL, OnCreateBorder);
 
 	// A deleter, this way the frame does not need
 	// to bother deleting us.
@@ -1008,8 +1014,6 @@ void MainMenuBar::OnSearchForItem(wxCommandEvent& WXUNUSED(event)) {
                 foreach_ItemOnMap(g_gui.GetCurrentMap(), finder, false);
                 std::vector<std::pair<Tile*, Item*>>& result = finder.result;
                 
-           
-                
                 g_gui.DestroyLoadBar();
                 
                 if (finder.limitReached()) {
@@ -1024,12 +1028,6 @@ void MainMenuBar::OnSearchForItem(wxCommandEvent& WXUNUSED(event)) {
                     resultWindow->AddPosition(wxString::Format("%s (ID: %d)", 
                         wxstr(pair.second->getName()),
                         pair.second->getID()), pair.first->getPosition());
-                }
-                
-                // Store the first ID for continuation (if results aren't empty)
-                if (!result.empty()) {
-                    uint16_t firstItemId = result[0].second->getID();
-                    resultWindow->StoreSearchInfo(firstItemId, false);
                 }
             }
         } else {
@@ -1050,12 +1048,6 @@ void MainMenuBar::OnSearchForItem(wxCommandEvent& WXUNUSED(event)) {
             SearchResultWindow* window = g_gui.ShowSearchWindow();
             window->Clear();
 
-            // Pass the ignored IDs configuration from the dialog
-            window->SetIgnoredIds(dialog.GetIgnoreIdsText(), dialog.IsIgnoreIdsEnabled());
-            
-            // Store search parameters for continuation
-            window->StoreSearchInfo(dialog.getResultID(), false);
-
             for (std::vector<std::pair<Tile*, Item*>>::const_iterator iter = result.begin(); iter != result.end(); ++iter) {
                 Tile* tile = iter->first;
                 Item* item = iter->second;
@@ -1073,6 +1065,106 @@ void MainMenuBar::OnSearchForItem(wxCommandEvent& WXUNUSED(event)) {
         }
 
         g_settings.setInteger(Config::FIND_ITEM_MODE, (int)dialog.getSearchMode());
+    }
+    dialog.Destroy();
+}
+
+void MainMenuBar::OnSearchForCreature(wxCommandEvent& WXUNUSED(event)) {
+    if (!g_gui.IsEditorOpen()) {
+        return;
+    }
+
+    FindCreatureDialog dialog(frame, "Search for Creature");
+    if (dialog.ShowModal() == wxID_OK) {
+        wxString creatureName = dialog.getResultName();
+        if (!creatureName.IsEmpty()) {
+            Editor* editor = g_gui.GetCurrentEditor();
+            if (editor) {
+                Map& map = editor->getMap();
+                SearchResultWindow* resultWindow = g_gui.ShowSearchWindow();
+                resultWindow->Clear();
+
+                g_gui.CreateLoadBar("Searching for creatures...");
+
+                size_t creatureFoundCount = 0;
+                const std::string creatureNameStr = creatureName.ToStdString();
+
+                // Get the spawn XML data
+                pugi::xml_document doc;
+                pugi::xml_parse_result result = doc.load_file(map.getSpawnFilename().c_str());
+                
+                if (result) {
+                    pugi::xml_node spawnsNode = doc.child("spawns");
+                    if (spawnsNode) {
+                        // Iterate through all spawns
+                        for (pugi::xml_node spawnNode = spawnsNode.first_child(); spawnNode; spawnNode = spawnNode.next_sibling()) {
+                            if (as_lower_str(spawnNode.name()) != "spawn") {
+                                continue;
+                            }
+
+                            Position spawnPos;
+                            spawnPos.x = spawnNode.attribute("centerx").as_int();
+                            spawnPos.y = spawnNode.attribute("centery").as_int();
+                            spawnPos.z = spawnNode.attribute("centerz").as_int();
+
+                            // Check each creature in the spawn
+                            for (pugi::xml_node creatureNode = spawnNode.first_child(); creatureNode; creatureNode = creatureNode.next_sibling()) {
+                                const std::string& creatureNodeName = as_lower_str(creatureNode.name());
+                                if (creatureNodeName != "monster" && creatureNodeName != "npc") {
+                                    continue;
+                                }
+
+                                const std::string& name = creatureNode.attribute("name").as_string();
+                                if (name == creatureNameStr) {
+                                    // Calculate the actual position of the creature
+                                    Position creaturePos = spawnPos;
+                                    creaturePos.x += creatureNode.attribute("x").as_int();
+                                    creaturePos.y += creatureNode.attribute("y").as_int();
+
+                                    wxString description = wxString::Format("%s at (%d,%d,%d)", 
+                                        creatureName,
+                                        creaturePos.x,
+                                        creaturePos.y,
+                                        creaturePos.z);
+                                    resultWindow->AddPosition(description, creaturePos);
+                                    ++creatureFoundCount;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Also check for loose creatures (not in spawns)
+                for (MapIterator mit = map.begin(); mit != map.end(); ++mit) {
+                    Tile* tile = (*mit)->get();
+                    if (!tile) continue;
+
+                    if (tile->creature && !tile->spawn) { // Only check tiles with creatures that aren't part of a spawn
+                        if (tile->creature->getName() == creatureNameStr) {
+                            wxString description = wxString::Format("%s (loose) at (%d,%d,%d)", 
+                                creatureName,
+                                tile->getPosition().x,
+                                tile->getPosition().y,
+                                tile->getPosition().z);
+                            resultWindow->AddPosition(description, tile->getPosition());
+                            ++creatureFoundCount;
+                        }
+                    }
+                }
+
+                g_gui.DestroyLoadBar();
+
+                wxString resultMessage;
+                if (creatureFoundCount == 0) {
+                    resultMessage = wxString::Format("No %s found on the map.", creatureName);
+                    g_gui.PopupDialog("Search completed", resultMessage, wxOK);
+                } else {
+                    resultMessage = wxString::Format("Found %d instances of %s on the map.", 
+                        creatureFoundCount, creatureName);
+                    g_gui.SetStatusText(resultMessage);
+                }
+            }
+        }
     }
     dialog.Destroy();
 }
@@ -3558,4 +3650,13 @@ void MainMenuBar::OnMapValidateGround(wxCommandEvent& WXUNUSED(event)) {
             window->ShowGroundValidationDialog();
         }
     }
+}
+
+void MainMenuBar::OnCreateBorder(wxCommandEvent& WXUNUSED(event)) {
+	// Open the Border Editor to create or edit auto-borders
+	BorderEditorDialog* dialog = new BorderEditorDialog(g_gui.root, "Auto Border Editor");
+	dialog->Show();
+
+	// After editing borders, refresh view to show any changes
+	g_gui.RefreshView();
 }

@@ -42,6 +42,7 @@ namespace MenuBar {
 		UNDO,
 		REDO,
 		FIND_ITEM,
+		FIND_CREATURE,
 		REPLACE_ITEMS,
 		AUTOMAGIC,
 		SEARCH_ON_MAP_EVERYTHING,
@@ -171,6 +172,10 @@ namespace MenuBar {
 		MAP_MENU_REPLACE_ITEMS,
 		MAP_MENU_GENERATE_ISLAND,
 		MAP_VALIDATE_GROUND,
+		MAP_CREATE_BORDER,
+			
+
+
 	};
 }
 
@@ -240,6 +245,7 @@ public:
 	void OnCopy(wxCommandEvent& event);
 	void OnPaste(wxCommandEvent& event);
 	void OnSearchForItem(wxCommandEvent& event);
+	void OnSearchForCreature(wxCommandEvent& event);
 	void OnReplaceItems(wxCommandEvent& event);
 	void OnSearchForStuffOnMap(wxCommandEvent& event);
 	void OnSearchForZonesOnMap(wxCommandEvent& event);
@@ -313,6 +319,7 @@ public:
 	// Add to class MainMenuBar private section:
 	void OnRefreshItems(wxCommandEvent& event);
 	void OnGenerateIsland(wxCommandEvent& event);
+	void OnCreateBorder(wxCommandEvent& event);
 
 protected:
 	// Load and returns a menu item, also sets accelerator

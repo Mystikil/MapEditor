@@ -1058,11 +1058,7 @@ void BorderEditorDialog::SaveBorder() {
         materials.remove_child(existingBorder);
     }
     
-    // Add a comment with the name if provided
-    if (!name.IsEmpty()) {
-        std::string commentText = "<!-- " + nstr(name) + " -->";
-        materials.append_child(pugi::node_comment).set_value(commentText.c_str());
-    }
+ 
     
     // Create the new border node
     pugi::xml_node borderNode = materials.append_child("border");
