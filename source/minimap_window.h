@@ -54,6 +54,9 @@ public:
 	// Pre-cache method for building the entire minimap at load time
 	void PreCacheEntireMap();
 
+	// Method to initialize minimap loading progressively on startup
+	void InitialLoad();
+
 	void UpdateDrawnTiles(const PositionVector& positions);
 
 	static const int BLOCK_SIZE = 256;  // 256 IS most optimal 512 is too laggy and 64 is too small

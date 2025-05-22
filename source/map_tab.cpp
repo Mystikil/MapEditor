@@ -88,6 +88,11 @@ Map* MapTab::GetMap() const {
 	return &editor.map;
 }
 
+Position MapTab::GetScreenCenterPosition() const {
+	// Forward to the MapWindow implementation
+	return MapWindow::GetScreenCenterPosition();
+}
+
 void MapTab::VisibilityCheck() {
 	EditorTab* editorTab = aui->GetCurrentTab();
 	MapTab* mapTab = dynamic_cast<MapTab*>(editorTab);

@@ -99,6 +99,9 @@ MinimapWindow::MinimapWindow(wxWindow* parent) :
 	resize_timer.SetOwner(this, ID_RESIZE_TIMER);
 	
 	StartRenderThread();
+	
+	// Schedule initial loading after a short delay
+	update_timer.Start(100, true); // Start a one-shot timer for 100ms
 }
 
 MinimapWindow::~MinimapWindow() {
@@ -218,6 +221,15 @@ void MinimapWindow::RenderThreadFunction() {
 }
 
 void MinimapWindow::OnSize(wxSizeEvent& event) {
+	// Get the new size
+	wxSize newSize = event.GetSize();
+	
+	// If we're already at this size, skip
+	if (newSize == GetSize()) {
+		event.Skip();
+		return;
+	}
+	
 	// Mark that we're resizing
 	is_resizing = true;
 	
@@ -226,8 +238,20 @@ void MinimapWindow::OnSize(wxSizeEvent& event) {
 		resize_timer.Stop();
 	}
 	
+	// Create a new buffer at the new size
+	{
+		std::lock_guard<std::mutex> lock(buffer_mutex);
+		buffer = wxBitmap(newSize.GetWidth(), newSize.GetHeight());
+	}
+	
+	// Clear the block cache since we're changing size
+	{
+		std::lock_guard<std::mutex> lock(m_mutex);
+		m_blocks.clear();
+	}
+	
 	// Start the resize timer (will fire when resize is complete)
-	resize_timer.Start(300, true); // 300ms single-shot timer
+	resize_timer.Start(50, true); // Reduced to 50ms for faster response
 	
 	// Skip the event to allow default handling
 	event.Skip();
@@ -245,6 +269,13 @@ void MinimapWindow::OnClose(wxCloseEvent& event) {
 }
 
 void MinimapWindow::OnDelayedUpdate(wxTimerEvent& event) {
+	if (g_gui.IsEditorOpen()) {
+		// If editor is already open, load the minimap
+		if (event.GetId() == ID_MINIMAP_UPDATE) {
+			InitialLoad();
+		}
+	}
+	
 	needs_update = true;
 }
 
@@ -256,24 +287,31 @@ void MinimapWindow::OnResizeTimer(wxTimerEvent& event) {
 	// Resizing has stopped
 	is_resizing = false;
 	
-	// Clear the cache to adjust to new size
-	std::lock_guard<std::mutex> lock(m_mutex);
-	m_blocks.clear();
+	// Force a complete redraw with the new size
 	needs_update = true;
 	
-	// Force a refresh now that we're done resizing
+	// Request a full refresh
 	Refresh();
+	
+	// Trigger an immediate update
+	if (g_gui.IsEditorOpen()) {
+		Editor& editor = *g_gui.GetCurrentEditor();
+		MapCanvas* canvas = g_gui.GetCurrentMapTab()->GetCanvas();
+		
+		int center_x, center_y;
+		canvas->GetScreenCenter(&center_x, &center_y);
+		
+		// Force update of the render thread
+		last_center_x = center_x;
+		last_center_y = center_y;
+		last_floor = g_gui.GetCurrentFloor();
+	}
 }
 
 void MinimapWindow::OnPaint(wxPaintEvent& event) {
 	wxBufferedPaintDC dc(this);
 	dc.SetBackground(*wxBLACK_BRUSH);
 	dc.Clear();
-	
-	// During resizing, just show black background
-	if (is_resizing) {
-		return;
-	}
 	
 	if (!g_gui.IsEditorOpen()) return;
 	
@@ -284,40 +322,83 @@ void MinimapWindow::OnPaint(wxPaintEvent& event) {
 	canvas->GetScreenCenter(&centerX, &centerY);
 	int floor = g_gui.GetCurrentFloor();
 	
-	// Make sure we're always showing the correct floor
-	if (floor != last_floor) {
-		// Update the floor we're tracking
-		last_floor = floor;
-		Refresh(); // Ensure complete redraw with new floor
-	}
+	// Store current state
+	last_center_x = centerX;
+	last_center_y = centerY;
+	last_floor = floor;
 
-	int windowWidth = GetSize().GetWidth();
-	int windowHeight = GetSize().GetHeight();
+	// Get window dimensions
+	int windowWidth = wxPanel::GetSize().GetWidth();
+	int windowHeight = wxPanel::GetSize().GetHeight();
 	
-	// Calculate visible blocks
-	int startBlockX = (centerX - windowWidth/2) / BLOCK_SIZE;
-	int startBlockY = (centerY - windowHeight/2) / BLOCK_SIZE;
-	int endBlockX = (centerX + windowWidth/2) / BLOCK_SIZE + 1;
-	int endBlockY = (centerY + windowHeight/2) / BLOCK_SIZE + 1;
+	// Draw header with map info (300px high)
+	int headerHeight = 30;
+	wxRect headerRect(0, 0, windowWidth, headerHeight);
+	dc.SetBrush(wxBrush(wxColour(40, 40, 40)));
+	dc.SetPen(*wxTRANSPARENT_PEN);
+	dc.DrawRectangle(headerRect);
 	
-	// Draw visible blocks
-	for (int by = startBlockY; by <= endBlockY; ++by) {
-		for (int bx = startBlockX; bx <= endBlockX; ++bx) {
-			BlockPtr block = getBlock(bx * BLOCK_SIZE, by * BLOCK_SIZE);
-			// We need to update the block if:
-			// 1. It needs an update OR
-			// 2. It's from a different floor than the current one
-			if (block->needsUpdate || block->floor != floor) {
-				updateBlock(block, bx * BLOCK_SIZE, by * BLOCK_SIZE, floor);
-			}
-			
-			if (block->wasSeen) {
-				int drawX = bx * BLOCK_SIZE - (centerX - windowWidth/2);
-				int drawY = by * BLOCK_SIZE - (centerY - windowHeight/2);
-				dc.DrawBitmap(block->bitmap, drawX, drawY, false);
+	// Draw map info text
+	dc.SetTextForeground(wxColour(220, 220, 220));
+	wxFont font = dc.GetFont();
+	font.SetPointSize(9);
+	dc.SetFont(font);
+	
+	wxString mapInfo = wxString::Format("Floor: %d | Position: %d,%d", 
+		floor, centerX, centerY);
+	dc.DrawText(mapInfo, 10, 8);
+	
+	// Calculate visible area to draw
+	int startX = centerX - (windowWidth / 2);
+	int startY = centerY - ((windowHeight - headerHeight) / 2);
+	int endX = startX + windowWidth;
+	int endY = startY + (windowHeight - headerHeight);
+	
+	// Simple optimization - limit the rendering area to reasonable bounds
+	int mapWidth = editor.map.getWidth();
+	int mapHeight = editor.map.getHeight();
+	
+	startX = std::max(0, startX);
+	startY = std::max(0, startY);
+	endX = std::min(mapWidth, endX);
+	endY = std::min(mapHeight, endY);
+	
+	// Batch drawing by color for better performance
+	std::vector<std::vector<wxPoint>> colorPoints(256);
+	
+	// Iterate over visible area only
+	for (int y = startY; y < endY; ++y) {
+		for (int x = startX; x < endX; ++x) {
+			if (x >= 0 && y >= 0 && x < mapWidth && y < mapHeight) {
+				Tile* tile = editor.map.getTile(x, y, floor);
+				if (tile) {
+					uint8_t color = tile->getMiniMapColor();
+					if (color) {
+						int drawX = x - startX;
+						int drawY = y - startY + headerHeight;
+						colorPoints[color].push_back(wxPoint(drawX, drawY));
+					}
+				}
 			}
 		}
 	}
+	
+	// Draw all points for each color at once
+	for (int color = 0; color < 256; ++color) {
+		if (!colorPoints[color].empty()) {
+			dc.SetPen(*pens[color]);
+			for (const wxPoint& pt : colorPoints[color]) {
+				dc.DrawPoint(pt);
+			}
+		}
+	}
+	
+	// Draw a marker for the center position
+	dc.SetPen(wxPen(wxColour(255, 0, 0), 2));
+	int centerDrawX = windowWidth / 2;
+	int centerDrawY = (windowHeight - headerHeight) / 2 + headerHeight;
+	dc.DrawLine(centerDrawX - 5, centerDrawY, centerDrawX + 5, centerDrawY);
+	dc.DrawLine(centerDrawX, centerDrawY - 5, centerDrawX, centerDrawY + 5);
 }
 
 void MinimapWindow::OnMouseClick(wxMouseEvent& event) {
@@ -332,18 +413,21 @@ void MinimapWindow::OnMouseClick(wxMouseEvent& event) {
 	
 	int windowWidth = GetSize().GetWidth();
 	int windowHeight = GetSize().GetHeight();
+	int headerHeight = 30; // Match the header height from OnPaint
 	
-	// Calculate start positions like the original
-	last_start_x = centerX - (windowWidth / 2);
-	last_start_y = centerY - (windowHeight / 2);
+	// Calculate the map position clicked
+	int clickX = event.GetX();
+	int clickY = event.GetY() - headerHeight; // Adjust for header
 	
-	// Use the original click handling
-	int new_map_x = last_start_x + event.GetX();
-	int new_map_y = last_start_y + event.GetY();
+	int mapX = centerX - (windowWidth / 2) + clickX;
+	int mapY = centerY - ((windowHeight - headerHeight) / 2) + clickY;
 	
-	g_gui.SetScreenCenterPosition(Position(new_map_x, new_map_y, g_gui.GetCurrentFloor()));
-	Refresh();
-	g_gui.RefreshView();
+	// Only process clicks below the header
+	if (event.GetY() > headerHeight) {
+		g_gui.SetScreenCenterPosition(Position(mapX, mapY, g_gui.GetCurrentFloor()));
+		Refresh();
+		g_gui.RefreshView();
+	}
 }
 
 void MinimapWindow::OnKey(wxKeyEvent& event) {
@@ -417,63 +501,31 @@ void MinimapWindow::updateBlock(BlockPtr block, int startX, int startY, int floo
 }
 
 void MinimapWindow::ClearCache() {
-	std::lock_guard<std::mutex> lock(buffer_mutex);
-	buffer = wxBitmap(wxPanel::GetSize().GetWidth(), wxPanel::GetSize().GetHeight());
-	
-	std::lock_guard<std::mutex> blockLock(m_mutex);
-	m_blocks.clear();
-	needs_update = true;
+	// Simply refresh the window
+	Refresh();
 }
 
 void MinimapWindow::UpdateDrawnTiles(const PositionVector& positions) {
-	std::set<uint32_t> updatedBlocks;
-	
-	for(const Position& pos : positions) {
-		int blockX = pos.x / BLOCK_SIZE;
-		int blockY = pos.y / BLOCK_SIZE;
-		uint32_t index = getBlockIndex(blockX * BLOCK_SIZE, blockY * BLOCK_SIZE);
-		
-		if(updatedBlocks.insert(index).second) {
-			BlockPtr block = getBlock(blockX * BLOCK_SIZE, blockY * BLOCK_SIZE);
-			block->needsUpdate = true;
-		}
-	}
-	DelayedUpdate();
+	// Just refresh the entire minimap - it's faster than checking which tiles need updating
+	Refresh();
 }
 
 void MinimapWindow::PreCacheEntireMap() {
-	if (!g_gui.IsEditorOpen()) return;
-	
-	Editor& editor = *g_gui.GetCurrentEditor();
-	
-	// Calculate map bounds
-	int min_x = 0;
-	int min_y = 0;
-	int max_x = editor.getMapWidth();
-	int max_y = editor.getMapHeight();
-	
-	// Add a bit of padding
-	min_x = (min_x / BLOCK_SIZE) * BLOCK_SIZE;
-	min_y = (min_y / BLOCK_SIZE) * BLOCK_SIZE;
-	max_x = ((max_x / BLOCK_SIZE) + 1) * BLOCK_SIZE;
-	max_y = ((max_y / BLOCK_SIZE) + 1) * BLOCK_SIZE;
-	
-	// Create a load bar for the user
-	g_gui.CreateLoadBar("Caching minimap...");
-	
-	// Cache all floors
-	for (int floor = 0; floor <= MAP_MAX_LAYER; ++floor) {
-		int progress = floor * 100 / MAP_MAX_LAYER;
-		g_gui.SetLoadDone(progress, wxString::Format("Caching minimap (floor %d)...", floor));
-		
-		// Cache blocks for this floor
-		for (int y = min_y; y < max_y; y += BLOCK_SIZE) {
-			for (int x = min_x; x < max_x; x += BLOCK_SIZE) {
-				BlockPtr block = getBlock(x, y);
-				updateBlock(block, x, y, floor);
-			}
-		}
-	}
-	
-	g_gui.DestroyLoadBar();
+	// No longer needed - we'll just draw the visible area on demand
+	return;
 }
+
+void MinimapWindow::InitialLoad() {
+	if (!g_gui.IsEditorOpen()) {
+		return;
+	}
+
+	// Clear any existing cache
+	std::lock_guard<std::mutex> lock(m_mutex);
+	m_blocks.clear();
+	
+	// Force an immediate refresh
+	needs_update = true;
+	Refresh();
+}
+

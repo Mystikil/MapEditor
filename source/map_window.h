@@ -67,7 +67,7 @@ public:
 	void FitToMap();
 
 	// Screen position.
-	Position GetScreenCenterPosition();
+	Position GetScreenCenterPosition() const;
 	void SetScreenCenterPosition(const Position& position);
 	void GoToPreviousCenterPosition();
 

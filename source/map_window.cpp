@@ -176,7 +176,7 @@ void MapWindow::FitToMap() {
 	SetSize(editor.map.getWidth() * TileSize, editor.map.getHeight() * TileSize, true);
 }
 
-Position MapWindow::GetScreenCenterPosition() {
+Position MapWindow::GetScreenCenterPosition() const {
 	int x, y;
 	canvas->GetScreenCenter(&x, &y);
 	return Position(x, y, canvas->GetFloor());

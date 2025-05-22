@@ -1479,7 +1479,6 @@ void GUI::CreateMinimap() {
 		// Create new minimap
 		minimap = newd MinimapWindow(root);
 		minimap->SetSize(wxSize(640, 320));
-		minimap->Show(true);
 		
 		// Add as dockable pane with configurable size
 		wxAuiPaneInfo paneInfo;
@@ -1496,6 +1495,9 @@ void GUI::CreateMinimap() {
 		aui_manager->AddPane(minimap, paneInfo);
 		minimap_enabled = true;
 		aui_manager->Update();
+		
+		// Show the minimap immediately without caching
+		minimap->Show(true);
 	}
 }
 
@@ -1641,12 +1643,19 @@ void GUI::DestroyLoadBar() {
 		progressBar->Show(false);
 		currentProgress = -1;
 
-		progressBar->Destroy();
-		progressBar = nullptr;
+		// Store pointer temporarily to avoid null issues
+		wxGenericProgressDialog* tempBar = progressBar;
+		progressBar = nullptr; // Set to null before destruction to prevent recursion
+		
+		try {
+			tempBar->Destroy();
+		} catch(...) {
+			// Ignore any exceptions during destroy
+		}
 
-		if (root->IsActive()) {
+		if (root && root->IsActive()) {
 			root->Raise();
-		} else {
+		} else if (root) {
 			root->RequestUserAttention();
 		}
 	}
@@ -1694,7 +1703,20 @@ void GUI::UpdateMenubar() {
 void GUI::SetScreenCenterPosition(Position position) {
 	MapTab* mapTab = GetCurrentMapTab();
 	if (mapTab) {
+		// Store old position for comparison
+		Position oldPosition = mapTab->GetScreenCenterPosition();
+		
+		// Set the new position
 		mapTab->SetScreenCenterPosition(position);
+		
+		// Update minimap if the position changed significantly (e.g., teleport/goto)
+		// or if the floor changed
+		if (minimap && IsMinimapVisible() && 
+		   (abs(oldPosition.x - position.x) > 10 || 
+		    abs(oldPosition.y - position.y) > 10 || 
+		    oldPosition.z != position.z)) {
+			minimap->Refresh();
+		}
 	}
 }
 
@@ -1842,7 +1864,7 @@ void GUI::ChangeFloor(int new_floor) {
 		if (old_floor != new_floor) {
 			tab->GetCanvas()->ChangeFloor(new_floor);
 			
-			// Force minimap refresh when changing floors to ensure it shows the correct floor
+			// Only refresh minimap if it's visible - it will use cached blocks for the new floor
 			if (minimap && IsMinimapVisible()) {
 				minimap->Refresh();
 			}
