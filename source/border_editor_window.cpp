@@ -190,7 +190,7 @@ BEGIN_EVENT_TABLE(BorderPreviewPanel, wxPanel)
 END_EVENT_TABLE()
 
 BorderEditorDialog::BorderEditorDialog(wxWindow* parent, const wxString& title) :
-    wxDialog(parent, wxID_ANY, title, wxDefaultPosition, wxSize(800, 600),
+    wxDialog(parent, wxID_ANY, title, wxDefaultPosition, wxSize(650, 520),
         wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER),
     m_nextBorderId(1),
     m_activeTab(0) {
@@ -214,25 +214,28 @@ BorderEditorDialog::~BorderEditorDialog() {
 void BorderEditorDialog::CreateGUIControls() {
     wxBoxSizer* topSizer = new wxBoxSizer(wxVERTICAL);
     
-    // Common properties
+    // Common properties - more compact horizontal layout
     wxStaticBoxSizer* commonPropertiesSizer = new wxStaticBoxSizer(wxVERTICAL, this, "Common Properties");
     
-    wxFlexGridSizer* commonPropertiesGridSizer = new wxFlexGridSizer(3, 10, 10);
-    commonPropertiesGridSizer->AddGrowableCol(1, 1);
+    wxBoxSizer* commonPropertiesHorizSizer = new wxBoxSizer(wxHORIZONTAL);
     
-    // Border/Brush Name
-    commonPropertiesGridSizer->Add(new wxStaticText(this, wxID_ANY, "Name:"), 0, wxALIGN_CENTER_VERTICAL);
+    // Name field
+    wxBoxSizer* nameSizer = new wxBoxSizer(wxVERTICAL);
+    nameSizer->Add(new wxStaticText(this, wxID_ANY, "Name:"), 0);
     m_nameCtrl = new wxTextCtrl(this, wxID_ANY);
-    commonPropertiesGridSizer->Add(m_nameCtrl, 0, wxEXPAND);
-    commonPropertiesGridSizer->Add(new wxStaticText(this, wxID_ANY, "Descriptive name for the border/brush"), 0, wxALIGN_CENTER_VERTICAL);
+    m_nameCtrl->SetToolTip("Descriptive name for the border/brush");
+    nameSizer->Add(m_nameCtrl, 0, wxEXPAND | wxTOP, 2);
+    commonPropertiesHorizSizer->Add(nameSizer, 1, wxEXPAND | wxRIGHT, 10);
     
-    // Border ID
-    commonPropertiesGridSizer->Add(new wxStaticText(this, wxID_ANY, "ID:"), 0, wxALIGN_CENTER_VERTICAL);
+    // ID field
+    wxBoxSizer* idSizer = new wxBoxSizer(wxVERTICAL);
+    idSizer->Add(new wxStaticText(this, wxID_ANY, "ID:"), 0);
     m_idCtrl = new wxSpinCtrl(this, wxID_ANY, "1", wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS, 1, 1000);
-    commonPropertiesGridSizer->Add(m_idCtrl, 0, wxEXPAND);
-    commonPropertiesGridSizer->Add(new wxStaticText(this, wxID_ANY, "Unique identifier for this border/brush"), 0, wxALIGN_CENTER_VERTICAL);
+    m_idCtrl->SetToolTip("Unique identifier for this border/brush");
+    idSizer->Add(m_idCtrl, 0, wxEXPAND | wxTOP, 2);
+    commonPropertiesHorizSizer->Add(idSizer, 0, wxEXPAND);
     
-    commonPropertiesSizer->Add(commonPropertiesGridSizer, 0, wxEXPAND | wxALL, 5);
+    commonPropertiesSizer->Add(commonPropertiesHorizSizer, 0, wxEXPAND | wxALL, 5);
     topSizer->Add(commonPropertiesSizer, 0, wxEXPAND | wxALL, 5);
     
     // Create notebook with Border and Ground tabs
@@ -242,35 +245,48 @@ void BorderEditorDialog::CreateGUIControls() {
     m_borderPanel = new wxPanel(m_notebook);
     wxBoxSizer* borderSizer = new wxBoxSizer(wxVERTICAL);
     
-    // Border Properties
+    // Border Properties - more compact layout
     wxStaticBoxSizer* borderPropertiesSizer = new wxStaticBoxSizer(wxVERTICAL, m_borderPanel, "Border Properties");
     
-    wxFlexGridSizer* borderPropertiesGridSizer = new wxFlexGridSizer(3, 10, 10);
-    borderPropertiesGridSizer->AddGrowableCol(1, 1);
+    // Two-column horizontal layout
+    wxBoxSizer* borderPropsHorizSizer = new wxBoxSizer(wxHORIZONTAL);
+    
+    // Left column - Group and Type
+    wxBoxSizer* leftColSizer = new wxBoxSizer(wxVERTICAL);
     
     // Border Group
-    borderPropertiesGridSizer->Add(new wxStaticText(m_borderPanel, wxID_ANY, "Group:"), 0, wxALIGN_CENTER_VERTICAL);
+    wxBoxSizer* groupSizer = new wxBoxSizer(wxVERTICAL);
+    groupSizer->Add(new wxStaticText(m_borderPanel, wxID_ANY, "Group:"), 0);
     m_groupCtrl = new wxSpinCtrl(m_borderPanel, wxID_ANY, "0", wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS, 0, 1000);
-    borderPropertiesGridSizer->Add(m_groupCtrl, 0, wxEXPAND);
-    borderPropertiesGridSizer->Add(new wxStaticText(m_borderPanel, wxID_ANY, "Optional group identifier (0 = no group)"), 0, wxALIGN_CENTER_VERTICAL);
+    m_groupCtrl->SetToolTip("Optional group identifier (0 = no group)");
+    groupSizer->Add(m_groupCtrl, 0, wxEXPAND | wxTOP, 2);
+    leftColSizer->Add(groupSizer, 0, wxEXPAND | wxBOTTOM, 5);
     
     // Border Type
-    borderPropertiesGridSizer->Add(new wxStaticText(m_borderPanel, wxID_ANY, "Type:"), 0, wxALIGN_CENTER_VERTICAL);
-    wxBoxSizer* typeSizer = new wxBoxSizer(wxHORIZONTAL);
+    wxBoxSizer* typeSizer = new wxBoxSizer(wxVERTICAL);
+    typeSizer->Add(new wxStaticText(m_borderPanel, wxID_ANY, "Type:"), 0);
+    wxBoxSizer* checkboxSizer = new wxBoxSizer(wxHORIZONTAL);
     m_isOptionalCheck = new wxCheckBox(m_borderPanel, wxID_ANY, "Optional");
+    m_isOptionalCheck->SetToolTip("Marks this border as optional");
     m_isGroundCheck = new wxCheckBox(m_borderPanel, wxID_ANY, "Ground");
-    typeSizer->Add(m_isOptionalCheck, 0, wxRIGHT, 10);
-    typeSizer->Add(m_isGroundCheck, 0);
-    borderPropertiesGridSizer->Add(typeSizer, 0, wxEXPAND);
-    borderPropertiesGridSizer->Add(new wxStaticText(m_borderPanel, wxID_ANY, "Optional or Ground border type"), 0, wxALIGN_CENTER_VERTICAL);
+    m_isGroundCheck->SetToolTip("Marks this border as a ground border");
+    checkboxSizer->Add(m_isOptionalCheck, 0, wxRIGHT, 10);
+    checkboxSizer->Add(m_isGroundCheck, 0);
+    typeSizer->Add(checkboxSizer, 0, wxEXPAND | wxTOP, 2);
+    leftColSizer->Add(typeSizer, 0, wxEXPAND);
     
-    // Existing borders dropdown
-    borderPropertiesGridSizer->Add(new wxStaticText(m_borderPanel, wxID_ANY, "Load Existing:"), 0, wxALIGN_CENTER_VERTICAL);
+    borderPropsHorizSizer->Add(leftColSizer, 1, wxEXPAND | wxRIGHT, 10);
+    
+    // Right column - Load Existing
+    wxBoxSizer* rightColSizer = new wxBoxSizer(wxVERTICAL);
+    rightColSizer->Add(new wxStaticText(m_borderPanel, wxID_ANY, "Load Existing:"), 0);
     m_existingBordersCombo = new wxComboBox(m_borderPanel, wxID_ANY, "", wxDefaultPosition, wxDefaultSize, 0, nullptr, wxCB_READONLY | wxCB_DROPDOWN);
-    borderPropertiesGridSizer->Add(m_existingBordersCombo, 0, wxEXPAND);
-    borderPropertiesGridSizer->Add(new wxStaticText(m_borderPanel, wxID_ANY, "Load an existing border as template"), 0, wxALIGN_CENTER_VERTICAL);
+    m_existingBordersCombo->SetToolTip("Load an existing border as template");
+    rightColSizer->Add(m_existingBordersCombo, 0, wxEXPAND | wxTOP, 2);
     
-    borderPropertiesSizer->Add(borderPropertiesGridSizer, 0, wxEXPAND | wxALL, 5);
+    borderPropsHorizSizer->Add(rightColSizer, 1, wxEXPAND);
+    
+    borderPropertiesSizer->Add(borderPropsHorizSizer, 0, wxEXPAND | wxALL, 5);
     borderSizer->Add(borderPropertiesSizer, 0, wxEXPAND | wxALL, 5);
     
     // Border content area with grid and preview
@@ -332,107 +348,157 @@ void BorderEditorDialog::CreateGUIControls() {
     m_groundPanel = new wxPanel(m_notebook);
     wxBoxSizer* groundSizer = new wxBoxSizer(wxVERTICAL);
     
-    // Ground Brush Properties
+    // Ground Brush Properties - more compact layout
     wxStaticBoxSizer* groundPropertiesSizer = new wxStaticBoxSizer(wxVERTICAL, m_groundPanel, "Ground Brush Properties");
     
-    wxFlexGridSizer* groundPropertiesGridSizer = new wxFlexGridSizer(3, 10, 10);
-    groundPropertiesGridSizer->AddGrowableCol(1, 1);
+    // Two rows of two columns each
+    wxBoxSizer* topRowSizer = new wxBoxSizer(wxHORIZONTAL);
     
     // Tileset selector
-    groundPropertiesGridSizer->Add(new wxStaticText(m_groundPanel, wxID_ANY, "Tileset:"), 0, wxALIGN_CENTER_VERTICAL);
+    wxBoxSizer* tilesetSizer = new wxBoxSizer(wxVERTICAL);
+    tilesetSizer->Add(new wxStaticText(m_groundPanel, wxID_ANY, "Tileset:"), 0);
     m_tilesetChoice = new wxChoice(m_groundPanel, wxID_ANY);
-    groundPropertiesGridSizer->Add(m_tilesetChoice, 0, wxEXPAND);
-    groundPropertiesGridSizer->Add(new wxStaticText(m_groundPanel, wxID_ANY, "Select tileset to add this brush to"), 0, wxALIGN_CENTER_VERTICAL);
+    m_tilesetChoice->SetToolTip("Select tileset to add this brush to");
+    tilesetSizer->Add(m_tilesetChoice, 0, wxEXPAND | wxTOP, 2);
+    topRowSizer->Add(tilesetSizer, 1, wxEXPAND | wxRIGHT, 10);
     
     // Server Look ID
-    groundPropertiesGridSizer->Add(new wxStaticText(m_groundPanel, wxID_ANY, "Server Look ID:"), 0, wxALIGN_CENTER_VERTICAL);
+    wxBoxSizer* serverIdSizer = new wxBoxSizer(wxVERTICAL);
+    serverIdSizer->Add(new wxStaticText(m_groundPanel, wxID_ANY, "Server Look ID:"), 0);
     m_serverLookIdCtrl = new wxSpinCtrl(m_groundPanel, wxID_ANY, "0", wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS, 0, 65535);
-    groundPropertiesGridSizer->Add(m_serverLookIdCtrl, 0, wxEXPAND);
-    groundPropertiesGridSizer->Add(new wxStaticText(m_groundPanel, wxID_ANY, "Server-side item ID"), 0, wxALIGN_CENTER_VERTICAL);
+    m_serverLookIdCtrl->SetToolTip("Server-side item ID");
+    serverIdSizer->Add(m_serverLookIdCtrl, 0, wxEXPAND | wxTOP, 2);
+    topRowSizer->Add(serverIdSizer, 1, wxEXPAND);
+    
+    groundPropertiesSizer->Add(topRowSizer, 0, wxEXPAND | wxALL, 5);
+    
+    // Second row
+    wxBoxSizer* bottomRowSizer = new wxBoxSizer(wxHORIZONTAL);
     
     // Z-Order
-    groundPropertiesGridSizer->Add(new wxStaticText(m_groundPanel, wxID_ANY, "Z-Order:"), 0, wxALIGN_CENTER_VERTICAL);
+    wxBoxSizer* zOrderSizer = new wxBoxSizer(wxVERTICAL);
+    zOrderSizer->Add(new wxStaticText(m_groundPanel, wxID_ANY, "Z-Order:"), 0);
     m_zOrderCtrl = new wxSpinCtrl(m_groundPanel, wxID_ANY, "0", wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS, 0, 10000);
-    groundPropertiesGridSizer->Add(m_zOrderCtrl, 0, wxEXPAND);
-    groundPropertiesGridSizer->Add(new wxStaticText(m_groundPanel, wxID_ANY, "Z-Order for display"), 0, wxALIGN_CENTER_VERTICAL);
+    m_zOrderCtrl->SetToolTip("Z-Order for display");
+    zOrderSizer->Add(m_zOrderCtrl, 0, wxEXPAND | wxTOP, 2);
+    bottomRowSizer->Add(zOrderSizer, 1, wxEXPAND | wxRIGHT, 10);
     
     // Existing ground brushes dropdown
-    groundPropertiesGridSizer->Add(new wxStaticText(m_groundPanel, wxID_ANY, "Load Existing:"), 0, wxALIGN_CENTER_VERTICAL);
+    wxBoxSizer* existingSizer = new wxBoxSizer(wxVERTICAL);
+    existingSizer->Add(new wxStaticText(m_groundPanel, wxID_ANY, "Load Existing:"), 0);
     m_existingGroundBrushesCombo = new wxComboBox(m_groundPanel, wxID_ANY + 100, "", wxDefaultPosition, wxDefaultSize, 0, nullptr, wxCB_READONLY | wxCB_DROPDOWN);
-    groundPropertiesGridSizer->Add(m_existingGroundBrushesCombo, 0, wxEXPAND);
-    groundPropertiesGridSizer->Add(new wxStaticText(m_groundPanel, wxID_ANY, "Load an existing ground brush as template"), 0, wxALIGN_CENTER_VERTICAL);
+    m_existingGroundBrushesCombo->SetToolTip("Load an existing ground brush as template");
+    existingSizer->Add(m_existingGroundBrushesCombo, 0, wxEXPAND | wxTOP, 2);
+    bottomRowSizer->Add(existingSizer, 1, wxEXPAND);
     
-    groundPropertiesSizer->Add(groundPropertiesGridSizer, 0, wxEXPAND | wxALL, 5);
+    groundPropertiesSizer->Add(bottomRowSizer, 0, wxEXPAND | wxALL, 5);
+    
     groundSizer->Add(groundPropertiesSizer, 0, wxEXPAND | wxALL, 5);
     
     // Ground Items
     wxStaticBoxSizer* groundItemsSizer = new wxStaticBoxSizer(wxVERTICAL, m_groundPanel, "Ground Items");
     
-    // List of ground items
-    m_groundItemsList = new wxListBox(m_groundPanel, ID_GROUND_ITEM_LIST, wxDefaultPosition, wxDefaultSize, 0, nullptr, wxLB_SINGLE);
-    groundItemsSizer->Add(m_groundItemsList, 1, wxEXPAND | wxALL, 5);
+    // List of ground items - set a smaller height
+    m_groundItemsList = new wxListBox(m_groundPanel, ID_GROUND_ITEM_LIST, wxDefaultPosition, wxSize(-1, 100), 0, nullptr, wxLB_SINGLE);
+    groundItemsSizer->Add(m_groundItemsList, 0, wxEXPAND | wxALL, 5);
     
     // Controls for adding/removing ground items
-    wxBoxSizer* groundItemControlsSizer = new wxBoxSizer(wxHORIZONTAL);
-    groundItemControlsSizer->Add(new wxStaticText(m_groundPanel, wxID_ANY, "Item ID:"), 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 5);
+    wxBoxSizer* groundItemRowSizer = new wxBoxSizer(wxHORIZONTAL);
+    
+    // Left side - item ID and chance
+    wxBoxSizer* itemDetailsSizer = new wxBoxSizer(wxHORIZONTAL);
+    
+    // Item ID input
+    wxBoxSizer* itemIdSizer = new wxBoxSizer(wxVERTICAL);
+    itemIdSizer->Add(new wxStaticText(m_groundPanel, wxID_ANY, "Item ID:"), 0);
     m_groundItemIdCtrl = new wxSpinCtrl(m_groundPanel, wxID_ANY, "0", wxDefaultPosition, wxSize(80, -1), wxSP_ARROW_KEYS, 0, 65535);
-    groundItemControlsSizer->Add(m_groundItemIdCtrl, 0, wxRIGHT, 5);
+    m_groundItemIdCtrl->SetToolTip("ID of the item to add");
+    itemIdSizer->Add(m_groundItemIdCtrl, 0, wxEXPAND | wxTOP, 2);
+    itemDetailsSizer->Add(itemIdSizer, 0, wxEXPAND | wxRIGHT, 5);
     
-    groundItemControlsSizer->Add(new wxStaticText(m_groundPanel, wxID_ANY, "Chance:"), 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 5);
-    m_groundItemChanceCtrl = new wxSpinCtrl(m_groundPanel, wxID_ANY, "10", wxDefaultPosition, wxSize(80, -1), wxSP_ARROW_KEYS, 1, 10000);
-    groundItemControlsSizer->Add(m_groundItemChanceCtrl, 0, wxRIGHT, 5);
+    // Chance input
+    wxBoxSizer* chanceSizer = new wxBoxSizer(wxVERTICAL);
+    chanceSizer->Add(new wxStaticText(m_groundPanel, wxID_ANY, "Chance:"), 0);
+    m_groundItemChanceCtrl = new wxSpinCtrl(m_groundPanel, wxID_ANY, "10", wxDefaultPosition, wxSize(60, -1), wxSP_ARROW_KEYS, 1, 10000);
+    m_groundItemChanceCtrl->SetToolTip("Chance of this item appearing");
+    chanceSizer->Add(m_groundItemChanceCtrl, 0, wxEXPAND | wxTOP, 2);
+    itemDetailsSizer->Add(chanceSizer, 0, wxEXPAND);
     
+    groundItemRowSizer->Add(itemDetailsSizer, 1, wxEXPAND | wxRIGHT, 10);
+    
+    // Right side - buttons
+    wxBoxSizer* itemButtonsSizer = new wxBoxSizer(wxVERTICAL);
+    itemButtonsSizer->AddStretchSpacer();
+    
+    wxBoxSizer* buttonsSizer = new wxBoxSizer(wxHORIZONTAL);
     wxButton* groundBrowseButton = new wxButton(m_groundPanel, wxID_FIND + 100, "Browse...", wxDefaultPosition, wxDefaultSize, wxBU_EXACTFIT);
-    groundItemControlsSizer->Add(groundBrowseButton, 0, wxRIGHT, 5);
-    wxButton* addGroundItemButton = new wxButton(m_groundPanel, wxID_ADD + 100, "Add Item", wxDefaultPosition, wxDefaultSize, wxBU_EXACTFIT);
-    groundItemControlsSizer->Add(addGroundItemButton, 0, wxRIGHT, 5);
-    wxButton* removeGroundItemButton = new wxButton(m_groundPanel, wxID_REMOVE, "Remove Item", wxDefaultPosition, wxDefaultSize, wxBU_EXACTFIT);
-    groundItemControlsSizer->Add(removeGroundItemButton, 0);
+    groundBrowseButton->SetToolTip("Browse for an item");
+    buttonsSizer->Add(groundBrowseButton, 0, wxRIGHT, 5);
     
-    groundItemsSizer->Add(groundItemControlsSizer, 0, wxEXPAND | wxALL, 5);
-    groundSizer->Add(groundItemsSizer, 1, wxEXPAND | wxALL, 5);
+    wxButton* addGroundItemButton = new wxButton(m_groundPanel, wxID_ADD + 100, "Add", wxDefaultPosition, wxDefaultSize, wxBU_EXACTFIT);
+    addGroundItemButton->SetToolTip("Add this item to the list");
+    buttonsSizer->Add(addGroundItemButton, 0, wxRIGHT, 5);
+    
+    wxButton* removeGroundItemButton = new wxButton(m_groundPanel, wxID_REMOVE, "Remove", wxDefaultPosition, wxDefaultSize, wxBU_EXACTFIT);
+    removeGroundItemButton->SetToolTip("Remove the selected item");
+    buttonsSizer->Add(removeGroundItemButton, 0);
+    
+    itemButtonsSizer->Add(buttonsSizer, 0, wxEXPAND);
+    groundItemRowSizer->Add(itemButtonsSizer, 0, wxEXPAND);
+    
+    groundItemsSizer->Add(groundItemRowSizer, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 5);
+    groundSizer->Add(groundItemsSizer, 0, wxEXPAND | wxALL, 5); // Changed from 1 to 0 to not expand
     
     // Grid and border selection for ground tab
     wxStaticBoxSizer* groundBorderSizer = new wxStaticBoxSizer(wxVERTICAL, m_groundPanel, "Border for Ground Brush");
     
-    wxFlexGridSizer* groundBorderGridSizer = new wxFlexGridSizer(3, 10, 10);
-    groundBorderGridSizer->AddGrowableCol(1, 1);
+    // First row - Border alignment and 'to none' option
+    wxBoxSizer* borderRow1 = new wxBoxSizer(wxHORIZONTAL);
     
     // Border alignment
-    groundBorderGridSizer->Add(new wxStaticText(m_groundPanel, wxID_ANY, "Border Alignment:"), 0, wxALIGN_CENTER_VERTICAL);
+    wxBoxSizer* alignSizer = new wxBoxSizer(wxVERTICAL);
+    alignSizer->Add(new wxStaticText(m_groundPanel, wxID_ANY, "Border Alignment:"), 0);
     wxArrayString alignOptions;
     alignOptions.Add("outer");
     alignOptions.Add("inner");
     m_borderAlignmentChoice = new wxChoice(m_groundPanel, wxID_ANY, wxDefaultPosition, wxDefaultSize, alignOptions);
     m_borderAlignmentChoice->SetSelection(0); // Default to "outer"
-    groundBorderGridSizer->Add(m_borderAlignmentChoice, 0, wxEXPAND);
-    groundBorderGridSizer->Add(new wxStaticText(m_groundPanel, wxID_ANY, "Alignment type for the border"), 0, wxALIGN_CENTER_VERTICAL);
+    m_borderAlignmentChoice->SetToolTip("Alignment type for the border");
+    alignSizer->Add(m_borderAlignmentChoice, 0, wxEXPAND | wxTOP, 2);
+    borderRow1->Add(alignSizer, 1, wxEXPAND | wxRIGHT, 10);
     
-    // "to none" option
-    groundBorderGridSizer->Add(new wxStaticText(m_groundPanel, wxID_ANY, "Include 'to none':"), 0, wxALIGN_CENTER_VERTICAL);
-    m_includeToNoneCheck = new wxCheckBox(m_groundPanel, wxID_ANY, "Add border with 'to none' attribute");
+    // Border options (checkboxes)
+    wxBoxSizer* optionsSizer = new wxBoxSizer(wxVERTICAL);
+    optionsSizer->Add(new wxStaticText(m_groundPanel, wxID_ANY, "Border Options:"), 0);
+    wxBoxSizer* checksSizer = new wxBoxSizer(wxHORIZONTAL);
+    m_includeToNoneCheck = new wxCheckBox(m_groundPanel, wxID_ANY, "To None");
     m_includeToNoneCheck->SetValue(true); // Default to checked
-    groundBorderGridSizer->Add(m_includeToNoneCheck, 0, wxEXPAND);
-    groundBorderGridSizer->Add(new wxStaticText(m_groundPanel, wxID_ANY, "Adds additional border with 'to none' attribute"), 0, wxALIGN_CENTER_VERTICAL);
+    m_includeToNoneCheck->SetToolTip("Adds additional border with 'to none' attribute");
+    m_includeInnerCheck = new wxCheckBox(m_groundPanel, wxID_ANY, "Inner Border");
+    m_includeInnerCheck->SetToolTip("Adds additional inner border with same ID");
+    checksSizer->Add(m_includeToNoneCheck, 0, wxRIGHT, 10);
+    checksSizer->Add(m_includeInnerCheck, 0);
+    optionsSizer->Add(checksSizer, 0, wxEXPAND | wxTOP, 2);
+    borderRow1->Add(optionsSizer, 1, wxEXPAND);
     
-    // "inner" option
-    groundBorderGridSizer->Add(new wxStaticText(m_groundPanel, wxID_ANY, "Include inner border:"), 0, wxALIGN_CENTER_VERTICAL);
-    m_includeInnerCheck = new wxCheckBox(m_groundPanel, wxID_ANY, "Add inner border");
-    groundBorderGridSizer->Add(m_includeInnerCheck, 0, wxEXPAND);
-    groundBorderGridSizer->Add(new wxStaticText(m_groundPanel, wxID_ANY, "Adds additional inner border with same ID"), 0, wxALIGN_CENTER_VERTICAL);
+    groundBorderSizer->Add(borderRow1, 0, wxEXPAND | wxALL, 5);
     
-    groundBorderGridSizer->Add(new wxStaticText(m_groundPanel, wxID_ANY, "Border ID:"), 0, wxALIGN_CENTER_VERTICAL);
-    wxStaticText* borderId = new wxStaticText(m_groundPanel, wxID_ANY, "Uses the ID specified in 'Common Properties' section at top");
+    // Border ID notice (red text)
+    wxBoxSizer* borderIdSizer = new wxBoxSizer(wxHORIZONTAL);
+    wxStaticText* borderIdLabel = new wxStaticText(m_groundPanel, wxID_ANY, "Border ID:");
+    borderIdSizer->Add(borderIdLabel, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 5);
+    wxStaticText* borderId = new wxStaticText(m_groundPanel, wxID_ANY, "Uses the ID specified in 'Common Properties' section");
     borderId->SetForegroundColour(*wxRED);
-    groundBorderGridSizer->Add(borderId, 0, wxEXPAND);
-    groundBorderGridSizer->Add(new wxStaticText(m_groundPanel, wxID_ANY, "Important: Set the ID in the Common Properties section"), 0, wxALIGN_CENTER_VERTICAL);
+    borderIdSizer->Add(borderId, 1, wxALIGN_CENTER_VERTICAL);
     
-    wxBoxSizer* instructionSizer = new wxBoxSizer(wxVERTICAL);
-    instructionSizer->Add(new wxStaticText(m_groundPanel, wxID_ANY, "Use the grid in the Border tab to define borders for this ground brush."), 0, wxEXPAND | wxBOTTOM, 5);
-    instructionSizer->Add(new wxStaticText(m_groundPanel, wxID_ANY, "The Border ID from Common Properties will be used even if no border items are defined."), 0, wxEXPAND | wxBOTTOM, 5);
+    groundBorderSizer->Add(borderIdSizer, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 5);
     
-    groundBorderSizer->Add(groundBorderGridSizer, 0, wxEXPAND | wxALL, 5);
-    groundBorderSizer->Add(instructionSizer, 0, wxEXPAND | wxALL, 5);
+    // Grid use instruction - shorter text
+    wxStaticText* gridInstructions = new wxStaticText(m_groundPanel, wxID_ANY, 
+        "Use the grid in the Border tab to define borders for this ground brush.");
+    gridInstructions->SetForegroundColour(*wxBLUE);
+    groundBorderSizer->Add(gridInstructions, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 5);
+    
     groundSizer->Add(groundBorderSizer, 0, wxEXPAND | wxALL, 5);
     
     // Bottom buttons for ground tab
