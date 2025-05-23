@@ -26,7 +26,7 @@ WelcomeDialog::WelcomeDialog(const wxString& title_text, const wxString& version
 	wxDialog(nullptr, wxID_ANY, "", wxDefaultPosition, size) {
 	Centre();
 	wxColour base_colour = wxColor(250, 250, 250);
-	m_welcome_dialog_panel = newd WelcomeDialogPanel(this, GetClientSize(), title_text, version_text, base_colour, wxBitmap(rme_logo.ConvertToImage().Scale(FROM_DIP(this, 128), FROM_DIP(this, 128))), recent_files);
+	m_welcome_dialog_panel = newd WelcomeDialogPanel(this, GetClientSize(), title_text, version_text, base_colour, wxBitmap(rme_logo.ConvertToImage().Scale(FROM_DIP(this, 48), FROM_DIP(this, 48))), recent_files);
 }
 
 void WelcomeDialog::OnButtonClicked(const wxMouseEvent& event) {
@@ -137,7 +137,7 @@ void WelcomeDialogPanel::OnPaint(const wxPaintEvent& event) {
 	dc.SetPen(wxPen(m_background_colour));
 	dc.DrawRectangle(wxRect(wxPoint(0, 0), GetClientSize()));
 
-	dc.DrawBitmap(m_rme_logo, wxPoint(GetSize().x / 4 - m_rme_logo.GetWidth() / 2, FROM_DIP(this, 10)), true);
+	dc.DrawBitmap(m_rme_logo, wxPoint(GetSize().x / 4 - m_rme_logo.GetWidth() / 2, FROM_DIP(this, 40)), true);
 
 	wxFont font = GetFont();
 	font.SetPointSize(18);
@@ -145,12 +145,12 @@ void WelcomeDialogPanel::OnPaint(const wxPaintEvent& event) {
 	wxSize header_size = dc.GetTextExtent(m_title_text);
 	wxSize header_point(GetSize().x / 4, GetSize().y / 4);
 	dc.SetTextForeground(m_text_colour);
-	dc.DrawText(m_title_text, wxPoint(header_point.x - header_size.x / 2, header_point.y+25));
+	dc.DrawText(m_title_text, wxPoint(header_point.x - header_size.x / 2, header_point.y));
 
 	dc.SetFont(GetFont());
 	wxSize version_size = dc.GetTextExtent(m_version_text);
 	dc.SetTextForeground(m_text_colour.ChangeLightness(110));
-	dc.DrawText(m_version_text, wxPoint(header_point.x - version_size.x / 2, header_point.y + header_size.y + 30));
+	dc.DrawText(m_version_text, wxPoint(header_point.x - version_size.x / 2, header_point.y + header_size.y + 10));
 }
 
 WelcomeDialogButton::WelcomeDialogButton(wxWindow* parent, const wxPoint& pos, const wxSize& size, const wxColour& base_colour, const wxString& text) :
