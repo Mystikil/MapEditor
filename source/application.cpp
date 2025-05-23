@@ -50,6 +50,7 @@
 #endif
 
 #include "../brushes/icon/editor_icon.xpm"
+#include "color_utils.h"
 
 BEGIN_EVENT_TABLE(MainFrame, wxFrame)
 EVT_CLOSE(MainFrame::OnExit)
@@ -196,7 +197,15 @@ bool Application::OnInit() {
 	// Load palette
 	g_gui.LoadPerspective();
 
-	wxIcon icon(editor_icon);
+	// Create icon and apply color shift
+	wxBitmap iconBitmap(editor_icon);
+	wxImage iconImage = iconBitmap.ConvertToImage();
+	ColorUtils::ShiftHue(iconImage, ColorUtils::GetRandomHueShift());
+	iconBitmap = wxBitmap(iconImage);
+	
+	// Convert to icon for the window and set both
+	wxIcon icon;
+	icon.CopyFromBitmap(iconBitmap);
 	g_gui.root->SetIcon(icon);
 
 	// Create a unique log directory for this session
@@ -218,9 +227,9 @@ bool Application::OnInit() {
 		sessionLog.close();
 	}
 
-	// Restore critical startup code - display welcome dialog or show main window
+	// Show welcome dialog with color-shifted bitmap
 	if (g_settings.getInteger(Config::WELCOME_DIALOG) == 1 && m_file_to_open == wxEmptyString) {
-		g_gui.ShowWelcomeDialog(icon);
+		g_gui.ShowWelcomeDialog(iconBitmap);
 	} else {
 		g_gui.root->Show();
 	}
