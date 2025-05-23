@@ -16,6 +16,7 @@
 //////////////////////////////////////////////////////////////////////
 
 #include "main.h"
+#include "gui.h"
 
 #include "table_brush.h"
 
@@ -150,7 +151,11 @@ void TableBrush::draw(BaseMap* map, Tile* tile, void* parameter) {
 	}
 
 	if (type != 0) {
-		tile->addItem(Item::Create(type));
+		Item* new_item = Item::Create(type);
+		if (new_item && g_gui.IsCurrentActionIDEnabled()) {
+			new_item->setActionID(g_gui.GetCurrentActionID());
+		}
+		tile->addItem(new_item);
 	}
 }
 

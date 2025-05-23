@@ -77,6 +77,16 @@ public:
 	RecentMapsPanel(wxWindow* parent, WelcomeDialog* dialog, const wxColour& base_colour, const std::vector<wxString>& recent_files);
 };
 
+class WhatsNewPanel : public wxPanel {
+public:
+	WhatsNewPanel(wxWindow* parent, const wxColour& base_colour);
+	void LoadWhatsNew();
+private:
+	wxTextCtrl* whats_new_text;
+	wxColour m_text_colour;
+	wxColour m_background_colour;
+};
+
 class RecentItem : public wxPanel {
 public:
 	RecentItem(wxWindow* parent, const wxColour& base_colour, const wxString& item_name);

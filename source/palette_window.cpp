@@ -40,6 +40,8 @@ EVT_CHOICEBOOK_PAGE_CHANGED(PALETTE_CHOICEBOOK, PaletteWindow::OnPageChanged)
 EVT_CLOSE(PaletteWindow::OnClose)
 
 EVT_KEY_DOWN(PaletteWindow::OnKey)
+EVT_TEXT(wxID_ANY, PaletteWindow::OnActionIDChange)
+EVT_CHECKBOX(wxID_ANY, PaletteWindow::OnActionIDToggle)
 END_EVENT_TABLE()
 
 PaletteWindow::PaletteWindow(wxWindow* parent, const TilesetContainer& tilesets) :
@@ -52,10 +54,29 @@ PaletteWindow::PaletteWindow(wxWindow* parent, const TilesetContainer& tilesets)
 	creature_palette(nullptr),
 	house_palette(nullptr),
 	waypoint_palette(nullptr),
-	raw_palette(nullptr) {
+	raw_palette(nullptr),
+	action_id_input(nullptr),
+	action_id_checkbox(nullptr),
+	action_id(0),
+	action_id_enabled(false) {
 	
 	// Allow resizing but maintain minimum size
 	SetMinSize(wxSize(225, 250));
+	
+	// Create main sizer
+	wxSizer* main_sizer = new wxBoxSizer(wxVERTICAL);
+
+	// Create action ID controls
+	wxSizer* action_id_sizer = new wxBoxSizer(wxHORIZONTAL);
+	action_id_input = new wxTextCtrl(this, wxID_ANY, "0", wxDefaultPosition, wxSize(60, -1));
+	action_id_input->SetToolTip("Enter action ID (0-65535)");
+	action_id_checkbox = new wxCheckBox(this, wxID_ANY, "Enable Action ID");
+	action_id_checkbox->SetToolTip("When enabled, placed items will have this action ID");
+	
+	action_id_sizer->Add(action_id_input, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 5);
+	action_id_sizer->Add(action_id_checkbox, 0, wxALIGN_CENTER_VERTICAL);
+	
+	main_sizer->Add(action_id_sizer, 0, wxEXPAND | wxALL, 5);
 	
 	// Create choicebook with EXPAND flag to fill available space
 	choicebook = new wxChoicebook(this, PALETTE_CHOICEBOOK, wxDefaultPosition, wxDefaultSize);
@@ -84,10 +105,9 @@ PaletteWindow::PaletteWindow(wxWindow* parent, const TilesetContainer& tilesets)
 	raw_palette = static_cast<BrushPalettePanel*>(CreateRAWPalette(choicebook, tilesets));
 	choicebook->AddPage(raw_palette, raw_palette->GetName());
 
-	// Setup sizers to allow resizing
-	wxSizer* sizer = new wxBoxSizer(wxVERTICAL);
-	sizer->Add(choicebook, 1, wxEXPAND | wxALL, 2);
-	SetSizer(sizer);
+	// Add choicebook to main sizer
+	main_sizer->Add(choicebook, 1, wxEXPAND | wxALL, 2);
+	SetSizer(main_sizer);
 
 	// Load first page
 	LoadCurrentContents();
@@ -486,4 +506,24 @@ void PaletteWindow::OnClose(wxCloseEvent& event) {
 		Show(false);
 		event.Veto(true);
 	}
+}
+
+void PaletteWindow::OnActionIDChange(wxCommandEvent& event) {
+	wxString value = action_id_input->GetValue();
+	long val;
+	if (value.ToLong(&val)) {
+		if (val >= 0 && val <= 65535) {
+			action_id = static_cast<uint16_t>(val);
+		} else {
+			// Reset to previous valid value
+			action_id_input->SetValue(wxString::Format("%d", action_id));
+		}
+	} else {
+		// Reset to previous valid value
+		action_id_input->SetValue(wxString::Format("%d", action_id));
+	}
+}
+
+void PaletteWindow::OnActionIDToggle(wxCommandEvent& event) {
+	action_id_enabled = action_id_checkbox->GetValue();
 }

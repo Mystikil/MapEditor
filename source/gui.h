@@ -407,7 +407,7 @@ public:
 	void SelectPalettePage(PaletteType pt);
 
 	// Returns primary palette
-	PaletteWindow* GetPalette();
+	PaletteWindow* GetPalette() const;
 	// Returns list of all palette, first in the list is primary
 	const std::list<PaletteWindow*>& GetPalettes();
 
@@ -529,6 +529,10 @@ public:
 	bool last_search_on_selection;
 	wxString last_ignored_ids_text;
 	bool last_ignored_ids_enabled;
+
+	// Add after line 400 (public members section)
+	uint16_t GetCurrentActionID() const;
+	bool IsCurrentActionIDEnabled() const;
 };
 
 extern GUI g_gui;

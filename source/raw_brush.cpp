@@ -16,6 +16,7 @@
 //////////////////////////////////////////////////////////////////////
 
 #include "main.h"
+#include "gui.h"
 
 #include "raw_brush.h"
 #include "settings.h"
@@ -97,5 +98,11 @@ void RAWBrush::draw(BaseMap* map, Tile* tile, void* parameter) {
 			}
 		}
 	}
-	tile->addItem(Item::Create(itemtype->id));
+	Item* new_item = Item::Create(itemtype->id);
+	if (new_item) {
+		if (g_gui.IsCurrentActionIDEnabled()) {
+			new_item->setActionID(g_gui.GetCurrentActionID());
+		}
+		tile->addItem(new_item);
+	}
 }

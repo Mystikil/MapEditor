@@ -16,6 +16,7 @@
 //////////////////////////////////////////////////////////////////////
 
 #include "main.h"
+#include "gui.h"
 
 #include "doodad_brush.h"
 #include "basemap.h"
@@ -324,7 +325,11 @@ void DoodadBrush::draw(BaseMap* map, Tile* tile, void* parameter) {
 		const SingleBlock& sb = *block_iter;
 		if (roll <= sb.chance) {
 			// Use this!
-			tile->addItem(sb.item->deepCopy());
+			Item* new_item = sb.item->deepCopy();
+			if (new_item && g_gui.IsCurrentActionIDEnabled()) {
+				new_item->setActionID(g_gui.GetCurrentActionID());
+			}
+			tile->addItem(new_item);
 			break;
 		}
 		roll -= sb.chance;

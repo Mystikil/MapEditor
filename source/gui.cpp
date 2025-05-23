@@ -1339,7 +1339,7 @@ SearchResultWindow* GUI::ShowSearchWindow() {
 //=============================================================================
 // Palette Window Interface implementation
 
-PaletteWindow* GUI::GetPalette() {
+PaletteWindow* GUI::GetPalette() const {
 	if (palettes.empty()) {
 		return nullptr;
 	}
@@ -1663,7 +1663,7 @@ void GUI::DestroyLoadBar() {
 
 void GUI::ShowWelcomeDialog(const wxBitmap& icon) {
 	std::vector<wxString> recent_files = root->GetRecentFiles();
-	welcomeDialog = newd WelcomeDialog(__W_RME_APPLICATION_NAME__, "Version " + __W_RME_VERSION__, FROM_DIP(root, wxSize(800, 480)), icon, recent_files);
+	welcomeDialog = newd WelcomeDialog(__W_RME_APPLICATION_NAME__, "Version " + __W_RME_VERSION__, FROM_DIP(root, wxSize(1000, 480)), icon, recent_files);
 	welcomeDialog->Bind(wxEVT_CLOSE_WINDOW, &GUI::OnWelcomeDialogClosed, this);
 	welcomeDialog->Bind(WELCOME_DIALOG_ACTION, &GUI::OnWelcomeDialogAction, this);
 	welcomeDialog->Show();
@@ -2871,4 +2871,20 @@ void GUI::RestoreSearchState(SearchResultWindow* window) {
 	window->SetIgnoredIds(last_ignored_ids_text, last_ignored_ids_enabled);
 	
 	OutputDebugStringA(wxString::Format("GUI::RestoreSearchState - Restored search for item ID %d\n", last_search_itemid).c_str());
+}
+
+uint16_t GUI::GetCurrentActionID() const {
+    PaletteWindow* palette = GetPalette();
+    if (palette) {
+        return palette->GetActionID();
+    }
+    return 0;
+}
+
+bool GUI::IsCurrentActionIDEnabled() const {
+    PaletteWindow* palette = GetPalette();
+    if (palette) {
+        return palette->IsActionIDEnabled();
+    }
+    return false;
 }

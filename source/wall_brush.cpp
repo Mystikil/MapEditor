@@ -367,7 +367,11 @@ void WallBrush::draw(BaseMap* map, Tile* tile, void* parameter) {
 		}
 	}
 
-	tile->addWallItem(Item::Create(id));
+	Item* new_item = Item::Create(id);
+	if (new_item && g_gui.IsCurrentActionIDEnabled()) {
+		new_item->setActionID(g_gui.GetCurrentActionID());
+	}
+	tile->addWallItem(new_item);
 }
 
 bool hasMatchingWallBrushAtTile(BaseMap* map, WallBrush* wall_brush, uint32_t x, uint32_t y, uint32_t z) {
