@@ -19,6 +19,7 @@
 #define RME_TILESET_CREATURE_H_
 
 #include "palette_common.h"
+#include <wx/longlong.h>
 
 // New class for seamless grid view of creature sprites with direct rendering
 class CreatureSeamlessGridPanel : public wxScrolledWindow {
@@ -220,6 +221,9 @@ protected:
 	wxSpinCtrl* spawn_size_spin;
 	wxToggleButton* creature_brush_button;
 	wxToggleButton* spawn_brush_button;
+
+private:
+	static wxLongLong last_search_click;  // For tracking double-clicks on search button
 
 	DECLARE_EVENT_TABLE();
 };

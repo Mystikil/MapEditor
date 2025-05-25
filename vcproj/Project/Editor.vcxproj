@@ -212,6 +212,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="..\..\source\add_creature_dialog.cpp" />
     <ClCompile Include="..\..\source\add_item_window.cpp" />
     <ClCompile Include="..\..\source\add_tileset_window.cpp" />
     <ClCompile Include="..\..\source\artprovider.cpp" />
@@ -232,6 +233,7 @@
     <ClCompile Include="..\..\source\string_utils.cpp" />
     <ClCompile Include="..\..\source\tileset_window.cpp" />
     <ClCompile Include="..\..\source\welcome_dialog.cpp" />
+    <ClInclude Include="..\..\source\add_creature_dialog.h" />
     <ClInclude Include="..\..\source\add_item_window.h" />
     <ClInclude Include="..\..\source\add_tileset_window.h" />
     <ClInclude Include="..\..\source\artprovider.h" />

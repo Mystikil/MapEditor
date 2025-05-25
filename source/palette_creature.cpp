@@ -24,10 +24,14 @@
 #include "creature_brush.h"
 #include "spawn_brush.h"
 #include "materials.h"
+#include "add_creature_dialog.h"
 #include <wx/dir.h>
 #include <wx/filefn.h>
 #include <wx/textdlg.h>
 #include "creature_sprite_manager.h"
+
+// Initialize static member
+wxLongLong CreaturePalettePanel::last_search_click(0);
 
 // Define the new event ID for the Load NPCs button
 #define PALETTE_LOAD_NPCS_BUTTON 1952
@@ -749,10 +753,68 @@ void CreaturePalettePanel::OnChangeSpawnSize(wxSpinEvent& event) {
 	}
 }
 
+// Add this as a class member in the header file first
+static wxLongLong last_search_click;
+
 void CreaturePalettePanel::OnClickSearchButton(wxCommandEvent& event) {
-	// Get the text from the search field and filter
-	wxString searchText = search_field->GetValue();
-	FilterCreatures(searchText);
+    // Get the text from the search field
+    wxString searchText = search_field->GetValue();
+    
+    // Check if this is a double-click (within 500ms)
+    wxLongLong now = wxGetLocalTimeMillis();
+    bool is_double_click = (now - last_search_click) < 500;
+    last_search_click = now;
+    
+    // First try to find the creature
+    FilterCreatures(searchText);
+    
+    // Show add dialog if:
+    // 1. No results found, OR
+    // 2. Double-clicked Go button
+    if ((use_sprite_view && sprite_panel->creatures.empty()) || 
+        (!use_sprite_view && creature_list->GetCount() == 0) ||
+        is_double_click) {
+        
+        // Show dialog to add new creature
+        AddCreatureDialog dialog(this, searchText);
+        if (dialog.ShowModal() == wxID_OK) {
+            // Get the created creature type
+            CreatureType* new_creature = dialog.GetCreatureType();
+            if (new_creature) {
+                // Get the brush that was created in the dialog
+                CreatureBrush* brush = new_creature->brush;
+                if (brush) {
+                    // Add to current view directly
+                    if (use_sprite_view) {
+                        if (use_seamless_view) {
+                            seamless_panel->creatures.push_back(brush);
+                            seamless_panel->SelectIndex(seamless_panel->creatures.size() - 1);
+                            seamless_panel->RecalculateGrid();
+                            seamless_panel->Refresh();
+                        } else {
+                            sprite_panel->creatures.push_back(brush);
+                            sprite_panel->SelectIndex(sprite_panel->creatures.size() - 1);
+                            sprite_panel->RecalculateGrid();
+                            sprite_panel->Refresh();
+                        }
+                    } else {
+                        // Add to list view
+                        std::string name = brush->getName();
+                        if (new_creature->outfit.lookHead > 0 || new_creature->outfit.lookBody > 0 || 
+                            new_creature->outfit.lookLegs > 0 || new_creature->outfit.lookFeet > 0) {
+                            name += " [outfit]";
+                        }
+                        creature_list->Append(wxstr(name), brush);
+                        creature_list->SetSelection(creature_list->GetCount() - 1);
+                    }
+
+                    // Select the brush for use
+                    SelectCreatureBrush();
+                    g_gui.SelectBrush(brush, TILESET_CREATURE);
+                }
+            }
+        }
+    }
 }
 
 void CreaturePalettePanel::OnSearchFieldText(wxCommandEvent& event) {
