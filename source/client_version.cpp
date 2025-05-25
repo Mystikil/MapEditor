@@ -491,20 +491,84 @@ bool ClientVersion::loadValidPaths() {
 		message << "Attempted metadata file: %s\n";
 		message << "Attempted sprites file: %s\n";
 
+		// Create a custom dialog with version selection
+		wxDialog* dialog = new wxDialog(nullptr, wxID_ANY, "Select Client Version", wxDefaultPosition, wxSize(400, 200));
+		wxBoxSizer* mainSizer = new wxBoxSizer(wxVERTICAL);
+		
+		// Add version selection dropdown
+		wxStaticText* versionLabel = new wxStaticText(dialog, wxID_ANY, "Select Client Version:");
+		wxChoice* versionChoice = new wxChoice(dialog, wxID_ANY);
+		
+		// Add all visible versions to the dropdown
+		ClientVersionList versions = ClientVersion::getAllVisible();
+		for (const auto& version : versions) {
+			versionChoice->Append(wxstr(version->getName()));
+		}
+		
+		// Set current version as default selection
+		versionChoice->SetStringSelection(wxstr(name));
+		
+		// Add force load checkbox
+		wxCheckBox* forceLoadCheckbox = new wxCheckBox(dialog, wxID_ANY, "Force load version");
+		
+		// Add directory selection
+		wxString dirHelpText("Select assets directory.");
+		wxDirPickerCtrl* dirPicker = new wxDirPickerCtrl(dialog, wxID_ANY, "", dirHelpText, wxDefaultPosition, wxDefaultSize, wxDIRP_USE_TEXTCTRL | wxDIRP_DIR_MUST_EXIST);
+		
+		// Add buttons
+		wxBoxSizer* buttonSizer = new wxBoxSizer(wxHORIZONTAL);
+		wxButton* okButton = new wxButton(dialog, wxID_OK, "OK");
+		wxButton* cancelButton = new wxButton(dialog, wxID_CANCEL, "Cancel");
+		buttonSizer->Add(okButton, 0, wxALL, 5);
+		buttonSizer->Add(cancelButton, 0, wxALL, 5);
+		
+		// Add all elements to main sizer
+		mainSizer->Add(versionLabel, 0, wxALL, 5);
+		mainSizer->Add(versionChoice, 0, wxEXPAND | wxALL, 5);
+		mainSizer->Add(forceLoadCheckbox, 0, wxALL, 5);
+		mainSizer->Add(dirPicker, 0, wxEXPAND | wxALL, 5);
+		mainSizer->Add(buttonSizer, 0, wxALIGN_CENTER | wxALL, 5);
+		
+		dialog->SetSizer(mainSizer);
+		
+		// Show error message first
 		g_gui.PopupDialog("Error", wxString::Format(message, name, metadata_path.GetFullPath(), sprites_path.GetFullPath()), wxOK);
 
-		wxString dirHelpText("Select assets directory.");
-		wxDirDialog file_dlg(nullptr, dirHelpText, "", wxDD_DIR_MUST_EXIST);
-		int ok = file_dlg.ShowModal();
-		if (ok == wxID_CANCEL) {
+		// Show the dialog
+		int result = dialog->ShowModal();
+		if (result == wxID_CANCEL) {
+			dialog->Destroy();
 			return false;
 		}
 
-		client_path.Assign(file_dlg.GetPath() + FileName::GetPathSeparator());
+		// Get selected version
+		wxString selectedVersion = versionChoice->GetStringSelection();
+		bool forceLoad = forceLoadCheckbox->GetValue();
+		
+		// If force load is checked, update the version
+		if (forceLoad) {
+			ClientVersion* newVersion = ClientVersion::get(nstr(selectedVersion));
+			if (newVersion) {
+				// Copy individual members instead of using assignment operator
+				otb = newVersion->otb;
+				name = newVersion->name;
+				visible = newVersion->visible;
+				preferred_map_version = newVersion->preferred_map_version;
+				data_path = newVersion->data_path;
+				data_versions = newVersion->data_versions;
+				map_versions_supported = newVersion->map_versions_supported;
+				extension_versions = newVersion->extension_versions;
+				usesFuckedUpCharges = newVersion->usesFuckedUpCharges;
+			}
+		}
+		
+		// Update client path
+		client_path.Assign(dirPicker->GetPath() + FileName::GetPathSeparator());
+		
+		dialog->Destroy();
 	}
 
 	ClientVersion::saveVersions();
-
 	return true;
 }
 

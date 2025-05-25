@@ -521,140 +521,297 @@ bool Map::exportMinimap(FileName filename, int floor, bool displaydialog) {
 	uint8_t* pic = nullptr;
 
 	try {
-		// Find the actual bounds of used tiles
-		int min_x = 0x10000, min_y = 0x10000;
-		int max_x = 0x00000, max_y = 0x00000;
-		bool found_tiles = false;
+		const int MAX_AREA_SIZE = 2500;
+		std::vector<std::pair<Position, Position>> initial_areas;
+		std::map<uint32_t, bool> processed_tiles;
 
+		// Helper function to get tile key
+		auto getTileKey = [](int x, int y) -> uint32_t {
+			return (uint32_t(x) << 16) | uint32_t(y);
+		};
+
+		// Helper function to check if two areas can be merged within size limits
+		auto canMergeAreas = [MAX_AREA_SIZE](const Position& min1, const Position& max1,
+											const Position& min2, const Position& max2) -> bool {
+			// Calculate combined bounds
+			Position combined_min(
+				std::min(min1.x, min2.x),
+				std::min(min1.y, min2.y),
+				min1.z
+			);
+			Position combined_max(
+				std::max(max1.x, max2.x),
+				std::max(max1.y, max2.y),
+				max1.z
+			);
+
+			// Check if combined area is within limits
+			return (combined_max.x - combined_min.x + 1 <= MAX_AREA_SIZE) &&
+				   (combined_max.y - combined_min.y + 1 <= MAX_AREA_SIZE);
+		};
+
+		// Helper function to check if areas are adjacent or close enough to merge
+		auto areAreasNearby = [](const Position& max1, const Position& min2,
+								const Position& min1, const Position& max2) -> bool {
+			const int MERGE_DISTANCE = 1000; // Maximum distance to consider areas for merging
+			
+			// Check if areas are within merge distance of each other
+			bool x_overlap = (min1.x <= max2.x + MERGE_DISTANCE) && (max1.x + MERGE_DISTANCE >= min2.x);
+			bool y_overlap = (min1.y <= max2.y + MERGE_DISTANCE) && (max1.y + MERGE_DISTANCE >= min2.y);
+			
+			return x_overlap && y_overlap;
+		};
+
+		// First pass - collect all initial areas using the existing flood fill
+		std::vector<Position> tiles_on_floor;
 		for (MapIterator mit = begin(); mit != end(); ++mit) {
 			if ((*mit)->get() == nullptr || (*mit)->empty() || (*mit)->getZ() != floor) {
 				continue;
 			}
-
-			found_tiles = true;
-			Position pos = (*mit)->getPosition();
-
-			min_x = std::min(min_x, pos.x);
-			min_y = std::min(min_y, pos.y);
-			max_x = std::max(max_x, pos.x);
-			max_y = std::max(max_y, pos.y);
+			tiles_on_floor.push_back((*mit)->getPosition());
 		}
 
-		if (!found_tiles) {
-			return true;
-		}
+		// Sort tiles for efficient processing
+		std::sort(tiles_on_floor.begin(), tiles_on_floor.end(),
+			[](const Position& a, const Position& b) {
+				return a.x < b.x || (a.x == b.x && a.y < b.y);
+			});
 
-		// Add padding of 10 tiles
-		min_x = std::max(0, min_x - 10);
-		min_y = std::max(0, min_y - 10);
-		max_x = std::min(65535, max_x + 10);
-		max_y = std::min(65535, max_y + 10);
-
-		// Calculate dimensions
-		int minimap_width = max_x - min_x + 1;
-		int minimap_height = max_y - min_y + 1;
-
-		// Allocate memory for the bitmap
-		pic = newd uint8_t[minimap_width * minimap_height];
-		memset(pic, 0, minimap_width * minimap_height);
-
-		// Fill the bitmap
-		for (MapIterator mit = begin(); mit != end(); ++mit) {
-			Tile* tile = (*mit)->get();
-			if (!tile || tile->empty() || tile->getZ() != floor) {
+		// Collect initial areas using flood fill
+		for (const Position& pos : tiles_on_floor) {
+			uint32_t tile_key = getTileKey(pos.x, pos.y);
+			if (processed_tiles[tile_key]) {
 				continue;
 			}
 
-			uint32_t pixelpos = (tile->getY() - min_y) * minimap_width + (tile->getX() - min_x);
-			uint8_t& pixel = pic[pixelpos];
+			Position area_start = pos;
+			Position area_end = pos;
+			std::queue<Position> to_process;
+			to_process.push(pos);
+			processed_tiles[tile_key] = true;
 
-			// Get color from items
-			for (ItemVector::const_reverse_iterator item_iter = tile->items.rbegin(); 
-				 item_iter != tile->items.rend(); ++item_iter) {
-				if ((*item_iter)->getMiniMapColor()) {
-					pixel = (*item_iter)->getMiniMapColor();
-					break;
+			while (!to_process.empty()) {
+				Position current = to_process.front();
+				to_process.pop();
+
+				if (area_end.x - area_start.x >= MAX_AREA_SIZE ||
+					area_end.y - area_start.y >= MAX_AREA_SIZE) {
+					continue;
+				}
+
+				area_start.x = std::min(area_start.x, current.x);
+				area_start.y = std::min(area_start.y, current.y);
+				area_end.x = std::max(area_end.x, current.x);
+				area_end.y = std::max(area_end.y, current.y);
+
+				for (int dx = -1; dx <= 1; dx++) {
+					for (int dy = -1; dy <= 1; dy++) {
+						if (dx == 0 && dy == 0) continue;
+
+						Position next(current.x + dx, current.y + dy, floor);
+						uint32_t next_key = getTileKey(next.x, next.y);
+
+						if (!processed_tiles[next_key]) {
+							Tile* next_tile = getTile(next);
+							if (next_tile && !next_tile->empty()) {
+								to_process.push(next);
+								processed_tiles[next_key] = true;
+							}
+						}
+					}
 				}
 			}
 
-			// If no item color, check ground
-			if (pixel == 0 && tile->hasGround()) {
-				pixel = tile->ground->getMiniMapColor();
+			// Add the area if it contains content
+			bool has_content = false;
+			for (int y = area_start.y; y <= area_end.y && !has_content; y++) {
+				for (int x = area_start.x; x <= area_end.x && !has_content; x++) {
+					Tile* tile = getTile(x, y, floor);
+					if (tile && !tile->empty()) {
+						has_content = true;
+					}
+				}
+			}
+			if (has_content) {
+				initial_areas.push_back(std::make_pair(area_start, area_end));
 			}
 		}
 
-		// Write to file
-		FileWriteHandle fh(nstr(filename.GetFullPath()));
-		if (!fh.isOpen()) {
+		// Second pass - merge nearby areas into larger areas while respecting size limits
+		std::vector<std::pair<Position, Position>> merged_areas;
+		std::vector<bool> area_processed(initial_areas.size(), false);
+
+		for (size_t i = 0; i < initial_areas.size(); i++) {
+			if (area_processed[i]) continue;
+
+			Position current_min = initial_areas[i].first;
+			Position current_max = initial_areas[i].second;
+			area_processed[i] = true;
+
+			bool merged;
+			do {
+				merged = false;
+				for (size_t j = 0; j < initial_areas.size(); j++) {
+					if (area_processed[j]) continue;
+
+					const auto& area2 = initial_areas[j];
+					if (canMergeAreas(current_min, current_max, area2.first, area2.second) &&
+						areAreasNearby(current_max, area2.first, current_min, area2.second)) {
+						
+						// Merge the areas
+						current_min.x = std::min(current_min.x, area2.first.x);
+						current_min.y = std::min(current_min.y, area2.first.y);
+						current_max.x = std::max(current_max.x, area2.second.x);
+						current_max.y = std::max(current_max.y, area2.second.y);
+						
+						area_processed[j] = true;
+						merged = true;
+					}
+				}
+			} while (merged);
+
+			merged_areas.push_back(std::make_pair(current_min, current_max));
+		}
+
+		// No areas found
+		if (merged_areas.empty()) {
+			return true;
+		}
+
+		// Export each merged area
+		int area_count = 0;
+		for (const auto& area : merged_areas) {
+			Position min_pos = area.first;
+			Position max_pos = area.second;
+
+			// Add small padding but respect MAX_AREA_SIZE
+			min_pos.x = std::max(0, min_pos.x - 5);
+			min_pos.y = std::max(0, min_pos.y - 5);
+			max_pos.x = std::min(65535, max_pos.x + 5);
+			max_pos.y = std::min(65535, max_pos.y + 5);
+
+			// Ensure we don't exceed MAX_AREA_SIZE
+			if (max_pos.x - min_pos.x + 1 > MAX_AREA_SIZE) {
+				max_pos.x = min_pos.x + MAX_AREA_SIZE - 1;
+			}
+			if (max_pos.y - min_pos.y + 1 > MAX_AREA_SIZE) {
+				max_pos.y = min_pos.y + MAX_AREA_SIZE - 1;
+			}
+
+			// Calculate dimensions
+			int minimap_width = max_pos.x - min_pos.x + 1;
+			int minimap_height = max_pos.y - min_pos.y + 1;
+
+			// Allocate memory for the bitmap
+			pic = newd uint8_t[minimap_width * minimap_height];
+			memset(pic, 0, minimap_width * minimap_height);
+
+			// Fill the bitmap
+			for (int y = min_pos.y; y <= max_pos.y; y++) {
+				for (int x = min_pos.x; x <= max_pos.x; x++) {
+					Tile* tile = getTile(x, y, floor);
+					if (!tile || tile->empty()) {
+						continue;
+					}
+
+					uint32_t pixelpos = (y - min_pos.y) * minimap_width + (x - min_pos.x);
+					uint8_t& pixel = pic[pixelpos];
+
+					// Get color from items
+					for (ItemVector::const_reverse_iterator item_iter = tile->items.rbegin(); 
+						 item_iter != tile->items.rend(); ++item_iter) {
+						if ((*item_iter)->getMiniMapColor()) {
+							pixel = (*item_iter)->getMiniMapColor();
+							break;
+						}
+					}
+
+					// If no item color, check ground
+					if (pixel == 0 && tile->hasGround()) {
+						pixel = tile->ground->getMiniMapColor();
+					}
+				}
+			}
+
+			// Generate filename for this area
+			wxString base_name = filename.GetFullPath();
+			base_name = base_name.BeforeLast('.');
+			wxString area_filename = wxString::Format("%s_area%d.bmp", base_name, area_count++);
+
+			// Write to file
+			FileWriteHandle fh(nstr(area_filename));
+			if (!fh.isOpen()) {
+				delete[] pic;
+				return false;
+			}
+
+			// Store the magic number
+			fh.addRAW("BM");
+
+			// Store the file size
+			uint32_t file_size = 14 // header
+				+ 40 // image data header
+				+ 256 * 4 // color palette
+				+ ((minimap_width + 3) / 4 * 4) * minimap_height; // pixels
+			fh.addU32(file_size);
+
+			// Two values reserved, must always be 0.
+			fh.addU16(0);
+			fh.addU16(0);
+
+			// Bitmapdata offset
+			fh.addU32(14 + 40 + 256 * 4);
+
+			// Header size
+			fh.addU32(40);
+
+			// Header width/height
+			fh.addU32(minimap_width);
+			fh.addU32(minimap_height);
+
+			// Color planes
+			fh.addU16(1);
+
+			// bits per pixel, OT map format is 8
+			fh.addU16(8);
+
+			// compression type, 0 is no compression
+			fh.addU32(0);
+
+			// image size, 0 is valid if we use no compression
+			fh.addU32(0);
+
+			// horizontal/vertical resolution in pixels / meter
+			fh.addU32(4000);
+			fh.addU32(4000);
+
+			// Number of colors
+			fh.addU32(256);
+			// Important colors, 0 is all
+			fh.addU32(0);
+
+			// Write the color palette
+			for (int i = 0; i < 256; ++i) {
+				fh.addU32(uint32_t(minimap_color[i]));
+			}
+
+			// Bitmap width must be divisible by four, calculate how much padding we need
+			int padding = ((minimap_width & 3) != 0 ? 4 - (minimap_width & 3) : 0);
+			// Bitmap rows are saved in reverse order
+			for (int y = minimap_height - 1; y >= 0; --y) {
+				fh.addRAW(pic + y * minimap_width, minimap_width);
+				for (int i = 0; i < padding; ++i) {
+					fh.addU8(0);
+				}
+				if (displaydialog && y % 100 == 0) {
+					g_gui.SetLoadDone(90 + int((minimap_height - y) / double(minimap_height) * 10.0));
+				}
+			}
+
 			delete[] pic;
-			return false;
+			pic = nullptr;
 		}
 
-		// Store the magic number
-		fh.addRAW("BM");
-
-		// Store the file size
-		// We need to predict how large it will be
-		uint32_t file_size = 14 // header
-			+ 40 // image data header
-			+ 256 * 4 // color palette
-			+ ((minimap_width + 3) / 4 * 4) * height; // pixels
-		fh.addU32(file_size);
-
-		// Two values reserved, must always be 0.
-		fh.addU16(0);
-		fh.addU16(0);
-
-		// Bitmapdata offset
-		fh.addU32(14 + 40 + 256 * 4);
-
-		// Header size
-		fh.addU32(40);
-
-		// Header width/height
-		fh.addU32(minimap_width);
-		fh.addU32(minimap_height);
-
-		// Color planes
-		fh.addU16(1);
-
-		// bits per pixel, OT map format is 8
-		fh.addU16(8);
-
-		// compression type, 0 is no compression
-		fh.addU32(0);
-
-		// image size, 0 is valid if we use no compression
-		fh.addU32(0);
-
-		// horizontal/vertical resolution in pixels / meter
-		fh.addU32(4000);
-		fh.addU32(4000);
-
-		// Number of colors
-		fh.addU32(256);
-		// Important colors, 0 is all
-		fh.addU32(0);
-
-		// Write the color palette
-		for (int i = 0; i < 256; ++i) {
-			fh.addU32(uint32_t(minimap_color[i]));
-		}
-
-		// Bitmap width must be divisible by four, calculate how much padding we need
-		int padding = ((minimap_width & 3) != 0 ? 4 - (minimap_width & 3) : 0);
-		// Bitmap rows are saved in reverse order
-		for (int y = minimap_height - 1; y >= 0; --y) {
-			fh.addRAW(pic + y * minimap_width, minimap_width);
-			for (int i = 0; i < padding; ++i) {
-				fh.addU8(0);
-			}
-			if (y % 100 == 0 && displaydialog) {
-				g_gui.SetLoadDone(90 + int((minimap_height - y) / double(minimap_height) * 10.0));
-			}
-		}
-
-		delete[] pic;
 		return true;
 	} catch (...) {
 		delete[] pic;
