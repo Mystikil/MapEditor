@@ -69,6 +69,7 @@
 #include "editor.h"
 #include "gui.h"
 #include "border_editor_window.h"
+#include "map_summary_window.h"
 
 #include <wx/chartype.h>
 
@@ -264,6 +265,7 @@ MainMenuBar::MainMenuBar(MainFrame* frame) :
 	// 669
 	MAKE_ACTION(FIND_CREATURE, wxITEM_NORMAL, OnSearchForCreature);
 	MAKE_ACTION(MAP_CREATE_BORDER, wxITEM_NORMAL, OnCreateBorder);
+	MAKE_ACTION(MAP_SUMMARIZE, wxITEM_NORMAL, OnMapSummarize);
 
 	// A deleter, this way the frame does not need
 	// to bother deleting us.
@@ -3659,4 +3661,14 @@ void MainMenuBar::OnCreateBorder(wxCommandEvent& WXUNUSED(event)) {
 
 	// After editing borders, refresh view to show any changes
 	g_gui.RefreshView();
+}
+
+void MainMenuBar::OnMapSummarize(wxCommandEvent& WXUNUSED(event)) {
+	if (!g_gui.IsEditorOpen()) {
+		g_gui.PopupDialog("Error", "No map is currently open!", wxOK | wxICON_ERROR);
+		return;
+	}
+
+	// Show the map summary window
+	g_gui.ShowMapSummaryWindow();
 }

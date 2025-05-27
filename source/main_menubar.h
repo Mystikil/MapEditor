@@ -173,6 +173,7 @@ namespace MenuBar {
 		MAP_MENU_GENERATE_ISLAND,
 		MAP_VALIDATE_GROUND,
 		MAP_CREATE_BORDER,
+		MAP_SUMMARIZE,
 			
 
 
@@ -320,6 +321,7 @@ public:
 	void OnRefreshItems(wxCommandEvent& event);
 	void OnGenerateIsland(wxCommandEvent& event);
 	void OnCreateBorder(wxCommandEvent& event);
+	void OnMapSummarize(wxCommandEvent& event);
 
 protected:
 	// Load and returns a menu item, also sets accelerator

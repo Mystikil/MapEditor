@@ -229,6 +229,7 @@
     <ClCompile Include="..\..\source\hotkey_manager.cpp" />
     <ClCompile Include="..\..\source\island_generator_dialog.cpp" />
     <ClCompile Include="..\..\source\light_drawer.cpp" />
+    <ClCompile Include="..\..\source\map_summary_window.cpp" />
     <ClCompile Include="..\..\source\replace_items_window.cpp" />
     <ClCompile Include="..\..\source\string_utils.cpp" />
     <ClCompile Include="..\..\source\tileset_window.cpp" />
@@ -250,6 +251,7 @@
     <ClInclude Include="..\..\source\light_drawer.h" />
     <ClInclude Include="..\..\source\live_action_packets.h" />
     <ClInclude Include="..\..\source\main_toolbar.h" />
+    <ClInclude Include="..\..\source\map_summary_window.h" />
     <ClInclude Include="..\..\source\otml.h" />
     <ClInclude Include="..\..\source\browse_tile_window.h" />
     <ClCompile Include="..\..\source\browse_tile_window.cpp" />

@@ -51,6 +51,7 @@ class MapWindow;
 class MapCanvas;
 
 class SearchResultWindow;
+class MapSummaryWindow;
 class MinimapWindow;
 class PaletteWindow;
 class OldPropertiesWindow;
@@ -221,6 +222,11 @@ public:
 	SearchResultWindow* GetSearchWindow();
 	SearchResultWindow* ShowSearchWindow();
 	void HideSearchWindow();
+
+	// Map Summary
+	MapSummaryWindow* GetMapSummaryWindow();
+	MapSummaryWindow* ShowMapSummaryWindow();
+	void HideMapSummaryWindow();
 	
 	// Search state persistence
 	void StoreSearchState(uint16_t itemId, bool onSelection);
@@ -430,6 +436,7 @@ public:
 	MinimapWindow* minimap;
 	DCButton* gem; // The small gem in the lower-right corner
 	SearchResultWindow* search_result_window;
+	MapSummaryWindow* map_summary_window;
 	GraphicManager gfx;
 
 	BaseMap* secondary_map; // A non-owning pointer to doodad_buffer_map when needed

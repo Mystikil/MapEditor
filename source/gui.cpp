@@ -164,6 +164,7 @@
 
 #include "common_windows.h"
 #include "result_window.h"
+#include "map_summary_window.h"
 #include "minimap_window.h"
 #include "palette_window.h"
 #include "map_display.h"
@@ -194,6 +195,7 @@ GUI::GUI() :
 	pasting(false),
 	hotkeys_enabled(true),
 	search_result_window(nullptr),
+	map_summary_window(nullptr),
 	loaded_version(CLIENT_VERSION_NONE),
 	secondary_map(nullptr),
 	minimap(nullptr),
@@ -1334,6 +1336,28 @@ SearchResultWindow* GUI::ShowSearchWindow() {
 	}
 	aui_manager->Update();
 	return search_result_window;
+}
+
+void GUI::HideMapSummaryWindow() {
+	if (map_summary_window) {
+		aui_manager->GetPane(map_summary_window).Show(false);
+		aui_manager->Update();
+	}
+}
+
+MapSummaryWindow* GUI::GetMapSummaryWindow() {
+	return map_summary_window;
+}
+
+MapSummaryWindow* GUI::ShowMapSummaryWindow() {
+	if (map_summary_window == nullptr) {
+		map_summary_window = newd MapSummaryWindow(root);
+		aui_manager->AddPane(map_summary_window, wxAuiPaneInfo().Caption("Map Summary"));
+	} else {
+		aui_manager->GetPane(map_summary_window).Show();
+	}
+	aui_manager->Update();
+	return map_summary_window;
 }
 
 //=============================================================================

@@ -398,6 +398,7 @@
     <ClInclude Include="..\..\source\find_creature_window.h" />
     <ClInclude Include="..\..\source\color_utils.h" />
     <ClInclude Include="..\..\source\add_creature_dialog.h" />
+    <ClInclude Include="..\..\source\map_summary_window.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\source\json\json_spirit_reader.cpp">
@@ -704,6 +705,7 @@
     <ClCompile Include="..\..\source\creature_sprite_manager.cpp" />
     <ClCompile Include="..\..\source\find_creature_window.cpp" />
     <ClCompile Include="..\..\source\add_creature_dialog.cpp" />
+    <ClCompile Include="..\..\source\map_summary_window.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="Editor.rc">
