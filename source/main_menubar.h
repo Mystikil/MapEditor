@@ -173,7 +173,10 @@ namespace MenuBar {
 		MAP_MENU_GENERATE_ISLAND,
 		MAP_VALIDATE_GROUND,
 		MAP_CREATE_BORDER,
-			
+		
+		// Chat actions
+		CHAT_REGISTER,
+		CHAT_CONNECT,
 
 
 	};
@@ -320,6 +323,10 @@ public:
 	void OnRefreshItems(wxCommandEvent& event);
 	void OnGenerateIsland(wxCommandEvent& event);
 	void OnCreateBorder(wxCommandEvent& event);
+	
+	// Chat handlers
+	void OnChatRegister(wxCommandEvent& event);
+	void OnChatConnect(wxCommandEvent& event);
 
 protected:
 	// Load and returns a menu item, also sets accelerator
