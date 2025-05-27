@@ -296,5 +296,5 @@ void MapSummaryWindow::OnClickSort(wxCommandEvent& event) {
 		SortByName();
 	}
 	
-	RefreshList();
+	RefreshList(); 
 } 
