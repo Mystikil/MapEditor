@@ -525,8 +525,9 @@ ActionQueue::ActionQueue(Editor& editor) :
 }
 
 ActionQueue::~ActionQueue() {
-	for (auto it = actions.begin(); it != actions.end(); it = actions.erase(it)) {
+	for (auto it = actions.begin(); it != actions.end(); /* no increment here */) {
 		delete *it;
+		it = actions.erase(it); // erase returns the next valid iterator
 	}
 }
 

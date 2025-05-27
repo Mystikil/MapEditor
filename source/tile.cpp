@@ -31,6 +31,8 @@
 #include "town.h"
 #include "map.h"
 
+static thread_local std::set<Position> wallize_processing_tiles;
+
 Tile::Tile(int x, int y, int z) :
 	location(nullptr),
 	ground(nullptr),
@@ -641,7 +643,16 @@ void Tile::cleanBorders() {
 }
 
 void Tile::wallize(BaseMap* parent) {
+	// Add recursion guard
+	if (wallize_processing_tiles.find(getPosition()) != wallize_processing_tiles.end()) {
+		return;
+	}
+	wallize_processing_tiles.insert(getPosition());
+
 	WallBrush::doWalls(parent, this);
+
+	// Remove from processing set when done
+	wallize_processing_tiles.erase(getPosition());
 }
 
 Item* Tile::getWall() const {

@@ -21,6 +21,8 @@
 #include "items.h"
 #include "basemap.h"
 
+static thread_local std::set<Position> processing_tiles;
+
 uint32_t GroundBrush::border_types[256];
 
 int AutoBorder::edgeNameToID(const std::string& edgename) {
@@ -673,6 +675,12 @@ inline GroundBrush* extractGroundBrushFromTile(BaseMap* map, uint32_t x, uint32_
 }
 
 void GroundBrush::doBorders(BaseMap* map, Tile* tile) {
+	// Add recursion guard
+	if (!tile || processing_tiles.find(tile->getPosition()) != processing_tiles.end()) {
+		return;
+	}
+	processing_tiles.insert(tile->getPosition());
+	
 	// Early exit for custom border mode
 	if (g_settings.getBoolean(Config::CUSTOM_BORDER_ENABLED) && g_settings.getBoolean(Config::USE_AUTOMAGIC)) {
 		// Get the custom border ID
@@ -1397,6 +1405,9 @@ void GroundBrush::doBorders(BaseMap* map, Tile* tile) {
 			}
 		}
 	}
+
+	// Remove tile from processing set when done
+	processing_tiles.erase(tile->getPosition());
 }
 
 // Add a custom method to reset borderize for the auto-magic behavior
