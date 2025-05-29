@@ -29,6 +29,7 @@ namespace MenuBar {
 		SAVE,
 		SAVE_AS,
 		GENERATE_MAP,
+		GENERATE_PROCEDURAL_MAP,
 		CLOSE,
 		IMPORT_MAP,
 		IMPORT_MONSTERS,
@@ -209,6 +210,7 @@ public:
 	void OnNew(wxCommandEvent& event);
 	void OnOpen(wxCommandEvent& event);
 	void OnGenerateMap(wxCommandEvent& event);
+	void OnGenerateProceduralMap(wxCommandEvent& event);
 	void OnOpenRecent(wxCommandEvent& event);
 	void OnSave(wxCommandEvent& event);
 	void OnSaveAs(wxCommandEvent& event);
