@@ -177,14 +177,22 @@ OTMapGenerator::~OTMapGenerator() {
 }
 
 void OTMapGenerator::seedRandom(const std::string& seed) {
-    // Convert string seed to numeric seed
-    std::hash<std::string> hasher;
-    unsigned int numeric_seed = static_cast<unsigned int>(hasher(seed));
+    // Try to parse as 64-bit integer first, like original OTMapGen
+    unsigned long long numeric_seed = 0;
     
-    // Initialize noise generator and RNG
+    try {
+        // Try to parse as number
+        numeric_seed = std::stoull(seed);
+    } catch (...) {
+        // If parsing fails, fall back to string hash
+        std::hash<std::string> hasher;
+        numeric_seed = hasher(seed);
+    }
+    
+    // Initialize noise generator and RNG with 64-bit seed
     delete noise_generator;
-    noise_generator = new SimplexNoise(numeric_seed);
-    rng.seed(numeric_seed);
+    noise_generator = new SimplexNoise(static_cast<unsigned int>(numeric_seed & 0xFFFFFFFF));
+    rng.seed(static_cast<unsigned int>(numeric_seed >> 32) ^ static_cast<unsigned int>(numeric_seed & 0xFFFFFFFF));
 }
 
 bool OTMapGenerator::generateMap(BaseMap* map, const GenerationConfig& config) {
@@ -198,11 +206,12 @@ bool OTMapGenerator::generateMap(BaseMap* map, const GenerationConfig& config) {
     // Initialize random seed
     seedRandom(config.seed);
     
-    // Generate height map
+    // Generate height map and moisture map
     auto heightMap = generateHeightMap(config);
+    auto moistureMap = generateMoistureMap(config);
     
     // Generate terrain layer
-    auto terrainLayer = generateTerrainLayer(heightMap, config);
+    auto terrainLayer = generateTerrainLayer(heightMap, moistureMap, config);
     
     // Apply terrain to map using Actions like the editor does
     std::vector<Position> tilesToGenerate;
@@ -261,7 +270,7 @@ bool OTMapGenerator::generateMap(BaseMap* map, const GenerationConfig& config) {
         }
     }
     
-    // Generate caves if enabled (similar batch approach)
+    // Generate caves if enabled
     if (config.add_caves) {
         auto caveLayer = generateCaveLayer(config);
         
@@ -271,8 +280,9 @@ bool OTMapGenerator::generateMap(BaseMap* map, const GenerationConfig& config) {
             for (int x = 0; x < config.width; ++x) {
                 uint16_t caveId = caveLayer[y][x];
                 if (caveId != 0) {
-                    // Place cave tiles below the surface
-                    for (int z = config.water_level + 1; z <= config.water_level + config.cave_depth; ++z) {
+                    // Place cave tiles below the surface (floors 8+)
+                    // Since map editor uses positive Z for underground, use water_level + offset
+                    for (int z = config.water_level + 1; z <= config.water_level + config.cave_depth && z <= 15; ++z) {
                         caveTilesToGenerate.push_back(Position(x, y, z));
                     }
                 }
@@ -319,21 +329,44 @@ bool OTMapGenerator::generateMap(BaseMap* map, const GenerationConfig& config) {
     
     // Add decorations if not terrain only (simplified for now)
     if (!config.terrain_only) {
-        for (int y = 0; y < config.height; ++y) {
-            for (int x = 0; x < config.width; ++x) {
-                Tile* tile = editorMap->getTile(x, y, config.water_level);
-                if (tile && tile->ground) {
-                    uint16_t groundId = tile->ground->getID();
-                    
-                    // Add vegetation to grass (simplified)
-                    if (groundId == OTMapGenItems::GRASS_TILE_ID) {
-                        std::uniform_real_distribution<double> dist(0.0, 1.0);
-                        if (dist(rng) < 0.05) { // 5% chance
-                            Tile* new_tile = tile->deepCopy(*editorMap);
-                            Item* decoration = Item::Create(OTMapGenItems::TREE_ID);
-                            if (decoration) {
-                                new_tile->addItem(decoration);
-                                editorMap->setTile(Position(x, y, config.water_level), new_tile);
+        // Find grass layer for decoration placement
+        const TerrainLayer* grassLayer = nullptr;
+        for (const auto& layer : config.terrain_layers) {
+            if (layer.name == "Grass" && layer.enabled) {
+                grassLayer = &layer;
+                break;
+            }
+        }
+        
+        if (grassLayer) {
+            for (int y = 0; y < config.height; ++y) {
+                for (int x = 0; x < config.width; ++x) {
+                    Tile* tile = editorMap->getTile(x, y, config.water_level);
+                    if (tile && tile->ground) {
+                        uint16_t groundId = tile->ground->getID();
+                        
+                        // Add vegetation to grass tiles
+                        if (groundId == grassLayer->item_id) {
+                            std::uniform_real_distribution<double> dist(0.0, 1.0);
+                            if (dist(rng) < 0.05) { // 5% chance
+                                Tile* new_tile = tile->deepCopy(*editorMap);
+                                
+                                // Use configurable decoration items (could be made configurable too)
+                                uint16_t decorationId = 2700; // Default tree ID
+                                double rand_val = dist(rng);
+                                if (rand_val < 0.6) {
+                                    decorationId = 2700; // Tree
+                                } else if (rand_val < 0.8) {
+                                    decorationId = 2785; // Bush
+                                } else {
+                                    decorationId = 2782; // Flower
+                                }
+                                
+                                Item* decoration = Item::Create(decorationId);
+                                if (decoration) {
+                                    new_tile->addItem(decoration);
+                                    editorMap->setTile(Position(x, y, config.water_level), new_tile);
+                                }
                             }
                         }
                     }
@@ -359,15 +392,44 @@ std::vector<std::vector<double>> OTMapGenerator::generateHeightMap(const Generat
             double ny = y * config.noise_increment / config.height;
             double noiseValue = noise_generator->fractal(nx, ny, config.frequencies);
             
-            // Apply island distance effect
+            // Apply different distance effects based on generation type
             double distance = getDistance(x, y, (int)centerX, (int)centerY, config.euclidean);
-            double distanceEffect = 1.0 - pow(distance / maxDistance, config.island_distance_exponent);
-            distanceEffect = std::max(0.0, distanceEffect * config.island_distance_decrement);
+            double distanceEffect = 1.0;
+            
+            if (config.generation_type == "ISLANDS" || config.generation_type == "SAND_ISLANDS" || 
+                config.generation_type == "ICE_ISLANDS" || config.generation_type == "ARCHIPELAGO") {
+                
+                // Island generation - create circular/oval islands
+                double islandRadius = maxDistance * config.island_size * 0.6; // Adjustable island size
+                distanceEffect = 1.0 - pow(distance / islandRadius, 2.0); // Circular falloff
+                distanceEffect = std::max(0.0, distanceEffect);
+                
+                if (config.generation_type == "ARCHIPELAGO") {
+                    // Multiple smaller islands using noise
+                    double archipelagoNoise = noise_generator->noise(nx * 0.3, ny * 0.3);
+                    distanceEffect += archipelagoNoise * 0.3; // Add island variety
+                    distanceEffect = std::max(0.0, distanceEffect);
+                }
+                
+            } else {
+                // Continental generation (original logic)
+                distanceEffect = 1.0 - pow(distance / maxDistance, config.island_distance_exponent);
+                distanceEffect = std::max(0.0, distanceEffect * config.island_distance_decrement);
+            }
             
             // Combine noise with distance effect
             double height = (noiseValue + 1.0) * 0.5; // Normalize to [0,1]
             height = pow(height, config.exponent) * config.linear;
             height *= distanceEffect;
+            
+            // Apply resource dominance
+            if (height < 0.2) {
+                height *= config.water_dominance; // More/less water
+            } else if (height > 0.7) {
+                height = 0.7 + (height - 0.7) * config.mountain_dominance; // More/less mountains
+            } else {
+                height = 0.2 + (height - 0.2) * config.land_dominance; // More/less land
+            }
             
             heightMap[y][x] = height;
         }
@@ -376,15 +438,32 @@ std::vector<std::vector<double>> OTMapGenerator::generateHeightMap(const Generat
     return heightMap;
 }
 
-std::vector<std::vector<uint16_t>> OTMapGenerator::generateTerrainLayer(const std::vector<std::vector<double>>& heightMap, const GenerationConfig& config) {
+std::vector<std::vector<double>> OTMapGenerator::generateMoistureMap(const GenerationConfig& config) {
+    std::vector<std::vector<double>> moistureMap(config.height, std::vector<double>(config.width, 0.0));
+    
+    for (int y = 0; y < config.height; ++y) {
+        for (int x = 0; x < config.width; ++x) {
+            // Generate moisture noise with different scale than height
+            double nx = x * 0.01; // Moisture varies more slowly
+            double ny = y * 0.01;
+            double moistureValue = noise_generator->noise(nx, ny);
+            
+            moistureMap[y][x] = moistureValue;
+        }
+    }
+    
+    return moistureMap;
+}
+
+std::vector<std::vector<uint16_t>> OTMapGenerator::generateTerrainLayer(const std::vector<std::vector<double>>& heightMap, 
+                                                      const std::vector<std::vector<double>>& moistureMap,
+                                                      const GenerationConfig& config) {
     std::vector<std::vector<uint16_t>> terrainLayer(config.height, std::vector<uint16_t>(config.width, 0));
     
     for (int y = 0; y < config.height; ++y) {
         for (int x = 0; x < config.width; ++x) {
             double height = heightMap[y][x];
-            
-            // Generate moisture noise for biome variation
-            double moisture = noise_generator->noise(x * 0.01, y * 0.01);
+            double moisture = moistureMap[y][x];
             
             uint16_t tileId = getTerrainTileId(height, moisture, config);
             terrainLayer[y][x] = tileId;
@@ -392,6 +471,78 @@ std::vector<std::vector<uint16_t>> OTMapGenerator::generateTerrainLayer(const st
     }
     
     return terrainLayer;
+}
+
+uint16_t OTMapGenerator::getTerrainTileId(double height, double moisture, const GenerationConfig& config) {
+    // Use the new terrain layer selection system
+    const TerrainLayer* selectedLayer = selectTerrainLayer(height, moisture, config);
+    
+    if (selectedLayer) {
+        return selectedLayer->item_id;
+    }
+    
+    // Fallback to water if no layer matches
+    return config.water_item_id;
+}
+
+const TerrainLayer* OTMapGenerator::selectTerrainLayer(double height, double moisture, const GenerationConfig& config) {
+    // Modify terrain selection based on generation type
+    std::vector<const TerrainLayer*> availableLayers;
+    
+    // Filter layers based on generation type
+    for (const auto& layer : config.terrain_layers) {
+        if (!layer.enabled) continue;
+        
+        bool includeLayer = true;
+        
+        if (config.generation_type == "SAND_ISLANDS") {
+            // Prefer sand and water for sand islands
+            if (layer.name == "Grass") includeLayer = false; // Replace grass with sand
+        } else if (config.generation_type == "ICE_ISLANDS") {
+            // Prefer ice/snow terrain for ice islands
+            if (layer.name == "Sand") includeLayer = false; // No sand on ice islands
+        }
+        
+        if (includeLayer) {
+            availableLayers.push_back(&layer);
+        }
+    }
+    
+    // If sand islands, add sand layer where grass would be
+    if (config.generation_type == "SAND_ISLANDS") {
+        for (const auto& layer : config.terrain_layers) {
+            if (layer.name == "Sand" && layer.enabled) {
+                if (height >= 0.0 && height <= 0.7 && moisture >= -1.0 && moisture <= 1.0) {
+                    return &layer; // Use sand instead of grass
+                }
+            }
+        }
+    }
+    
+    // Sort layers by z-order (higher z-order = higher priority)
+    std::sort(availableLayers.begin(), availableLayers.end(), 
+        [](const TerrainLayer* a, const TerrainLayer* b) {
+            return a->z_order > b->z_order; // Higher z-order first
+        });
+    
+    // Find the first layer that matches the height and moisture criteria
+    for (const TerrainLayer* layer : availableLayers) {
+        if (height >= layer->height_min && height <= layer->height_max &&
+            moisture >= layer->moisture_min && moisture <= layer->moisture_max) {
+            
+            // Check coverage probability
+            if (layer->coverage >= 1.0) {
+                return layer;
+            } else {
+                std::uniform_real_distribution<double> dist(0.0, 1.0);
+                if (dist(rng) < layer->coverage) {
+                    return layer;
+                }
+            }
+        }
+    }
+    
+    return nullptr; // No matching layer found
 }
 
 std::vector<std::vector<uint16_t>> OTMapGenerator::generateCaveLayer(const GenerationConfig& config) {
@@ -404,54 +555,12 @@ std::vector<std::vector<uint16_t>> OTMapGenerator::generateCaveLayer(const Gener
             // Random chance for cave generation
             std::uniform_real_distribution<double> dist(0.0, 1.0);
             if (dist(rng) < config.cave_chance && caveNoise > 0.1) {
-                caveLayer[y][x] = OTMapGenItems::STONE_TILE_ID; // Cave floor
+                caveLayer[y][x] = config.cave_item_id; // Use configurable cave item ID
             }
         }
     }
     
     return caveLayer;
-}
-
-uint16_t OTMapGenerator::getTerrainTileId(double height, double moisture, const GenerationConfig& config) {
-    // Similar logic to the original getMapTileFromElevation
-    if (height < 0.0) {
-        return OTMapGenItems::WATER_TILE_ID;
-    }
-    
-    if (height > 0.8) {
-        // High elevation - mountains or snow
-        if (moisture > 0.2) {
-            return OTMapGenItems::STONE_TILE_ID;
-        } else {
-            return OTMapGenItems::SNOW_TILE_ID;
-        }
-    }
-    
-    // Medium to low elevation
-    if (config.mountain_type == "SNOW") {
-        if (height > 0.1) {
-            return OTMapGenItems::SNOW_TILE_ID;
-        } else {
-            return OTMapGenItems::SNOW_TILE_ID;
-        }
-    }
-    
-    // Default terrain generation
-    if (config.sand_biome && moisture < -0.6) {
-        return OTMapGenItems::SAND_TILE_ID;
-    } else {
-        return OTMapGenItems::GRASS_TILE_ID;
-    }
-}
-
-uint16_t OTMapGenerator::getMountainTileId(const std::string& mountainType) {
-    if (mountainType == "SNOW") {
-        return OTMapGenItems::SNOW_MOUNTAIN_TILE_ID;
-    } else if (mountainType == "SAND") {
-        return OTMapGenItems::SAND_MOUNTAIN_TILE_ID;
-    } else {
-        return OTMapGenItems::MOUNTAIN_TILE_ID; // Default mountain type
-    }
 }
 
 double OTMapGenerator::getDistance(int x, int y, int centerX, int centerY, bool euclidean) {
@@ -486,14 +595,22 @@ void OTMapGenerator::addClutter(BaseMap* map, const GenerationConfig& config) {
             if (tile && tile->ground) {
                 uint16_t groundId = tile->ground->getID();
                 
-                // Add vegetation to grass
-                if (groundId == OTMapGenItems::GRASS_TILE_ID) {
-                    placeTreesAndVegetation(map, tile, groundId);
+                // Find the terrain layer this ground belongs to
+                const TerrainLayer* terrainLayer = nullptr;
+                for (const auto& layer : config.terrain_layers) {
+                    if (layer.item_id == groundId && layer.enabled) {
+                        terrainLayer = &layer;
+                        break;
+                    }
                 }
                 
-                // Add stones to various terrains
-                if (groundId == OTMapGenItems::GRAVEL_TILE_ID || groundId == OTMapGenItems::STONE_TILE_ID) {
-                    placeStones(map, tile, groundId);
+                if (terrainLayer) {
+                    // Add decorations based on terrain type
+                    if (terrainLayer->name == "Grass") {
+                        placeTreesAndVegetation(map, tile, groundId);
+                    } else if (terrainLayer->name == "Mountain" || terrainLayer->brush_name.find("stone") != std::string::npos) {
+                        placeStones(map, tile, groundId);
+                    }
                 }
             }
         }
@@ -509,11 +626,11 @@ void OTMapGenerator::placeTreesAndVegetation(BaseMap* map, Tile* tile, uint16_t 
         double rand_val = dist(rng);
         
         if (rand_val < 0.6) {
-            decorationId = OTMapGenItems::TREE_ID;
+            decorationId = 2700; // Tree
         } else if (rand_val < 0.8) {
-            decorationId = OTMapGenItems::BUSH_ID;
+            decorationId = 2785; // Bush
         } else {
-            decorationId = OTMapGenItems::FLOWER_ID;
+            decorationId = 2782; // Flower
         }
         
         OTMapGenUtils::addDecoration(tile, decorationId);
@@ -525,7 +642,7 @@ void OTMapGenerator::placeStones(BaseMap* map, Tile* tile, uint16_t groundId) {
     
     // Random chance for stones
     if (dist(rng) < 0.05) { // 5% chance
-        uint16_t stoneId = (dist(rng) < 0.7) ? OTMapGenItems::SMALL_STONE_ID : OTMapGenItems::LARGE_STONE_ID;
+        uint16_t stoneId = (dist(rng) < 0.7) ? 1770 : 1771; // Small or large stone
         OTMapGenUtils::addDecoration(tile, stoneId);
     }
 }
@@ -535,7 +652,7 @@ void OTMapGenerator::placeCaveDecorations(BaseMap* map, Tile* tile) {
     
     // Random chance for cave decorations
     if (dist(rng) < 0.15) { // 15% chance
-        OTMapGenUtils::addDecoration(tile, OTMapGenItems::STALAGMITE_ID);
+        OTMapGenUtils::addDecoration(tile, 1785); // Stalagmite
     }
 }
 
@@ -543,8 +660,9 @@ std::vector<std::vector<uint16_t>> OTMapGenerator::generateLayers(const Generati
     // Initialize random seed
     seedRandom(config.seed);
     
-    // Generate height map
+    // Generate height map and moisture map
     auto heightMap = generateHeightMap(config);
+    auto moistureMap = generateMoistureMap(config);
     
     // Create 8 layers (floors) like the original OTMapGen
     std::vector<std::vector<std::vector<uint16_t>>> layers(8);
@@ -556,11 +674,9 @@ std::vector<std::vector<uint16_t>> OTMapGenerator::generateLayers(const Generati
     for (int y = 0; y < config.height; ++y) {
         for (int x = 0; x < config.width; ++x) {
             double height = heightMap[y][x];
+            double moisture = moistureMap[y][x];
             
-            // Generate moisture noise for biome variation
-            double moisture = noise_generator->noise(x * 0.01, y * 0.01);
-            
-            // Get terrain tile ID
+            // Get terrain tile ID using the new configurable system
             uint16_t tileId = getTerrainTileId(height, moisture, config);
             
             // Calculate elevation for determining elevated content
@@ -570,6 +686,77 @@ std::vector<std::vector<uint16_t>> OTMapGenerator::generateLayers(const Generati
             // Fill column - this will put main terrain on layers[0] (Floor 7)
             // and add elevated content based on elevation value
             fillColumn(layers, x, y, elevation, tileId, config);
+        }
+    }
+    
+    // Post-process: Add neighbor influence to make mountains more clustered
+    // This creates more realistic mountain formations
+    for (int pass = 0; pass < 2; ++pass) { // Do 2 passes for better clustering
+        for (int floor = 1; floor < 4; ++floor) { // Only process elevated floors
+            std::vector<std::vector<uint16_t>> newLayer = layers[floor]; // Copy current layer
+            
+            for (int y = 1; y < config.height - 1; ++y) {
+                for (int x = 1; x < config.width - 1; ++x) {
+                    if (layers[floor][y][x] == 0) { // Empty tile
+                        // Check if surrounded by mountain terrain
+                        int mountainNeighbors = 0;
+                        uint16_t neighborTerrain = 0;
+                        
+                        // Check 8 neighbors
+                        for (int dy = -1; dy <= 1; ++dy) {
+                            for (int dx = -1; dx <= 1; ++dx) {
+                                if (dx == 0 && dy == 0) continue;
+                                
+                                uint16_t neighborTile = layers[floor][y + dy][x + dx];
+                                if (neighborTile != 0) {
+                                    mountainNeighbors++;
+                                    neighborTerrain = neighborTile;
+                                }
+                            }
+                        }
+                        
+                        // If enough neighbors have terrain, add some too
+                        if (mountainNeighbors >= 4) { // At least half neighbors have terrain
+                            std::uniform_real_distribution<double> dist(0.0, 1.0);
+                            double probability = mountainNeighbors / 8.0 * 0.6; // Max 60% chance
+                            
+                            if (dist(rng) < probability) {
+                                newLayer[y][x] = neighborTerrain;
+                            }
+                        }
+                    }
+                }
+            }
+            
+            layers[floor] = newLayer; // Apply changes
+        }
+    }
+    
+    // Add caves if enabled (now using configurable cave generation)
+    if (config.add_caves) {
+        auto caveLayer = generateCaveLayer(config);
+        
+        // Place caves on underground floors (below the main surface)
+        // In Tibia coordinates: floors 8+ are underground
+        // But since we only have 8 layers (0-7), we'll place caves on upper floors sparsely
+        for (int y = 0; y < config.height; ++y) {
+            for (int x = 0; x < config.width; ++x) {
+                uint16_t caveId = caveLayer[y][x];
+                if (caveId != 0) {
+                    // Place caves on layers 1-3 (floors 6-4) with decreasing probability
+                    std::uniform_real_distribution<double> dist(0.0, 1.0);
+                    
+                    if (dist(rng) < 0.8) { // 80% chance on floor 6
+                        layers[1][y][x] = caveId;
+                    }
+                    if (dist(rng) < 0.5) { // 50% chance on floor 5  
+                        layers[2][y][x] = caveId;
+                    }
+                    if (dist(rng) < 0.2) { // 20% chance on floor 4
+                        layers[3][y][x] = caveId;
+                    }
+                }
+            }
         }
     }
     
@@ -600,27 +787,101 @@ void OTMapGenerator::fillColumn(std::vector<std::vector<std::vector<uint16_t>>>&
     // Always place the surface tile on the ground level (layers[0] → Floor 7)
     layers[0][y][x] = surfaceTileId;
     
-    // For elevated terrain, we can optionally fill some above-ground floors
-    // with the same terrain or sparse variations
-    if (elevation > 4) { // High elevation areas
-        // Add some terrain to the first above-ground floor
-        layers[1][y][x] = surfaceTileId;
+    // STRUCTURAL INTEGRITY: Only add upper floors if there's terrain below to support them
+    // Create realistic multi-level mountain structures based on elevation
+    
+    if (elevation >= 3) { // Medium to high elevation areas
+        bool isMountainTerrain = (surfaceTileId == 919 || surfaceTileId == 4468 || surfaceTileId == 4469);
+        bool isHighElevation = elevation >= 5;
+        bool isVeryHighElevation = elevation >= 6;
         
-        if (elevation > 6) { // Very high elevation
-            // Add sparse terrain to second above-ground floor
-            layers[2][y][x] = surfaceTileId;
+        // Determine how many floors this mountain should have
+        int mountainFloors = 1; // At least the base floor
+        
+        if (isHighElevation) {
+            mountainFloors = 2 + (elevation - 5); // 2-4 floors based on elevation
+        }
+        
+        // Fill mountain floors from bottom to top - ENSURING STRUCTURAL SUPPORT
+        uint16_t lastPlacedTerrain = surfaceTileId;
+        bool hasSupport = true;
+        
+        for (int floor = 1; floor < mountainFloors && floor < 8 && hasSupport; ++floor) {
+            double floorProbability = 1.0; // Start with high probability
+            
+            // Reduce probability as we go higher, but not too aggressively
+            floorProbability -= (floor - 1) * 0.15; // Reduce by 15% per floor
+            floorProbability = std::max(0.4, floorProbability); // Never below 40%
+            
+            // STRUCTURAL CHECK: Only place if there's support from the floor below
+            if (floor > 1 && layers[floor - 1][y][x] == 0) {
+                hasSupport = false; // No support below, stop building up
+                break;
+            }
+            
+            std::uniform_real_distribution<double> dist(0.0, 1.0);
+            double roll = dist(rng);
+            
+            if (roll < floorProbability) {
+                if (isMountainTerrain) {
+                    // Keep mountain terrain for most levels
+                    layers[floor][y][x] = surfaceTileId;
+                    lastPlacedTerrain = surfaceTileId;
+                } else if (isHighElevation && floor <= 2) {
+                    // For high elevation non-mountain areas, create elevated ground
+                    uint16_t grassId = 4526; // Default grass
+                    for (const auto& layer : config.terrain_layers) {
+                        if (layer.name == "Grass" && layer.enabled) {
+                            grassId = layer.item_id;
+                            break;
+                        }
+                    }
+                    layers[floor][y][x] = grassId;
+                    lastPlacedTerrain = grassId;
+                }
+            } else {
+                // If we don't place terrain, stop building up (creates natural stepped look)
+                hasSupport = false;
+                break;
+            }
+        }
+        
+        // Special case: Very high mountains can have different terrain on top
+        if (isVeryHighElevation && mountainFloors >= 3) {
+            int topFloor = mountainFloors - 1;
+            if (topFloor < 8 && layers[topFloor][y][x] != 0) {
+                // Snow on peaks for ice islands or snow generation
+                if (config.generation_type == "ICE_ISLANDS" || config.generation_type == "MOUNTAINS") {
+                    layers[topFloor][y][x] = 670; // Snow terrain
+                }
+            }
         }
     }
     
-    // Note: We're not filling "below" anymore since we're not doing underground yet
-    // All the main terrain goes on the ground level (layers[0] → Floor 7)
-    // Above-ground floors (layers[1-7] → Floors 6-0) get sparse elevated content
+    // For lower elevation areas, occasionally add some elevated ground WITH SUPPORT CHECK
+    else if (elevation >= 1) {
+        std::uniform_real_distribution<double> dist(0.0, 1.0);
+        
+        // Small chance for low hills/elevated grass
+        if (dist(rng) < 0.2) { // 20% chance for small elevation
+            uint16_t elevatedTerrain = surfaceTileId;
+            
+            // If it's sand at base, maybe make it grass (oasis effect)
+            if (surfaceTileId == 231) { // Sand
+                for (const auto& layer : config.terrain_layers) {
+                    if (layer.name == "Grass" && layer.enabled) {
+                        elevatedTerrain = layer.item_id;
+                        break;
+                    }
+                }
+            }
+            
+            layers[1][y][x] = elevatedTerrain;
+        }
+    }
 }
 
-// Utility functions (no longer needed - using Action system instead)
-
-
-
+// Utility functions
 namespace OTMapGenUtils {
     Tile* getOrCreateTile(BaseMap* map, int x, int y, int z) {
         Position pos(x, y, z);
@@ -658,19 +919,50 @@ namespace OTMapGenUtils {
     }
     
     bool isWaterTile(uint16_t itemId) {
-        return itemId == OTMapGenItems::WATER_TILE_ID;
+        // This could be made configurable by checking against water item IDs
+        return itemId == 4608 || itemId == 4609 || itemId == 4610 || itemId == 4611;
     }
     
     bool isLandTile(uint16_t itemId) {
-        return itemId == OTMapGenItems::GRASS_TILE_ID || 
-               itemId == OTMapGenItems::SAND_TILE_ID ||
-               itemId == OTMapGenItems::STONE_TILE_ID ||
-               itemId == OTMapGenItems::GRAVEL_TILE_ID;
+        // This could be made configurable by checking against land item IDs  
+        return itemId == 4526 || itemId == 231 || itemId == 1284 || itemId == 4597;
     }
     
     bool isMountainTile(uint16_t itemId) {
-        return itemId == OTMapGenItems::MOUNTAIN_TILE_ID ||
-               itemId == OTMapGenItems::SNOW_MOUNTAIN_TILE_ID ||
-               itemId == OTMapGenItems::SAND_MOUNTAIN_TILE_ID;
+        // This could be made configurable by checking against mountain item IDs
+        return itemId == 919 || itemId == 4611 || itemId == 4621 || itemId == 4616;
+    }
+    
+    std::vector<std::string> getAvailableBrushes() {
+        // This should parse the actual grounds.xml files
+        // For now, return a basic list
+        return {
+            "grass", "sea", "sand", "mountain", "cave", "snow", 
+            "stone floor", "wooden floor", "lawn", "ice"
+        };
+    }
+    
+    uint16_t getPrimaryItemFromBrush(const std::string& brushName) {
+        // This should parse the grounds.xml to get the primary item ID
+        // For now, use basic mappings
+        if (brushName == "grass") return 4526;
+        else if (brushName == "sea") return 4608;
+        else if (brushName == "sand") return 231;
+        else if (brushName == "mountain") return 919;
+        else if (brushName == "cave") return 351;
+        else if (brushName == "snow") return 670;
+        else if (brushName == "stone floor") return 431;
+        else if (brushName == "wooden floor") return 405;
+        else if (brushName == "lawn") return 106;
+        else if (brushName == "ice") return 671;
+        return 100; // Default
+    }
+    
+    bool applyBrushToTile(BaseMap* map, Tile* tile, const std::string& brushName, int x, int y, int z) {
+        // This should integrate with the actual brush system
+        // For now, just set the ground tile
+        uint16_t itemId = getPrimaryItemFromBrush(brushName);
+        setGroundTile(tile, itemId);
+        return true;
     }
 } 

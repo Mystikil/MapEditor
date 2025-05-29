@@ -43,15 +43,21 @@ wxBEGIN_EVENT_TABLE(OTMapGenDialog, wxDialog)
 	EVT_SPINCTRL(ID_WIDTH_SPIN, OTMapGenDialog::OnParameterChange)
 	EVT_SPINCTRL(ID_HEIGHT_SPIN, OTMapGenDialog::OnParameterChange)
 	EVT_CHOICE(ID_VERSION_CHOICE, OTMapGenDialog::OnParameterChangeText)
-	EVT_CHOICE(ID_MOUNTAIN_TYPE_CHOICE, OTMapGenDialog::OnMountainTypeChange)
-	EVT_COMMAND_SCROLL(ID_NOISE_INCREMENT_SLIDER, OTMapGenDialog::OnParameterChange)
-	EVT_COMMAND_SCROLL(ID_ISLAND_DISTANCE_SLIDER, OTMapGenDialog::OnParameterChange)
-	EVT_COMMAND_SCROLL(ID_CAVE_DEPTH_SLIDER, OTMapGenDialog::OnParameterChange)
-	EVT_COMMAND_SCROLL(ID_CAVE_ROUGHNESS_SLIDER, OTMapGenDialog::OnParameterChange)
-	EVT_COMMAND_SCROLL(ID_CAVE_CHANCE_SLIDER, OTMapGenDialog::OnParameterChange)
-	EVT_COMMAND_SCROLL(ID_WATER_LEVEL_SLIDER, OTMapGenDialog::OnParameterChange)
-	EVT_COMMAND_SCROLL(ID_EXPONENT_SLIDER, OTMapGenDialog::OnParameterChange)
-	EVT_COMMAND_SCROLL(ID_LINEAR_SLIDER, OTMapGenDialog::OnParameterChange)
+	EVT_CHOICE(ID_GENERATION_TYPE_CHOICE, OTMapGenDialog::OnGenerationTypeChange)
+	
+	// Terrain layer management events
+	EVT_LIST_ITEM_SELECTED(ID_TERRAIN_LAYER_LIST, OTMapGenDialog::OnTerrainLayerSelect)
+	EVT_BUTTON(ID_ADD_LAYER, OTMapGenDialog::OnTerrainLayerAdd)
+	EVT_BUTTON(ID_REMOVE_LAYER, OTMapGenDialog::OnTerrainLayerRemove)
+	EVT_BUTTON(ID_MOVE_UP_LAYER, OTMapGenDialog::OnTerrainLayerMoveUp)
+	EVT_BUTTON(ID_MOVE_DOWN_LAYER, OTMapGenDialog::OnTerrainLayerMoveDown)
+	EVT_BUTTON(ID_EDIT_LAYER, OTMapGenDialog::OnTerrainLayerEdit)
+	EVT_CHOICE(ID_LAYER_BRUSH_CHOICE, OTMapGenDialog::OnBrushChoice)
+	EVT_COMMAND(ID_LAYER_ITEM_ID_SPIN, wxEVT_COMMAND_SPINCTRL_UPDATED, OTMapGenDialog::OnItemIdChange)
+	EVT_CHOICE(ID_CAVE_BRUSH_CHOICE, OTMapGenDialog::OnBrushChoice)
+	EVT_COMMAND(ID_CAVE_ITEM_ID_SPIN, wxEVT_COMMAND_SPINCTRL_UPDATED, OTMapGenDialog::OnItemIdChange)
+	EVT_CHOICE(ID_WATER_BRUSH_CHOICE, OTMapGenDialog::OnBrushChoice)
+	EVT_COMMAND(ID_WATER_ITEM_ID_SPIN, wxEVT_COMMAND_SPINCTRL_UPDATED, OTMapGenDialog::OnItemIdChange)
 wxEND_EVENT_TABLE()
 
 OTMapGenDialog::OTMapGenDialog(wxWindow* parent) : 
@@ -75,12 +81,13 @@ OTMapGenDialog::OTMapGenDialog(wxWindow* parent) :
 	// Basic parameters group
 	wxStaticBoxSizer* basic_params_sizer = new wxStaticBoxSizer(wxVERTICAL, basic_panel, "Basic Parameters");
 	
-	// Seed
+	// Seed - allow large 64-bit integers
 	wxFlexGridSizer* basic_grid_sizer = new wxFlexGridSizer(2, 2, 5, 10);
 	basic_grid_sizer->AddGrowableCol(1);
 	
 	basic_grid_sizer->Add(new wxStaticText(basic_panel, wxID_ANY, "Seed:"), 0, wxALIGN_CENTER_VERTICAL);
-	seed_text_ctrl = new wxTextCtrl(basic_panel, ID_SEED_TEXT, wxString::Format("%d", rand()));
+	seed_text_ctrl = new wxTextCtrl(basic_panel, ID_SEED_TEXT, wxString::Format("%lld", (long long)time(nullptr) * 1000));
+	seed_text_ctrl->SetToolTip("Enter any integer value (supports 64-bit seeds like original OTMapGen)");
 	basic_grid_sizer->Add(seed_text_ctrl, 1, wxEXPAND);
 	
 	// Width
@@ -103,15 +110,18 @@ OTMapGenDialog::OTMapGenDialog(wxWindow* parent) :
 	version_choice->SetSelection(0);
 	basic_grid_sizer->Add(version_choice, 1, wxEXPAND);
 	
-	// Mountain Type
-	basic_grid_sizer->Add(new wxStaticText(basic_panel, wxID_ANY, "Mountain Type:"), 0, wxALIGN_CENTER_VERTICAL);
-	wxArrayString mountain_types;
-	mountain_types.Add("MOUNTAIN");
-	mountain_types.Add("SNOW");
-	mountain_types.Add("SAND");
-	mountain_type_choice = new wxChoice(basic_panel, ID_MOUNTAIN_TYPE_CHOICE, wxDefaultPosition, wxDefaultSize, mountain_types);
-	mountain_type_choice->SetSelection(0);
-	basic_grid_sizer->Add(mountain_type_choice, 1, wxEXPAND);
+	// Generation Type (was Mountain Type)
+	basic_grid_sizer->Add(new wxStaticText(basic_panel, wxID_ANY, "Generation Type:"), 0, wxALIGN_CENTER_VERTICAL);
+	wxArrayString generation_types;
+	generation_types.Add("CONTINENTAL"); // Standard landmass
+	generation_types.Add("ISLANDS"); // Grass islands in water
+	generation_types.Add("SAND_ISLANDS"); // Desert islands
+	generation_types.Add("ICE_ISLANDS"); // Frozen islands
+	generation_types.Add("ARCHIPELAGO"); // Multiple small islands
+	generation_types.Add("MOUNTAINS"); // Mountain-focused terrain
+	generation_type_choice = new wxChoice(basic_panel, ID_GENERATION_TYPE_CHOICE, wxDefaultPosition, wxDefaultSize, generation_types);
+	generation_type_choice->SetSelection(0);
+	basic_grid_sizer->Add(generation_type_choice, 1, wxEXPAND);
 	
 	basic_params_sizer->Add(basic_grid_sizer, 0, wxEXPAND | wxALL, 5);
 	
@@ -123,11 +133,14 @@ OTMapGenDialog::OTMapGenDialog(wxWindow* parent) :
 	smooth_coastline_checkbox->SetValue(true);
 	add_caves_checkbox = new wxCheckBox(basic_panel, wxID_ANY, "Add Underground Caves");
 	add_caves_checkbox->SetValue(true);
+	auto_borderize_checkbox = new wxCheckBox(basic_panel, wxID_ANY, "Auto-Borderize (Apply brush borders after generation)");
+	auto_borderize_checkbox->SetValue(true);
 	
 	basic_params_sizer->Add(terrain_only_checkbox, 0, wxEXPAND | wxALL, 5);
 	basic_params_sizer->Add(sand_biome_checkbox, 0, wxEXPAND | wxALL, 5);
 	basic_params_sizer->Add(smooth_coastline_checkbox, 0, wxEXPAND | wxALL, 5);
 	basic_params_sizer->Add(add_caves_checkbox, 0, wxEXPAND | wxALL, 5);
+	basic_params_sizer->Add(auto_borderize_checkbox, 0, wxEXPAND | wxALL, 5);
 	
 	basic_sizer->Add(basic_params_sizer, 0, wxEXPAND | wxALL, 5);
 	
@@ -140,7 +153,7 @@ OTMapGenDialog::OTMapGenDialog(wxWindow* parent) :
 	// Floor navigation
 	wxBoxSizer* floor_nav_sizer = new wxBoxSizer(wxHORIZONTAL);
 	floor_down_button = new wxButton(basic_panel, ID_FLOOR_DOWN, "Floor -");
-	floor_label = new wxStaticText(basic_panel, wxID_ANY, "Floor: 7 (Ground)");
+	floor_label = new wxStaticText(basic_panel, wxID_ANY, "Floor: 7 (Ground Level - Main Terrain)");
 	floor_up_button = new wxButton(basic_panel, ID_FLOOR_UP, "Floor +");
 	
 	floor_nav_sizer->Add(floor_down_button, 0, wxALL, 2);
@@ -177,61 +190,233 @@ OTMapGenDialog::OTMapGenDialog(wxWindow* parent) :
 	wxBoxSizer* advanced_sizer = new wxBoxSizer(wxVERTICAL);
 	
 	wxStaticBoxSizer* advanced_params_sizer = new wxStaticBoxSizer(wxVERTICAL, advanced_panel, "Advanced Parameters");
-	wxFlexGridSizer* advanced_grid_sizer = new wxFlexGridSizer(3, 3, 5, 10);
+	wxFlexGridSizer* advanced_grid_sizer = new wxFlexGridSizer(2, 2, 5, 10);
 	advanced_grid_sizer->AddGrowableCol(1);
 	
-	// Noise Increment
+	// Noise Increment - direct input
 	advanced_grid_sizer->Add(new wxStaticText(advanced_panel, wxID_ANY, "Noise Increment:"), 0, wxALIGN_CENTER_VERTICAL);
-	noise_increment_slider = new wxSlider(advanced_panel, ID_NOISE_INCREMENT_SLIDER, 100, 1, 300, wxDefaultPosition, wxDefaultSize, wxSL_HORIZONTAL | wxSL_LABELS);
-	advanced_grid_sizer->Add(noise_increment_slider, 1, wxEXPAND);
-	advanced_grid_sizer->Add(new wxStaticText(advanced_panel, wxID_ANY, "0.01 - 3.0"), 0, wxALIGN_CENTER_VERTICAL);
+	noise_increment_text = new wxTextCtrl(advanced_panel, ID_NOISE_INCREMENT_TEXT, "1.0");
+	noise_increment_text->SetToolTip("Range: 0.01 - 3.0");
+	advanced_grid_sizer->Add(noise_increment_text, 1, wxEXPAND);
 	
-	// Island Distance
+	// Island Distance - direct input
 	advanced_grid_sizer->Add(new wxStaticText(advanced_panel, wxID_ANY, "Island Distance:"), 0, wxALIGN_CENTER_VERTICAL);
-	island_distance_slider = new wxSlider(advanced_panel, ID_ISLAND_DISTANCE_SLIDER, 92, 50, 99, wxDefaultPosition, wxDefaultSize, wxSL_HORIZONTAL | wxSL_LABELS);
-	advanced_grid_sizer->Add(island_distance_slider, 1, wxEXPAND);
-	advanced_grid_sizer->Add(new wxStaticText(advanced_panel, wxID_ANY, "0.5 - 0.99"), 0, wxALIGN_CENTER_VERTICAL);
+	island_distance_text = new wxTextCtrl(advanced_panel, ID_ISLAND_DISTANCE_TEXT, "0.92");
+	island_distance_text->SetToolTip("Range: 0.5 - 0.99");
+	advanced_grid_sizer->Add(island_distance_text, 1, wxEXPAND);
 	
-	// Cave Depth
+	// Cave Depth - direct input
 	advanced_grid_sizer->Add(new wxStaticText(advanced_panel, wxID_ANY, "Cave Depth:"), 0, wxALIGN_CENTER_VERTICAL);
-	cave_depth_slider = new wxSlider(advanced_panel, ID_CAVE_DEPTH_SLIDER, 20, 5, 50, wxDefaultPosition, wxDefaultSize, wxSL_HORIZONTAL | wxSL_LABELS);
-	advanced_grid_sizer->Add(cave_depth_slider, 1, wxEXPAND);
-	advanced_grid_sizer->Add(new wxStaticText(advanced_panel, wxID_ANY, "5 - 50"), 0, wxALIGN_CENTER_VERTICAL);
+	cave_depth_text = new wxTextCtrl(advanced_panel, ID_CAVE_DEPTH_TEXT, "20");
+	cave_depth_text->SetToolTip("Range: 5 - 50");
+	advanced_grid_sizer->Add(cave_depth_text, 1, wxEXPAND);
 	
-	// Cave Roughness
+	// Cave Roughness - direct input
 	advanced_grid_sizer->Add(new wxStaticText(advanced_panel, wxID_ANY, "Cave Roughness:"), 0, wxALIGN_CENTER_VERTICAL);
-	cave_roughness_slider = new wxSlider(advanced_panel, ID_CAVE_ROUGHNESS_SLIDER, 45, 10, 80, wxDefaultPosition, wxDefaultSize, wxSL_HORIZONTAL | wxSL_LABELS);
-	advanced_grid_sizer->Add(cave_roughness_slider, 1, wxEXPAND);
-	advanced_grid_sizer->Add(new wxStaticText(advanced_panel, wxID_ANY, "0.1 - 0.8"), 0, wxALIGN_CENTER_VERTICAL);
+	cave_roughness_text = new wxTextCtrl(advanced_panel, ID_CAVE_ROUGHNESS_TEXT, "0.45");
+	cave_roughness_text->SetToolTip("Range: 0.1 - 0.8");
+	advanced_grid_sizer->Add(cave_roughness_text, 1, wxEXPAND);
 	
-	// Cave Chance
+	// Cave Chance - direct input
 	advanced_grid_sizer->Add(new wxStaticText(advanced_panel, wxID_ANY, "Cave Chance:"), 0, wxALIGN_CENTER_VERTICAL);
-	cave_chance_slider = new wxSlider(advanced_panel, ID_CAVE_CHANCE_SLIDER, 9, 1, 20, wxDefaultPosition, wxDefaultSize, wxSL_HORIZONTAL | wxSL_LABELS);
-	advanced_grid_sizer->Add(cave_chance_slider, 1, wxEXPAND);
-	advanced_grid_sizer->Add(new wxStaticText(advanced_panel, wxID_ANY, "0.01 - 0.2"), 0, wxALIGN_CENTER_VERTICAL);
+	cave_chance_text = new wxTextCtrl(advanced_panel, ID_CAVE_CHANCE_TEXT, "0.09");
+	cave_chance_text->SetToolTip("Range: 0.01 - 0.2");
+	advanced_grid_sizer->Add(cave_chance_text, 1, wxEXPAND);
 	
-	// Water Level
+	// Water Level - direct input
 	advanced_grid_sizer->Add(new wxStaticText(advanced_panel, wxID_ANY, "Water Level:"), 0, wxALIGN_CENTER_VERTICAL);
-	water_level_slider = new wxSlider(advanced_panel, ID_WATER_LEVEL_SLIDER, 2, 0, 10, wxDefaultPosition, wxDefaultSize, wxSL_HORIZONTAL | wxSL_LABELS);
-	advanced_grid_sizer->Add(water_level_slider, 1, wxEXPAND);
-	advanced_grid_sizer->Add(new wxStaticText(advanced_panel, wxID_ANY, "0 - 10"), 0, wxALIGN_CENTER_VERTICAL);
+	water_level_text = new wxTextCtrl(advanced_panel, ID_WATER_LEVEL_TEXT, "7");
+	water_level_text->SetToolTip("Tibia Z-coordinate (7 = ground level)");
+	advanced_grid_sizer->Add(water_level_text, 1, wxEXPAND);
 	
-	// Exponent
+	// Exponent - direct input
 	advanced_grid_sizer->Add(new wxStaticText(advanced_panel, wxID_ANY, "Exponent:"), 0, wxALIGN_CENTER_VERTICAL);
-	exponent_slider = new wxSlider(advanced_panel, ID_EXPONENT_SLIDER, 140, 100, 300, wxDefaultPosition, wxDefaultSize, wxSL_HORIZONTAL | wxSL_LABELS);
-	advanced_grid_sizer->Add(exponent_slider, 1, wxEXPAND);
-	advanced_grid_sizer->Add(new wxStaticText(advanced_panel, wxID_ANY, "1.0 - 3.0"), 0, wxALIGN_CENTER_VERTICAL);
+	exponent_text = new wxTextCtrl(advanced_panel, ID_EXPONENT_TEXT, "1.4");
+	exponent_text->SetToolTip("Range: 1.0 - 3.0");
+	advanced_grid_sizer->Add(exponent_text, 1, wxEXPAND);
 	
-	// Linear
+	// Linear - direct input
 	advanced_grid_sizer->Add(new wxStaticText(advanced_panel, wxID_ANY, "Linear:"), 0, wxALIGN_CENTER_VERTICAL);
-	linear_slider = new wxSlider(advanced_panel, ID_LINEAR_SLIDER, 6, 1, 20, wxDefaultPosition, wxDefaultSize, wxSL_HORIZONTAL | wxSL_LABELS);
-	advanced_grid_sizer->Add(linear_slider, 1, wxEXPAND);
-	advanced_grid_sizer->Add(new wxStaticText(advanced_panel, wxID_ANY, "1 - 20"), 0, wxALIGN_CENTER_VERTICAL);
+	linear_text = new wxTextCtrl(advanced_panel, ID_LINEAR_TEXT, "6.0");
+	linear_text->SetToolTip("Range: 1.0 - 20.0");
+	advanced_grid_sizer->Add(linear_text, 1, wxEXPAND);
+	
+	// === Resource Dominance Controls ===
+	advanced_grid_sizer->Add(new wxStaticText(advanced_panel, wxID_ANY, ""), 0); // Spacer
+	advanced_grid_sizer->Add(new wxStaticText(advanced_panel, wxID_ANY, ""), 0); // Spacer
+	
+	advanced_grid_sizer->Add(new wxStaticText(advanced_panel, wxID_ANY, "Water Dominance:"), 0, wxALIGN_CENTER_VERTICAL);
+	water_dominance_text = new wxTextCtrl(advanced_panel, ID_WATER_DOMINANCE_TEXT, "1.0");
+	water_dominance_text->SetToolTip("Range: 0.1 - 3.0 (Higher = more water)");
+	advanced_grid_sizer->Add(water_dominance_text, 1, wxEXPAND);
+	
+	advanced_grid_sizer->Add(new wxStaticText(advanced_panel, wxID_ANY, "Land Dominance:"), 0, wxALIGN_CENTER_VERTICAL);
+	land_dominance_text = new wxTextCtrl(advanced_panel, ID_LAND_DOMINANCE_TEXT, "1.0");
+	land_dominance_text->SetToolTip("Range: 0.1 - 3.0 (Higher = more land)");
+	advanced_grid_sizer->Add(land_dominance_text, 1, wxEXPAND);
+	
+	advanced_grid_sizer->Add(new wxStaticText(advanced_panel, wxID_ANY, "Mountain Dominance:"), 0, wxALIGN_CENTER_VERTICAL);
+	mountain_dominance_text = new wxTextCtrl(advanced_panel, ID_MOUNTAIN_DOMINANCE_TEXT, "1.0");
+	mountain_dominance_text->SetToolTip("Range: 0.1 - 3.0 (Higher = more mountains)");
+	advanced_grid_sizer->Add(mountain_dominance_text, 1, wxEXPAND);
+	
+	advanced_grid_sizer->Add(new wxStaticText(advanced_panel, wxID_ANY, "Island Size:"), 0, wxALIGN_CENTER_VERTICAL);
+	island_size_text = new wxTextCtrl(advanced_panel, ID_ISLAND_SIZE_TEXT, "1.0");
+	island_size_text->SetToolTip("Range: 0.3 - 3.0 (Island generation size multiplier)");
+	advanced_grid_sizer->Add(island_size_text, 1, wxEXPAND);
 	
 	advanced_params_sizer->Add(advanced_grid_sizer, 1, wxEXPAND | wxALL, 5);
 	advanced_sizer->Add(advanced_params_sizer, 1, wxEXPAND | wxALL, 5);
 	advanced_panel->SetSizer(advanced_sizer);
 	notebook->AddPage(advanced_panel, "Advanced Settings", false);
+	
+	// === Layout Design Tab ===
+	wxPanel* layout_panel = new wxPanel(notebook);
+	wxBoxSizer* layout_sizer = new wxBoxSizer(wxVERTICAL);
+	
+	// Terrain Layers section
+	wxStaticBoxSizer* terrain_layers_sizer = new wxStaticBoxSizer(wxHORIZONTAL, layout_panel, "Terrain Layers");
+	
+	// Terrain layer list
+	terrain_layer_list = new wxListCtrl(layout_panel, ID_TERRAIN_LAYER_LIST, wxDefaultPosition, wxSize(300, 200), 
+		wxLC_REPORT | wxLC_SINGLE_SEL);
+	terrain_layer_list->InsertColumn(0, "Name", wxLIST_FORMAT_LEFT, 100);
+	terrain_layer_list->InsertColumn(1, "Brush", wxLIST_FORMAT_LEFT, 100);
+	terrain_layer_list->InsertColumn(2, "Item ID", wxLIST_FORMAT_LEFT, 60);
+	terrain_layer_list->InsertColumn(3, "Height", wxLIST_FORMAT_LEFT, 80);
+	terrain_layer_list->InsertColumn(4, "Enabled", wxLIST_FORMAT_LEFT, 60);
+	
+	terrain_layers_sizer->Add(terrain_layer_list, 1, wxEXPAND | wxALL, 5);
+	
+	// Layer control buttons
+	wxBoxSizer* layer_buttons_sizer = new wxBoxSizer(wxVERTICAL);
+	add_layer_button = new wxButton(layout_panel, ID_ADD_LAYER, "Add Layer");
+	remove_layer_button = new wxButton(layout_panel, ID_REMOVE_LAYER, "Remove Layer");
+	move_up_button = new wxButton(layout_panel, ID_MOVE_UP_LAYER, "Move Up");
+	move_down_button = new wxButton(layout_panel, ID_MOVE_DOWN_LAYER, "Move Down");
+	edit_layer_button = new wxButton(layout_panel, ID_EDIT_LAYER, "Edit Layer");
+	
+	layer_buttons_sizer->Add(add_layer_button, 0, wxEXPAND | wxALL, 2);
+	layer_buttons_sizer->Add(remove_layer_button, 0, wxEXPAND | wxALL, 2);
+	layer_buttons_sizer->Add(move_up_button, 0, wxEXPAND | wxALL, 2);
+	layer_buttons_sizer->Add(move_down_button, 0, wxEXPAND | wxALL, 2);
+	layer_buttons_sizer->Add(edit_layer_button, 0, wxEXPAND | wxALL, 2);
+	layer_buttons_sizer->AddStretchSpacer();
+	
+	terrain_layers_sizer->Add(layer_buttons_sizer, 0, wxEXPAND | wxALL, 5);
+	
+	// Layer Properties section
+	wxStaticBoxSizer* layer_props_sizer = new wxStaticBoxSizer(wxVERTICAL, layout_panel, "Layer Properties");
+	layer_properties_panel = new wxPanel(layout_panel);
+	wxFlexGridSizer* props_grid_sizer = new wxFlexGridSizer(5, 4, 5, 10);
+	props_grid_sizer->AddGrowableCol(1);
+	props_grid_sizer->AddGrowableCol(3);
+	
+	// Row 1: Name and Brush
+	props_grid_sizer->Add(new wxStaticText(layer_properties_panel, wxID_ANY, "Name:"), 0, wxALIGN_CENTER_VERTICAL);
+	layer_name_text = new wxTextCtrl(layer_properties_panel, wxID_ANY, "");
+	props_grid_sizer->Add(layer_name_text, 1, wxEXPAND);
+	
+	props_grid_sizer->Add(new wxStaticText(layer_properties_panel, wxID_ANY, "Brush:"), 0, wxALIGN_CENTER_VERTICAL);
+	layer_brush_choice = new wxChoice(layer_properties_panel, ID_LAYER_BRUSH_CHOICE);
+	props_grid_sizer->Add(layer_brush_choice, 1, wxEXPAND);
+	
+	// Row 2: Item ID and Z-Order
+	props_grid_sizer->Add(new wxStaticText(layer_properties_panel, wxID_ANY, "Item ID:"), 0, wxALIGN_CENTER_VERTICAL);
+	layer_item_id_spin = new wxSpinCtrl(layer_properties_panel, ID_LAYER_ITEM_ID_SPIN, "100", wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS, 100, 65535, 100);
+	props_grid_sizer->Add(layer_item_id_spin, 1, wxEXPAND);
+	
+	props_grid_sizer->Add(new wxStaticText(layer_properties_panel, wxID_ANY, "Z-Order:"), 0, wxALIGN_CENTER_VERTICAL);
+	z_order_spin = new wxSpinCtrl(layer_properties_panel, wxID_ANY, "1000", wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS, 0, 10000, 1000);
+	props_grid_sizer->Add(z_order_spin, 1, wxEXPAND);
+	
+	// Row 3: Height range
+	props_grid_sizer->Add(new wxStaticText(layer_properties_panel, wxID_ANY, "Height Min:"), 0, wxALIGN_CENTER_VERTICAL);
+	height_min_text = new wxTextCtrl(layer_properties_panel, wxID_ANY, "0.0");
+	props_grid_sizer->Add(height_min_text, 1, wxEXPAND);
+	
+	props_grid_sizer->Add(new wxStaticText(layer_properties_panel, wxID_ANY, "Height Max:"), 0, wxALIGN_CENTER_VERTICAL);
+	height_max_text = new wxTextCtrl(layer_properties_panel, wxID_ANY, "1.0");
+	props_grid_sizer->Add(height_max_text, 1, wxEXPAND);
+	
+	// Row 4: Moisture range
+	props_grid_sizer->Add(new wxStaticText(layer_properties_panel, wxID_ANY, "Moisture Min:"), 0, wxALIGN_CENTER_VERTICAL);
+	moisture_min_text = new wxTextCtrl(layer_properties_panel, wxID_ANY, "-1.0");
+	props_grid_sizer->Add(moisture_min_text, 1, wxEXPAND);
+	
+	props_grid_sizer->Add(new wxStaticText(layer_properties_panel, wxID_ANY, "Moisture Max:"), 0, wxALIGN_CENTER_VERTICAL);
+	moisture_max_text = new wxTextCtrl(layer_properties_panel, wxID_ANY, "1.0");
+	props_grid_sizer->Add(moisture_max_text, 1, wxEXPAND);
+	
+	// Row 5: Noise scale and Coverage
+	props_grid_sizer->Add(new wxStaticText(layer_properties_panel, wxID_ANY, "Noise Scale:"), 0, wxALIGN_CENTER_VERTICAL);
+	noise_scale_text = new wxTextCtrl(layer_properties_panel, wxID_ANY, "1.0");
+	props_grid_sizer->Add(noise_scale_text, 1, wxEXPAND);
+	
+	props_grid_sizer->Add(new wxStaticText(layer_properties_panel, wxID_ANY, "Coverage:"), 0, wxALIGN_CENTER_VERTICAL);
+	coverage_text = new wxTextCtrl(layer_properties_panel, wxID_ANY, "1.0");
+	props_grid_sizer->Add(coverage_text, 1, wxEXPAND);
+	
+	layer_properties_panel->SetSizer(props_grid_sizer);
+	layer_props_sizer->Add(layer_properties_panel, 1, wxEXPAND | wxALL, 5);
+	
+	// Checkboxes for layer options
+	wxBoxSizer* layer_options_sizer = new wxBoxSizer(wxHORIZONTAL);
+	use_borders_checkbox = new wxCheckBox(layout_panel, wxID_ANY, "Use Borders");
+	use_borders_checkbox->SetValue(true);
+	layer_enabled_checkbox = new wxCheckBox(layout_panel, wxID_ANY, "Layer Enabled");
+	layer_enabled_checkbox->SetValue(true);
+	
+	layer_options_sizer->Add(use_borders_checkbox, 0, wxALL, 5);
+	layer_options_sizer->Add(layer_enabled_checkbox, 0, wxALL, 5);
+	layer_props_sizer->Add(layer_options_sizer, 0, wxEXPAND | wxALL, 5);
+	
+	layout_sizer->Add(layer_props_sizer, 0, wxEXPAND | wxALL, 5);
+	
+	// Cave and Water Configuration section
+	wxStaticBoxSizer* special_terrain_sizer = new wxStaticBoxSizer(wxHORIZONTAL, layout_panel, "Cave & Water Configuration");
+	
+	// Cave configuration
+	wxBoxSizer* cave_config_sizer = new wxBoxSizer(wxVERTICAL);
+	cave_config_sizer->Add(new wxStaticText(layout_panel, wxID_ANY, "Cave Configuration"), 0, wxALL, 2);
+	
+	wxFlexGridSizer* cave_grid_sizer = new wxFlexGridSizer(2, 2, 5, 10);
+	cave_grid_sizer->AddGrowableCol(1);
+	
+	cave_grid_sizer->Add(new wxStaticText(layout_panel, wxID_ANY, "Cave Brush:"), 0, wxALIGN_CENTER_VERTICAL);
+	cave_brush_choice = new wxChoice(layout_panel, ID_CAVE_BRUSH_CHOICE);
+	cave_grid_sizer->Add(cave_brush_choice, 1, wxEXPAND);
+	
+	cave_grid_sizer->Add(new wxStaticText(layout_panel, wxID_ANY, "Cave Item ID:"), 0, wxALIGN_CENTER_VERTICAL);
+	cave_item_id_spin = new wxSpinCtrl(layout_panel, ID_CAVE_ITEM_ID_SPIN, "351", wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS, 100, 65535, 351);
+	cave_grid_sizer->Add(cave_item_id_spin, 1, wxEXPAND);
+	
+	cave_config_sizer->Add(cave_grid_sizer, 0, wxEXPAND | wxALL, 5);
+	special_terrain_sizer->Add(cave_config_sizer, 1, wxEXPAND | wxALL, 5);
+	
+	// Water configuration
+	wxBoxSizer* water_config_sizer = new wxBoxSizer(wxVERTICAL);
+	water_config_sizer->Add(new wxStaticText(layout_panel, wxID_ANY, "Water Configuration"), 0, wxALL, 2);
+	
+	wxFlexGridSizer* water_grid_sizer = new wxFlexGridSizer(2, 2, 5, 10);
+	water_grid_sizer->AddGrowableCol(1);
+	
+	water_grid_sizer->Add(new wxStaticText(layout_panel, wxID_ANY, "Water Brush:"), 0, wxALIGN_CENTER_VERTICAL);
+	water_brush_choice = new wxChoice(layout_panel, ID_WATER_BRUSH_CHOICE);
+	water_grid_sizer->Add(water_brush_choice, 1, wxEXPAND);
+	
+	water_grid_sizer->Add(new wxStaticText(layout_panel, wxID_ANY, "Water Item ID:"), 0, wxALIGN_CENTER_VERTICAL);
+	water_item_id_spin = new wxSpinCtrl(layout_panel, ID_WATER_ITEM_ID_SPIN, "4608", wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS, 100, 65535, 4608);
+	water_grid_sizer->Add(water_item_id_spin, 1, wxEXPAND);
+	
+	water_config_sizer->Add(water_grid_sizer, 0, wxEXPAND | wxALL, 5);
+	special_terrain_sizer->Add(water_config_sizer, 1, wxEXPAND | wxALL, 5);
+	
+	layout_sizer->Add(special_terrain_sizer, 0, wxEXPAND | wxALL, 5);
+	layout_sizer->Add(terrain_layers_sizer, 1, wxEXPAND | wxALL, 5);
+	
+	layout_panel->SetSizer(layout_sizer);
+	notebook->AddPage(layout_panel, "Layout Design", false);
 	
 	main_sizer->Add(notebook, 1, wxEXPAND | wxALL, 5);
 	
@@ -249,9 +434,24 @@ OTMapGenDialog::OTMapGenDialog(wxWindow* parent) :
 	SetSizer(main_sizer);
 	Center();
 	
-	// Generate initial random seed
+	// Initialize terrain layers and brush choices
+	PopulateBrushChoices();
+	
+	// Initialize default terrain layers
+	GenerationConfig defaultConfig;
+	defaultConfig.initializeDefaultLayers();
+	working_terrain_layers = defaultConfig.terrain_layers;
+	
+	// Populate the terrain layer list
+	PopulateTerrainLayerList();
+	
+	// Initially disable layer property controls
+	UpdateLayerControls();
+	
+	// Generate initial random 64-bit seed
 	srand(time(nullptr));
-	seed_text_ctrl->SetValue(wxString::Format("%d", rand()));
+	long long initial_seed = ((long long)rand() << 32) | rand();
+	seed_text_ctrl->SetValue(wxString::Format("%lld", initial_seed));
 }
 
 OTMapGenDialog::~OTMapGenDialog() {
@@ -282,16 +482,12 @@ void OTMapGenDialog::OnParameterChange(wxSpinEvent& event) {
 	// Optional: Auto-update preview when parameters change
 }
 
-void OTMapGenDialog::OnParameterChange(wxScrollEvent& event) {
-	// Optional: Auto-update preview when slider parameters change
-}
-
 void OTMapGenDialog::OnParameterChangeText(wxCommandEvent& event) {
 	// Optional: Auto-update preview when parameters change
 }
 
-void OTMapGenDialog::OnMountainTypeChange(wxCommandEvent& event) {
-	// Optional: Auto-update preview when mountain type changes
+void OTMapGenDialog::OnGenerationTypeChange(wxCommandEvent& event) {
+	// Optional: Auto-update preview when generation type changes
 }
 
 void OTMapGenDialog::OnFloorUp(wxCommandEvent& event) {
@@ -427,11 +623,20 @@ void OTMapGenDialog::UpdatePreviewFloor() {
 void OTMapGenDialog::UpdateFloorLabel() {
 	wxString label;
 	if (current_preview_floor == 7) {
-		label = "Floor: 7 (Ground)";
+		label = "Floor: 7 (Ground Level - Main Terrain)";
 	} else if (current_preview_floor < 7) {
-		label = wxString::Format("Floor: %d (Above Ground %d)", current_preview_floor, 7 - current_preview_floor);
+		int aboveGround = 7 - current_preview_floor;
+		if (aboveGround == 1) {
+			label = "Floor: 6 (1st Above Ground - Mountain Bases/Hills)";
+		} else if (aboveGround == 2) {
+			label = "Floor: 5 (2nd Above Ground - Mountain Plateaus)";
+		} else if (aboveGround == 3) {
+			label = "Floor: 4 (3rd Above Ground - High Mountains)";
+		} else {
+			label = wxString::Format("Floor: %d (%d Above Ground - Very High Peaks)", current_preview_floor, aboveGround);
+		}
 	} else {
-		label = wxString::Format("Floor: %d", current_preview_floor);
+		label = wxString::Format("Floor: %d (Underground)", current_preview_floor);
 	}
 	floor_label->SetLabel(label);
 }
@@ -530,7 +735,7 @@ bool OTMapGenDialog::GenerateMap() {
 					}
 					
 					uint16_t tileId = surfaceLayer[tileIndex++];
-					if (tileId == OTMapGenItems::GRASS_TILE_ID && dist(decoration_rng) < 0.03) {
+					if (tileId == 4526 && dist(decoration_rng) < 0.03) { // Use grass item ID directly
 						Position pos(x, y, 7); // Surface level in Tibia coordinates
 						Tile* tile = tempMap.getTile(pos);
 						if (tile) {
@@ -538,11 +743,11 @@ bool OTMapGenDialog::GenerateMap() {
 							uint16_t decorationId;
 							double rand_val = dist(decoration_rng);
 							if (rand_val < 0.6) {
-								decorationId = OTMapGenItems::TREE_ID;
+								decorationId = 2700; // Tree ID
 							} else if (rand_val < 0.8) {
-								decorationId = OTMapGenItems::BUSH_ID;
+								decorationId = 2785; // Bush ID
 							} else {
-								decorationId = OTMapGenItems::FLOWER_ID;
+								decorationId = 2782; // Flower ID
 							}
 							
 							Item* decoration = Item::Create(decorationId);
@@ -596,6 +801,17 @@ bool OTMapGenDialog::GenerateMap() {
 		
 		if (loadSuccess) {
 			wxMessageBox("Procedural map generated and loaded successfully!", "Success", wxOK | wxICON_INFORMATION);
+			
+			// Apply auto-borderization if enabled
+			if (config.auto_borderize) {
+				progress.SetLabel("Applying brush borders...");
+				progress.Pulse();
+				
+				// TODO: Implement proper brush borderization
+				// For now, just show a message that borderization would happen here
+				// This would integrate with the existing brush system to apply borders
+			}
+			
 			return true;
 		} else {
 			wxMessageBox("Failed to load the generated map.", "Load Error", wxOK | wxICON_ERROR);
@@ -617,56 +833,410 @@ GenerationConfig OTMapGenDialog::BuildGenerationConfig() {
 	config.width = width_spin_ctrl->GetValue();
 	config.height = height_spin_ctrl->GetValue();
 	config.version = version_choice->GetStringSelection().ToStdString();
-	config.mountain_type = mountain_type_choice->GetStringSelection().ToStdString();
+	config.generation_type = generation_type_choice->GetStringSelection().ToStdString();
 	
 	// Boolean flags
 	config.terrain_only = terrain_only_checkbox->GetValue();
 	config.sand_biome = sand_biome_checkbox->GetValue();
 	config.smooth_coastline = smooth_coastline_checkbox->GetValue();
 	config.add_caves = add_caves_checkbox->GetValue();
+	config.auto_borderize = auto_borderize_checkbox->GetValue();
 	
-	// Advanced parameters (convert slider values to appropriate ranges)
-	config.noise_increment = noise_increment_slider->GetValue() / 100.0;
-	config.island_distance_decrement = island_distance_slider->GetValue() / 100.0;
-	config.cave_depth = cave_depth_slider->GetValue();
-	config.cave_roughness = cave_roughness_slider->GetValue() / 100.0;
-	config.cave_chance = cave_chance_slider->GetValue() / 100.0;
-	config.water_level = water_level_slider->GetValue();
-	config.exponent = exponent_slider->GetValue() / 100.0;
-	config.linear = linear_slider->GetValue();
+	// Advanced parameters - parse text inputs with validation
+	double noise_increment = 1.0;
+	double island_distance = 0.92;
+	double cave_depth = 20.0;
+	double cave_roughness = 0.45;
+	double cave_chance = 0.09;
+	double water_level = 7.0;
+	double exponent = 1.4;
+	double linear = 6.0;
+	
+	if (!noise_increment_text->GetValue().ToDouble(&noise_increment)) noise_increment = 1.0;
+	if (!island_distance_text->GetValue().ToDouble(&island_distance)) island_distance = 0.92;
+	if (!cave_depth_text->GetValue().ToDouble(&cave_depth)) cave_depth = 20.0;
+	if (!cave_roughness_text->GetValue().ToDouble(&cave_roughness)) cave_roughness = 0.45;
+	if (!cave_chance_text->GetValue().ToDouble(&cave_chance)) cave_chance = 0.09;
+	if (!water_level_text->GetValue().ToDouble(&water_level)) water_level = 7.0;
+	if (!exponent_text->GetValue().ToDouble(&exponent)) exponent = 1.4;
+	if (!linear_text->GetValue().ToDouble(&linear)) linear = 6.0;
+	
+	// Apply bounds checking
+	noise_increment = std::max(0.01, std::min(3.0, noise_increment));
+	island_distance = std::max(0.5, std::min(0.99, island_distance));
+	cave_depth = std::max(5.0, std::min(50.0, cave_depth));
+	cave_roughness = std::max(0.1, std::min(0.8, cave_roughness));
+	cave_chance = std::max(0.01, std::min(0.2, cave_chance));
+	water_level = std::max(0.0, std::min(15.0, water_level));
+	exponent = std::max(1.0, std::min(3.0, exponent));
+	linear = std::max(1.0, std::min(20.0, linear));
+	
+	// Resource dominance controls
+	double water_dominance = 1.0;
+	double land_dominance = 1.0;
+	double mountain_dominance = 1.0;
+	double island_size = 1.0;
+	
+	if (!water_dominance_text->GetValue().ToDouble(&water_dominance)) water_dominance = 1.0;
+	if (!land_dominance_text->GetValue().ToDouble(&land_dominance)) land_dominance = 1.0;
+	if (!mountain_dominance_text->GetValue().ToDouble(&mountain_dominance)) mountain_dominance = 1.0;
+	if (!island_size_text->GetValue().ToDouble(&island_size)) island_size = 1.0;
+	
+	// Apply bounds checking for dominance controls
+	water_dominance = std::max(0.1, std::min(3.0, water_dominance));
+	land_dominance = std::max(0.1, std::min(3.0, land_dominance));
+	mountain_dominance = std::max(0.1, std::min(3.0, mountain_dominance));
+	island_size = std::max(0.3, std::min(3.0, island_size));
+	
+	config.noise_increment = noise_increment;
+	config.island_distance_decrement = island_distance;
+	config.cave_depth = (int)cave_depth;
+	config.cave_roughness = cave_roughness;
+	config.cave_chance = cave_chance;
+	config.water_level = (int)water_level;
+	config.exponent = exponent;
+	config.linear = linear;
+	
+	// New generation controls
+	config.water_dominance = water_dominance;
+	config.land_dominance = land_dominance;
+	config.mountain_dominance = mountain_dominance;
+	config.island_size = island_size;
+	
+	// Use the working terrain layers from the layout design tab
+	config.terrain_layers = working_terrain_layers;
+	
+	// Update the sand biome layer's enabled state based on checkbox
+	for (auto& layer : config.terrain_layers) {
+		if (layer.name == "Sand") {
+			layer.enabled = config.sand_biome;
+		}
+	}
+	
+	// Cave configuration
+	int caveSelection = cave_brush_choice->GetSelection();
+	if (caveSelection >= 0 && caveSelection < static_cast<int>(available_brushes.size())) {
+		config.cave_brush_name = available_brushes[caveSelection];
+	}
+	config.cave_item_id = cave_item_id_spin->GetValue();
+	
+	// Water configuration  
+	int waterSelection = water_brush_choice->GetSelection();
+	if (waterSelection >= 0 && waterSelection < static_cast<int>(available_brushes.size())) {
+		config.water_brush_name = available_brushes[waterSelection];
+	}
+	config.water_item_id = water_item_id_spin->GetValue();
 	
 	return config;
 }
 
+// Terrain layer management event handlers
+void OTMapGenDialog::OnTerrainLayerSelect(wxListEvent& event) {
+	UpdateLayerControls();
+}
+
+void OTMapGenDialog::OnTerrainLayerAdd(wxCommandEvent& event) {
+	TerrainLayer newLayer;
+	newLayer.name = "New Layer";
+	newLayer.brush_name = "grass";
+	newLayer.item_id = 4526;
+	newLayer.height_min = 0.0;
+	newLayer.height_max = 1.0;
+	newLayer.moisture_min = -1.0;
+	newLayer.moisture_max = 1.0;
+	newLayer.noise_scale = 1.0;
+	newLayer.coverage = 1.0;
+	newLayer.use_borders = true;
+	newLayer.enabled = true;
+	newLayer.z_order = 1000;
+	
+	working_terrain_layers.push_back(newLayer);
+	PopulateTerrainLayerList();
+	
+	// Select the new layer
+	terrain_layer_list->SetItemState(working_terrain_layers.size() - 1, wxLIST_STATE_SELECTED, wxLIST_STATE_SELECTED);
+	UpdateLayerControls();
+}
+
+void OTMapGenDialog::OnTerrainLayerRemove(wxCommandEvent& event) {
+	long selected = terrain_layer_list->GetNextItem(-1, wxLIST_NEXT_ALL, wxLIST_STATE_SELECTED);
+	if (selected >= 0 && selected < static_cast<long>(working_terrain_layers.size())) {
+		working_terrain_layers.erase(working_terrain_layers.begin() + selected);
+		PopulateTerrainLayerList();
+		UpdateLayerControls();
+	}
+}
+
+void OTMapGenDialog::OnTerrainLayerMoveUp(wxCommandEvent& event) {
+	long selected = terrain_layer_list->GetNextItem(-1, wxLIST_NEXT_ALL, wxLIST_STATE_SELECTED);
+	if (selected > 0 && selected < static_cast<long>(working_terrain_layers.size())) {
+		std::swap(working_terrain_layers[selected], working_terrain_layers[selected - 1]);
+		PopulateTerrainLayerList();
+		terrain_layer_list->SetItemState(selected - 1, wxLIST_STATE_SELECTED, wxLIST_STATE_SELECTED);
+		UpdateLayerControls();
+	}
+}
+
+void OTMapGenDialog::OnTerrainLayerMoveDown(wxCommandEvent& event) {
+	long selected = terrain_layer_list->GetNextItem(-1, wxLIST_NEXT_ALL, wxLIST_STATE_SELECTED);
+	if (selected >= 0 && selected < static_cast<long>(working_terrain_layers.size()) - 1) {
+		std::swap(working_terrain_layers[selected], working_terrain_layers[selected + 1]);
+		PopulateTerrainLayerList();
+		terrain_layer_list->SetItemState(selected + 1, wxLIST_STATE_SELECTED, wxLIST_STATE_SELECTED);
+		UpdateLayerControls();
+	}
+}
+
+void OTMapGenDialog::OnTerrainLayerEdit(wxCommandEvent& event) {
+	// Save current layer properties back to the selected layer
+	TerrainLayer* layer = GetSelectedLayer();
+	if (layer) {
+		layer->name = layer_name_text->GetValue().ToStdString();
+		
+		int brushSelection = layer_brush_choice->GetSelection();
+		if (brushSelection >= 0 && brushSelection < static_cast<int>(available_brushes.size())) {
+			layer->brush_name = available_brushes[brushSelection];
+		}
+		
+		layer->item_id = layer_item_id_spin->GetValue();
+		
+		double height_min, height_max, moisture_min, moisture_max, noise_scale, coverage;
+		if (height_min_text->GetValue().ToDouble(&height_min)) layer->height_min = height_min;
+		if (height_max_text->GetValue().ToDouble(&height_max)) layer->height_max = height_max;
+		if (moisture_min_text->GetValue().ToDouble(&moisture_min)) layer->moisture_min = moisture_min;
+		if (moisture_max_text->GetValue().ToDouble(&moisture_max)) layer->moisture_max = moisture_max;
+		if (noise_scale_text->GetValue().ToDouble(&noise_scale)) layer->noise_scale = noise_scale;
+		if (coverage_text->GetValue().ToDouble(&coverage)) layer->coverage = coverage;
+		
+		layer->use_borders = use_borders_checkbox->GetValue();
+		layer->enabled = layer_enabled_checkbox->GetValue();
+		layer->z_order = z_order_spin->GetValue();
+		
+		PopulateTerrainLayerList();
+	}
+}
+
+void OTMapGenDialog::OnBrushChoice(wxCommandEvent& event) {
+	// Auto-update item ID when brush is changed
+	wxChoice* choice = dynamic_cast<wxChoice*>(event.GetEventObject());
+	if (choice) {
+		int selection = choice->GetSelection();
+		if (selection >= 0 && selection < static_cast<int>(available_brushes.size())) {
+			wxString brushName = available_brushes[selection];
+			
+			// Try to get the primary item ID from the brush (placeholder - needs implementation)
+			// For now, use some default mappings based on brush name
+			uint16_t itemId = 100; // Default
+			if (brushName == "grass") itemId = 4526;
+			else if (brushName == "sea") itemId = 4608;
+			else if (brushName == "sand") itemId = 231;
+			else if (brushName == "mountain") itemId = 919;
+			else if (brushName == "cave") itemId = 351;
+			else if (brushName == "snow") itemId = 670;
+			else if (brushName == "stone") itemId = 1284;
+			
+			if (choice->GetId() == ID_LAYER_BRUSH_CHOICE) {
+				layer_item_id_spin->SetValue(itemId);
+			} else if (choice->GetId() == ID_CAVE_BRUSH_CHOICE) {
+				cave_item_id_spin->SetValue(itemId);
+			} else if (choice->GetId() == ID_WATER_BRUSH_CHOICE) {
+				water_item_id_spin->SetValue(itemId);
+			}
+		}
+	}
+}
+
+void OTMapGenDialog::OnItemIdChange(wxCommandEvent& event) {
+	// Item ID changed - could trigger preview update
+}
+
+// Helper functions for terrain layer management
+void OTMapGenDialog::PopulateTerrainLayerList() {
+	terrain_layer_list->DeleteAllItems();
+	
+	for (size_t i = 0; i < working_terrain_layers.size(); ++i) {
+		const TerrainLayer& layer = working_terrain_layers[i];
+		
+		long index = terrain_layer_list->InsertItem(i, layer.name);
+		terrain_layer_list->SetItem(index, 1, layer.brush_name);
+		terrain_layer_list->SetItem(index, 2, wxString::Format("%d", layer.item_id));
+		terrain_layer_list->SetItem(index, 3, wxString::Format("%.1f-%.1f", layer.height_min, layer.height_max));
+		terrain_layer_list->SetItem(index, 4, layer.enabled ? "Yes" : "No");
+	}
+}
+
+void OTMapGenDialog::PopulateBrushChoices() {
+	// Populate with common brush names from grounds.xml
+	// This should be replaced with actual brush parsing from the XML files
+	available_brushes.clear();
+	available_brushes.push_back("grass");
+	available_brushes.push_back("sea");
+	available_brushes.push_back("sand");
+	available_brushes.push_back("mountain");
+	available_brushes.push_back("cave");
+	available_brushes.push_back("snow");
+	available_brushes.push_back("stone floor");
+	available_brushes.push_back("wooden floor");
+	available_brushes.push_back("lawn");
+	available_brushes.push_back("ice");
+	
+	// Populate all brush choice controls
+	layer_brush_choice->Clear();
+	cave_brush_choice->Clear();
+	water_brush_choice->Clear();
+	
+	for (const std::string& brush : available_brushes) {
+		layer_brush_choice->Append(brush);
+		cave_brush_choice->Append(brush);
+		water_brush_choice->Append(brush);
+	}
+	
+	// Set default selections
+	cave_brush_choice->SetStringSelection("cave");
+	water_brush_choice->SetStringSelection("sea");
+}
+
+void OTMapGenDialog::UpdateLayerControls() {
+	TerrainLayer* layer = GetSelectedLayer();
+	bool hasSelection = (layer != nullptr);
+	
+	// Enable/disable controls based on selection
+	layer_properties_panel->Enable(hasSelection);
+	remove_layer_button->Enable(hasSelection);
+	edit_layer_button->Enable(hasSelection);
+	
+	long selected = terrain_layer_list->GetNextItem(-1, wxLIST_NEXT_ALL, wxLIST_STATE_SELECTED);
+	move_up_button->Enable(hasSelection && selected > 0);
+	move_down_button->Enable(hasSelection && selected < static_cast<long>(working_terrain_layers.size()) - 1);
+	
+	if (hasSelection) {
+		SetSelectedLayer(*layer);
+	} else {
+		// Clear controls
+		layer_name_text->SetValue("");
+		layer_brush_choice->SetSelection(-1);
+		layer_item_id_spin->SetValue(100);
+		height_min_text->SetValue("0.0");
+		height_max_text->SetValue("1.0");
+		moisture_min_text->SetValue("-1.0");
+		moisture_max_text->SetValue("1.0");
+		noise_scale_text->SetValue("1.0");
+		coverage_text->SetValue("1.0");
+		use_borders_checkbox->SetValue(false);
+		layer_enabled_checkbox->SetValue(false);
+		z_order_spin->SetValue(1000);
+	}
+}
+
+TerrainLayer* OTMapGenDialog::GetSelectedLayer() {
+	long selected = terrain_layer_list->GetNextItem(-1, wxLIST_NEXT_ALL, wxLIST_STATE_SELECTED);
+	if (selected >= 0 && selected < static_cast<long>(working_terrain_layers.size())) {
+		return &working_terrain_layers[selected];
+	}
+	return nullptr;
+}
+
+void OTMapGenDialog::SetSelectedLayer(const TerrainLayer& layer) {
+	layer_name_text->SetValue(layer.name);
+	
+	// Find and select the brush
+	for (size_t i = 0; i < available_brushes.size(); ++i) {
+		if (available_brushes[i] == layer.brush_name) {
+			layer_brush_choice->SetSelection(i);
+			break;
+		}
+	}
+	
+	layer_item_id_spin->SetValue(layer.item_id);
+	height_min_text->SetValue(wxString::Format("%.2f", layer.height_min));
+	height_max_text->SetValue(wxString::Format("%.2f", layer.height_max));
+	moisture_min_text->SetValue(wxString::Format("%.2f", layer.moisture_min));
+	moisture_max_text->SetValue(wxString::Format("%.2f", layer.moisture_max));
+	noise_scale_text->SetValue(wxString::Format("%.2f", layer.noise_scale));
+	coverage_text->SetValue(wxString::Format("%.2f", layer.coverage));
+	use_borders_checkbox->SetValue(layer.use_borders);
+	layer_enabled_checkbox->SetValue(layer.enabled);
+	z_order_spin->SetValue(layer.z_order);
+}
+
 void OTMapGenDialog::GetTilePreviewColor(uint16_t tileId, unsigned char& r, unsigned char& g, unsigned char& b) {
-	// Convert tile IDs to preview colors
+	// First check if this tile ID matches any of our configured terrain layers
+	for (const auto& layer : working_terrain_layers) {
+		if (layer.item_id == tileId && layer.enabled) {
+			// Use layer-specific colors based on layer name
+			if (layer.name == "Water" || layer.brush_name == "sea") {
+				r = 0; g = 100; b = 255; // Blue for water
+				return;
+			} else if (layer.name == "Grass" || layer.brush_name == "grass") {
+				r = 50; g = 200; b = 50; // Green for grass
+				return;
+			} else if (layer.name == "Sand" || layer.brush_name == "sand") {
+				r = 255; g = 255; b = 100; // Yellow for sand
+				return;
+			} else if (layer.name == "Mountain" || layer.brush_name == "mountain") {
+				r = 139; g = 69; b = 19; // Brown for mountains
+				return;
+			} else if (layer.brush_name == "snow") {
+				r = 255; g = 255; b = 255; // White for snow
+				return;
+			} else if (layer.brush_name == "cave") {
+				r = 64; g = 64; b = 64; // Dark gray for caves
+				return;
+			} else if (layer.brush_name.find("stone") != std::string::npos) {
+				r = 128; g = 128; b = 128; // Gray for stone
+				return;
+			} else if (layer.brush_name == "ice") {
+				r = 200; g = 200; b = 255; // Light blue for ice
+				return;
+			} else if (layer.brush_name.find("wood") != std::string::npos) {
+				r = 139; g = 69; b = 19; // Brown for wood
+				return;
+			}
+		}
+	}
+	
+	// Check cave and water configuration
+	if (tileId == cave_item_id_spin->GetValue()) {
+		r = 64; g = 64; b = 64; // Dark gray for caves
+		return;
+	}
+	
+	if (tileId == water_item_id_spin->GetValue()) {
+		r = 0; g = 100; b = 255; // Blue for water
+		return;
+	}
+	
+	// Fallback: Convert tile ID to preview colors using common item IDs
 	switch (tileId) {
-		case OTMapGenItems::WATER_TILE_ID:
+		case 4608: case 4609: case 4610: case 4611: case 4612: case 4613:
 			r = 0; g = 100; b = 255; // Blue for water
 			break;
-		case OTMapGenItems::GRASS_TILE_ID:
+		case 4526: case 4527: case 4528: case 4529: case 4530:
 			r = 50; g = 200; b = 50; // Green for grass
 			break;
-		case OTMapGenItems::SAND_TILE_ID:
+		case 231:
 			r = 255; g = 255; b = 100; // Yellow for sand
 			break;
-		case OTMapGenItems::STONE_TILE_ID:
+		case 1284: case 431:
 			r = 128; g = 128; b = 128; // Gray for stone
 			break;
-		case OTMapGenItems::GRAVEL_TILE_ID:
+		case 4597:
 			r = 100; g = 100; b = 100; // Dark gray for gravel
 			break;
-		case OTMapGenItems::SNOW_TILE_ID:
+		case 670: case 671:
 			r = 255; g = 255; b = 255; // White for snow
 			break;
-		case OTMapGenItems::MOUNTAIN_TILE_ID:
+		case 919: case 4468: case 4469:
 			r = 139; g = 69; b = 19; // Brown for mountains
 			break;
-		case OTMapGenItems::SNOW_MOUNTAIN_TILE_ID:
-			r = 200; g = 200; b = 255; // Light blue for snow mountains
+		case 351: case 352: case 353:
+			r = 64; g = 64; b = 64; // Dark gray for caves
 			break;
-		case OTMapGenItems::SAND_MOUNTAIN_TILE_ID:
-			r = 205; g = 133; b = 63; // Sandy brown for sand mountains
+		case 106: case 108: case 109:
+			r = 0; g = 150; b = 0; // Dark green for lawn
+			break;
+		case 405: case 448:
+			r = 139; g = 69; b = 19; // Brown for wooden floors
 			break;
 		default:
 			r = 64; g = 64; b = 64; // Default dark gray
