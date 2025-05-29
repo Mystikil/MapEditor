@@ -62,17 +62,10 @@ struct GenerationConfig {
     bool euclidean = false;
     bool smooth_coastline = true;
     bool add_caves = true;
-    bool auto_borderize = true;
     int water_level = 7;  // Changed to match Tibia coordinates (7 = ground level)
     double exponent = 1.4;
     double linear = 6.0;
-    std::string generation_type = "CONTINENTAL";
-    
-    // Resource dominance controls
-    double water_dominance = 1.0;
-    double land_dominance = 1.0;
-    double mountain_dominance = 1.0;
-    double island_size = 1.0;
+    std::string mountain_type = "MOUNTAIN";
     
     // Configurable terrain layers instead of hardcoded items
     std::vector<TerrainLayer> terrain_layers;

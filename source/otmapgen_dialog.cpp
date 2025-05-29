@@ -43,7 +43,7 @@ wxBEGIN_EVENT_TABLE(OTMapGenDialog, wxDialog)
 	EVT_SPINCTRL(ID_WIDTH_SPIN, OTMapGenDialog::OnParameterChange)
 	EVT_SPINCTRL(ID_HEIGHT_SPIN, OTMapGenDialog::OnParameterChange)
 	EVT_CHOICE(ID_VERSION_CHOICE, OTMapGenDialog::OnParameterChangeText)
-	EVT_CHOICE(ID_GENERATION_TYPE_CHOICE, OTMapGenDialog::OnGenerationTypeChange)
+	EVT_CHOICE(ID_MOUNTAIN_TYPE_CHOICE, OTMapGenDialog::OnMountainTypeChange)
 	
 	// Terrain layer management events
 	EVT_LIST_ITEM_SELECTED(ID_TERRAIN_LAYER_LIST, OTMapGenDialog::OnTerrainLayerSelect)
@@ -61,7 +61,7 @@ wxBEGIN_EVENT_TABLE(OTMapGenDialog, wxDialog)
 wxEND_EVENT_TABLE()
 
 OTMapGenDialog::OTMapGenDialog(wxWindow* parent) : 
-	wxDialog(parent, wxID_ANY, "Procedural Map Generator", wxDefaultPosition, wxSize(800, 650), wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER),
+	wxDialog(parent, wxID_ANY, "Procedural Map Generator", wxDefaultPosition, wxSize(1000, 700), wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER),
 	current_preview(nullptr),
 	current_preview_floor(7), // Start with ground level (floor 7)
 	current_zoom(1.0),
@@ -74,87 +74,144 @@ OTMapGenDialog::OTMapGenDialog(wxWindow* parent) :
 	// Create notebook for tabs
 	wxNotebook* notebook = new wxNotebook(this, wxID_ANY);
 	
-	// === Basic Settings Tab ===
-	wxPanel* basic_panel = new wxPanel(notebook);
-	wxBoxSizer* basic_sizer = new wxBoxSizer(wxVERTICAL);
+	// === Main Settings Tab (merged basic + advanced) ===
+	wxPanel* main_panel = new wxPanel(notebook);
+	wxBoxSizer* settings_main_sizer = new wxBoxSizer(wxHORIZONTAL);
 	
-	// Basic parameters group
-	wxStaticBoxSizer* basic_params_sizer = new wxStaticBoxSizer(wxVERTICAL, basic_panel, "Basic Parameters");
+	// Left side - All Settings
+	wxBoxSizer* left_main_sizer = new wxBoxSizer(wxVERTICAL);
 	
-	// Seed - allow large 64-bit integers
-	wxFlexGridSizer* basic_grid_sizer = new wxFlexGridSizer(2, 2, 5, 10);
+	// Basic parameters group (more compact)
+	wxStaticBoxSizer* basic_params_sizer = new wxStaticBoxSizer(wxVERTICAL, main_panel, "Basic Parameters");
+	wxFlexGridSizer* basic_grid_sizer = new wxFlexGridSizer(3, 4, 5, 5);
 	basic_grid_sizer->AddGrowableCol(1);
+	basic_grid_sizer->AddGrowableCol(3);
 	
-	basic_grid_sizer->Add(new wxStaticText(basic_panel, wxID_ANY, "Seed:"), 0, wxALIGN_CENTER_VERTICAL);
-	seed_text_ctrl = new wxTextCtrl(basic_panel, ID_SEED_TEXT, wxString::Format("%lld", (long long)time(nullptr) * 1000));
-	seed_text_ctrl->SetToolTip("Enter any integer value (supports 64-bit seeds like original OTMapGen)");
+	// Row 1: Seed and Width
+	basic_grid_sizer->Add(new wxStaticText(main_panel, wxID_ANY, "Seed:"), 0, wxALIGN_CENTER_VERTICAL);
+	seed_text_ctrl = new wxTextCtrl(main_panel, ID_SEED_TEXT, wxString::Format("%lld", (long long)time(nullptr) * 1000));
+	seed_text_ctrl->SetToolTip("Enter any integer value (supports 64-bit seeds)");
 	basic_grid_sizer->Add(seed_text_ctrl, 1, wxEXPAND);
 	
-	// Width
-	basic_grid_sizer->Add(new wxStaticText(basic_panel, wxID_ANY, "Width:"), 0, wxALIGN_CENTER_VERTICAL);
-	width_spin_ctrl = new wxSpinCtrl(basic_panel, ID_WIDTH_SPIN, "256", wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS, 64, 2048, 256);
+	basic_grid_sizer->Add(new wxStaticText(main_panel, wxID_ANY, "Width:"), 0, wxALIGN_CENTER_VERTICAL);
+	width_spin_ctrl = new wxSpinCtrl(main_panel, ID_WIDTH_SPIN, "256", wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS, 64, 2048, 256);
 	basic_grid_sizer->Add(width_spin_ctrl, 1, wxEXPAND);
 	
-	// Height
-	basic_grid_sizer->Add(new wxStaticText(basic_panel, wxID_ANY, "Height:"), 0, wxALIGN_CENTER_VERTICAL);
-	height_spin_ctrl = new wxSpinCtrl(basic_panel, ID_HEIGHT_SPIN, "256", wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS, 64, 2048, 256);
-	basic_grid_sizer->Add(height_spin_ctrl, 1, wxEXPAND);
-	
-	// Version
-	basic_grid_sizer->Add(new wxStaticText(basic_panel, wxID_ANY, "Version:"), 0, wxALIGN_CENTER_VERTICAL);
+	// Row 2: Version and Height
+	basic_grid_sizer->Add(new wxStaticText(main_panel, wxID_ANY, "Version:"), 0, wxALIGN_CENTER_VERTICAL);
 	wxArrayString versions;
 	versions.Add("10.98");
 	versions.Add("11.00");
 	versions.Add("12.00");
-	version_choice = new wxChoice(basic_panel, ID_VERSION_CHOICE, wxDefaultPosition, wxDefaultSize, versions);
+	version_choice = new wxChoice(main_panel, ID_VERSION_CHOICE, wxDefaultPosition, wxDefaultSize, versions);
 	version_choice->SetSelection(0);
 	basic_grid_sizer->Add(version_choice, 1, wxEXPAND);
 	
-	// Generation Type (was Mountain Type)
-	basic_grid_sizer->Add(new wxStaticText(basic_panel, wxID_ANY, "Generation Type:"), 0, wxALIGN_CENTER_VERTICAL);
-	wxArrayString generation_types;
-	generation_types.Add("CONTINENTAL"); // Standard landmass
-	generation_types.Add("ISLANDS"); // Grass islands in water
-	generation_types.Add("SAND_ISLANDS"); // Desert islands
-	generation_types.Add("ICE_ISLANDS"); // Frozen islands
-	generation_types.Add("ARCHIPELAGO"); // Multiple small islands
-	generation_types.Add("MOUNTAINS"); // Mountain-focused terrain
-	generation_type_choice = new wxChoice(basic_panel, ID_GENERATION_TYPE_CHOICE, wxDefaultPosition, wxDefaultSize, generation_types);
-	generation_type_choice->SetSelection(0);
-	basic_grid_sizer->Add(generation_type_choice, 1, wxEXPAND);
+	basic_grid_sizer->Add(new wxStaticText(main_panel, wxID_ANY, "Height:"), 0, wxALIGN_CENTER_VERTICAL);
+	height_spin_ctrl = new wxSpinCtrl(main_panel, ID_HEIGHT_SPIN, "256", wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS, 64, 2048, 256);
+	basic_grid_sizer->Add(height_spin_ctrl, 1, wxEXPAND);
+	
+	// Row 3: Mountain Type and Water Level
+	basic_grid_sizer->Add(new wxStaticText(main_panel, wxID_ANY, "Mountain Type:"), 0, wxALIGN_CENTER_VERTICAL);
+	wxArrayString mountain_types;
+	mountain_types.Add("MOUNTAIN");
+	mountain_types.Add("SNOW");
+	mountain_types.Add("SAND");
+	mountain_type_choice = new wxChoice(main_panel, ID_MOUNTAIN_TYPE_CHOICE, wxDefaultPosition, wxDefaultSize, mountain_types);
+	mountain_type_choice->SetSelection(0);
+	basic_grid_sizer->Add(mountain_type_choice, 1, wxEXPAND);
+	
+	basic_grid_sizer->Add(new wxStaticText(main_panel, wxID_ANY, "Water Level:"), 0, wxALIGN_CENTER_VERTICAL);
+	water_level_text = new wxTextCtrl(main_panel, ID_WATER_LEVEL_TEXT, "7");
+	water_level_text->SetToolTip("Tibia Z-coordinate (0-15, 7 = ground level)");
+	basic_grid_sizer->Add(water_level_text, 1, wxEXPAND);
 	
 	basic_params_sizer->Add(basic_grid_sizer, 0, wxEXPAND | wxALL, 5);
 	
-	// Checkboxes
-	terrain_only_checkbox = new wxCheckBox(basic_panel, wxID_ANY, "Terrain Only (no decorations)");
-	sand_biome_checkbox = new wxCheckBox(basic_panel, wxID_ANY, "Enable Sand Biome");
+	// Checkboxes in horizontal layout
+	wxBoxSizer* checkbox_sizer = new wxBoxSizer(wxHORIZONTAL);
+	terrain_only_checkbox = new wxCheckBox(main_panel, wxID_ANY, "Terrain Only");
+	sand_biome_checkbox = new wxCheckBox(main_panel, wxID_ANY, "Sand Biome");
 	sand_biome_checkbox->SetValue(true);
-	smooth_coastline_checkbox = new wxCheckBox(basic_panel, wxID_ANY, "Smooth Coastlines");
+	smooth_coastline_checkbox = new wxCheckBox(main_panel, wxID_ANY, "Smooth Coastlines");
 	smooth_coastline_checkbox->SetValue(true);
-	add_caves_checkbox = new wxCheckBox(basic_panel, wxID_ANY, "Add Underground Caves");
+	add_caves_checkbox = new wxCheckBox(main_panel, wxID_ANY, "Underground Caves");
 	add_caves_checkbox->SetValue(true);
-	auto_borderize_checkbox = new wxCheckBox(basic_panel, wxID_ANY, "Auto-Borderize (Apply brush borders after generation)");
-	auto_borderize_checkbox->SetValue(true);
 	
-	basic_params_sizer->Add(terrain_only_checkbox, 0, wxEXPAND | wxALL, 5);
-	basic_params_sizer->Add(sand_biome_checkbox, 0, wxEXPAND | wxALL, 5);
-	basic_params_sizer->Add(smooth_coastline_checkbox, 0, wxEXPAND | wxALL, 5);
-	basic_params_sizer->Add(add_caves_checkbox, 0, wxEXPAND | wxALL, 5);
-	basic_params_sizer->Add(auto_borderize_checkbox, 0, wxEXPAND | wxALL, 5);
+	checkbox_sizer->Add(terrain_only_checkbox, 0, wxALL, 5);
+	checkbox_sizer->Add(sand_biome_checkbox, 0, wxALL, 5);
+	checkbox_sizer->Add(smooth_coastline_checkbox, 0, wxALL, 5);
+	checkbox_sizer->Add(add_caves_checkbox, 0, wxALL, 5);
 	
-	basic_sizer->Add(basic_params_sizer, 0, wxEXPAND | wxALL, 5);
+	basic_params_sizer->Add(checkbox_sizer, 0, wxEXPAND | wxALL, 5);
+	left_main_sizer->Add(basic_params_sizer, 0, wxEXPAND | wxALL, 5);
 	
-	// Preview section
-	wxStaticBoxSizer* preview_sizer = new wxStaticBoxSizer(wxVERTICAL, basic_panel, "Preview");
-	preview_bitmap = new wxStaticBitmap(basic_panel, wxID_ANY, wxBitmap(256, 256));
+	// Advanced parameters group (more compact)
+	wxStaticBoxSizer* advanced_params_sizer = new wxStaticBoxSizer(wxVERTICAL, main_panel, "Noise & Generation Parameters");
+	wxFlexGridSizer* advanced_grid_sizer = new wxFlexGridSizer(4, 4, 5, 5);
+	advanced_grid_sizer->AddGrowableCol(1);
+	advanced_grid_sizer->AddGrowableCol(3);
+	
+	// Row 1: Noise Increment and Island Distance
+	advanced_grid_sizer->Add(new wxStaticText(main_panel, wxID_ANY, "Noise Increment:"), 0, wxALIGN_CENTER_VERTICAL);
+	noise_increment_text = new wxTextCtrl(main_panel, ID_NOISE_INCREMENT_TEXT, "1.0");
+	noise_increment_text->SetToolTip("Range: 0.001 - 100.0 (higher = more detail)");
+	advanced_grid_sizer->Add(noise_increment_text, 1, wxEXPAND);
+	
+	advanced_grid_sizer->Add(new wxStaticText(main_panel, wxID_ANY, "Island Distance:"), 0, wxALIGN_CENTER_VERTICAL);
+	island_distance_text = new wxTextCtrl(main_panel, ID_ISLAND_DISTANCE_TEXT, "0.92");
+	island_distance_text->SetToolTip("Range: 0.001 - 100.0 (lower = more island effect)");
+	advanced_grid_sizer->Add(island_distance_text, 1, wxEXPAND);
+	
+	// Row 2: Exponent and Linear
+	advanced_grid_sizer->Add(new wxStaticText(main_panel, wxID_ANY, "Exponent:"), 0, wxALIGN_CENTER_VERTICAL);
+	exponent_text = new wxTextCtrl(main_panel, ID_EXPONENT_TEXT, "1.4");
+	exponent_text->SetToolTip("Range: 0.001 - 100.0 (height curve shaping)");
+	advanced_grid_sizer->Add(exponent_text, 1, wxEXPAND);
+	
+	advanced_grid_sizer->Add(new wxStaticText(main_panel, wxID_ANY, "Linear:"), 0, wxALIGN_CENTER_VERTICAL);
+	linear_text = new wxTextCtrl(main_panel, ID_LINEAR_TEXT, "6.0");
+	linear_text->SetToolTip("Range: 0.001 - 100.0 (height multiplier)");
+	advanced_grid_sizer->Add(linear_text, 1, wxEXPAND);
+	
+	// Row 3: Cave Depth and Cave Roughness
+	advanced_grid_sizer->Add(new wxStaticText(main_panel, wxID_ANY, "Cave Depth:"), 0, wxALIGN_CENTER_VERTICAL);
+	cave_depth_text = new wxTextCtrl(main_panel, ID_CAVE_DEPTH_TEXT, "20");
+	cave_depth_text->SetToolTip("Range: 1 - 100 (number of underground floors)");
+	advanced_grid_sizer->Add(cave_depth_text, 1, wxEXPAND);
+	
+	advanced_grid_sizer->Add(new wxStaticText(main_panel, wxID_ANY, "Cave Roughness:"), 0, wxALIGN_CENTER_VERTICAL);
+	cave_roughness_text = new wxTextCtrl(main_panel, ID_CAVE_ROUGHNESS_TEXT, "0.45");
+	cave_roughness_text->SetToolTip("Range: 0.001 - 100.0 (noise scale for caves)");
+	advanced_grid_sizer->Add(cave_roughness_text, 1, wxEXPAND);
+	
+	// Row 4: Cave Chance (spanning two columns)
+	advanced_grid_sizer->Add(new wxStaticText(main_panel, wxID_ANY, "Cave Chance:"), 0, wxALIGN_CENTER_VERTICAL);
+	cave_chance_text = new wxTextCtrl(main_panel, ID_CAVE_CHANCE_TEXT, "0.09");
+	cave_chance_text->SetToolTip("Range: 0.001 - 1.0 (probability of cave generation)");
+	advanced_grid_sizer->Add(cave_chance_text, 1, wxEXPAND);
+	
+	// Add spacers for the remaining cells
+	advanced_grid_sizer->Add(new wxStaticText(main_panel, wxID_ANY, ""), 0);
+	advanced_grid_sizer->Add(new wxStaticText(main_panel, wxID_ANY, ""), 0);
+	
+	advanced_params_sizer->Add(advanced_grid_sizer, 0, wxEXPAND | wxALL, 5);
+	left_main_sizer->Add(advanced_params_sizer, 0, wxEXPAND | wxALL, 5);
+	
+	// Right side - Large Preview section
+	wxBoxSizer* right_main_sizer = new wxBoxSizer(wxVERTICAL);
+	
+	wxStaticBoxSizer* preview_sizer = new wxStaticBoxSizer(wxVERTICAL, main_panel, "Map Preview");
+	preview_bitmap = new wxStaticBitmap(main_panel, wxID_ANY, wxBitmap(400, 400));
 	preview_bitmap->SetBackgroundColour(*wxBLACK);
+	preview_bitmap->SetMinSize(wxSize(400, 400));
 	preview_sizer->Add(preview_bitmap, 1, wxEXPAND | wxALL, 5);
 	
 	// Floor navigation
 	wxBoxSizer* floor_nav_sizer = new wxBoxSizer(wxHORIZONTAL);
-	floor_down_button = new wxButton(basic_panel, ID_FLOOR_DOWN, "Floor -");
-	floor_label = new wxStaticText(basic_panel, wxID_ANY, "Floor: 7 (Ground Level - Main Terrain)");
-	floor_up_button = new wxButton(basic_panel, ID_FLOOR_UP, "Floor +");
+	floor_down_button = new wxButton(main_panel, ID_FLOOR_DOWN, "Floor -");
+	floor_label = new wxStaticText(main_panel, wxID_ANY, "Floor: 7 (Ground)");
+	floor_up_button = new wxButton(main_panel, ID_FLOOR_UP, "Floor +");
 	
 	floor_nav_sizer->Add(floor_down_button, 0, wxALL, 2);
 	floor_nav_sizer->AddStretchSpacer();
@@ -166,9 +223,9 @@ OTMapGenDialog::OTMapGenDialog(wxWindow* parent) :
 	
 	// Zoom navigation
 	wxBoxSizer* zoom_nav_sizer = new wxBoxSizer(wxHORIZONTAL);
-	zoom_out_button = new wxButton(basic_panel, ID_ZOOM_OUT, "Zoom -");
-	zoom_label = new wxStaticText(basic_panel, wxID_ANY, "Zoom: 100%");
-	zoom_in_button = new wxButton(basic_panel, ID_ZOOM_IN, "Zoom +");
+	zoom_out_button = new wxButton(main_panel, ID_ZOOM_OUT, "Zoom -");
+	zoom_label = new wxStaticText(main_panel, wxID_ANY, "Zoom: 100%");
+	zoom_in_button = new wxButton(main_panel, ID_ZOOM_IN, "Zoom +");
 	
 	zoom_nav_sizer->Add(zoom_out_button, 0, wxALL, 2);
 	zoom_nav_sizer->AddStretchSpacer();
@@ -178,97 +235,24 @@ OTMapGenDialog::OTMapGenDialog(wxWindow* parent) :
 	
 	preview_sizer->Add(zoom_nav_sizer, 0, wxEXPAND | wxALL, 5);
 	
-	preview_button = new wxButton(basic_panel, ID_PREVIEW, "Generate Preview");
-	preview_sizer->Add(preview_button, 0, wxALIGN_CENTER | wxALL, 5);
+	// Preview buttons
+	wxBoxSizer* preview_buttons_sizer = new wxBoxSizer(wxHORIZONTAL);
+	preview_button = new wxButton(main_panel, ID_PREVIEW, "Generate Preview");
+	wxButton* refresh_preview_button = new wxButton(main_panel, ID_PREVIEW, "Refresh");
 	
-	basic_sizer->Add(preview_sizer, 1, wxEXPAND | wxALL, 5);
-	basic_panel->SetSizer(basic_sizer);
-	notebook->AddPage(basic_panel, "Basic Settings", true);
+	preview_buttons_sizer->Add(preview_button, 1, wxEXPAND | wxALL, 2);
+	preview_buttons_sizer->Add(refresh_preview_button, 0, wxALL, 2);
 	
-	// === Advanced Settings Tab ===
-	wxPanel* advanced_panel = new wxPanel(notebook);
-	wxBoxSizer* advanced_sizer = new wxBoxSizer(wxVERTICAL);
+	preview_sizer->Add(preview_buttons_sizer, 0, wxEXPAND | wxALL, 5);
 	
-	wxStaticBoxSizer* advanced_params_sizer = new wxStaticBoxSizer(wxVERTICAL, advanced_panel, "Advanced Parameters");
-	wxFlexGridSizer* advanced_grid_sizer = new wxFlexGridSizer(2, 2, 5, 10);
-	advanced_grid_sizer->AddGrowableCol(1);
+	right_main_sizer->Add(preview_sizer, 1, wxEXPAND | wxALL, 5);
 	
-	// Noise Increment - direct input
-	advanced_grid_sizer->Add(new wxStaticText(advanced_panel, wxID_ANY, "Noise Increment:"), 0, wxALIGN_CENTER_VERTICAL);
-	noise_increment_text = new wxTextCtrl(advanced_panel, ID_NOISE_INCREMENT_TEXT, "1.0");
-	noise_increment_text->SetToolTip("Range: 0.01 - 3.0");
-	advanced_grid_sizer->Add(noise_increment_text, 1, wxEXPAND);
+	// Add left and right sides to main tab
+	settings_main_sizer->Add(left_main_sizer, 0, wxEXPAND | wxALL, 5);
+	settings_main_sizer->Add(right_main_sizer, 1, wxEXPAND | wxALL, 5);
 	
-	// Island Distance - direct input
-	advanced_grid_sizer->Add(new wxStaticText(advanced_panel, wxID_ANY, "Island Distance:"), 0, wxALIGN_CENTER_VERTICAL);
-	island_distance_text = new wxTextCtrl(advanced_panel, ID_ISLAND_DISTANCE_TEXT, "0.92");
-	island_distance_text->SetToolTip("Range: 0.5 - 0.99");
-	advanced_grid_sizer->Add(island_distance_text, 1, wxEXPAND);
-	
-	// Cave Depth - direct input
-	advanced_grid_sizer->Add(new wxStaticText(advanced_panel, wxID_ANY, "Cave Depth:"), 0, wxALIGN_CENTER_VERTICAL);
-	cave_depth_text = new wxTextCtrl(advanced_panel, ID_CAVE_DEPTH_TEXT, "20");
-	cave_depth_text->SetToolTip("Range: 5 - 50");
-	advanced_grid_sizer->Add(cave_depth_text, 1, wxEXPAND);
-	
-	// Cave Roughness - direct input
-	advanced_grid_sizer->Add(new wxStaticText(advanced_panel, wxID_ANY, "Cave Roughness:"), 0, wxALIGN_CENTER_VERTICAL);
-	cave_roughness_text = new wxTextCtrl(advanced_panel, ID_CAVE_ROUGHNESS_TEXT, "0.45");
-	cave_roughness_text->SetToolTip("Range: 0.1 - 0.8");
-	advanced_grid_sizer->Add(cave_roughness_text, 1, wxEXPAND);
-	
-	// Cave Chance - direct input
-	advanced_grid_sizer->Add(new wxStaticText(advanced_panel, wxID_ANY, "Cave Chance:"), 0, wxALIGN_CENTER_VERTICAL);
-	cave_chance_text = new wxTextCtrl(advanced_panel, ID_CAVE_CHANCE_TEXT, "0.09");
-	cave_chance_text->SetToolTip("Range: 0.01 - 0.2");
-	advanced_grid_sizer->Add(cave_chance_text, 1, wxEXPAND);
-	
-	// Water Level - direct input
-	advanced_grid_sizer->Add(new wxStaticText(advanced_panel, wxID_ANY, "Water Level:"), 0, wxALIGN_CENTER_VERTICAL);
-	water_level_text = new wxTextCtrl(advanced_panel, ID_WATER_LEVEL_TEXT, "7");
-	water_level_text->SetToolTip("Tibia Z-coordinate (7 = ground level)");
-	advanced_grid_sizer->Add(water_level_text, 1, wxEXPAND);
-	
-	// Exponent - direct input
-	advanced_grid_sizer->Add(new wxStaticText(advanced_panel, wxID_ANY, "Exponent:"), 0, wxALIGN_CENTER_VERTICAL);
-	exponent_text = new wxTextCtrl(advanced_panel, ID_EXPONENT_TEXT, "1.4");
-	exponent_text->SetToolTip("Range: 1.0 - 3.0");
-	advanced_grid_sizer->Add(exponent_text, 1, wxEXPAND);
-	
-	// Linear - direct input
-	advanced_grid_sizer->Add(new wxStaticText(advanced_panel, wxID_ANY, "Linear:"), 0, wxALIGN_CENTER_VERTICAL);
-	linear_text = new wxTextCtrl(advanced_panel, ID_LINEAR_TEXT, "6.0");
-	linear_text->SetToolTip("Range: 1.0 - 20.0");
-	advanced_grid_sizer->Add(linear_text, 1, wxEXPAND);
-	
-	// === Resource Dominance Controls ===
-	advanced_grid_sizer->Add(new wxStaticText(advanced_panel, wxID_ANY, ""), 0); // Spacer
-	advanced_grid_sizer->Add(new wxStaticText(advanced_panel, wxID_ANY, ""), 0); // Spacer
-	
-	advanced_grid_sizer->Add(new wxStaticText(advanced_panel, wxID_ANY, "Water Dominance:"), 0, wxALIGN_CENTER_VERTICAL);
-	water_dominance_text = new wxTextCtrl(advanced_panel, ID_WATER_DOMINANCE_TEXT, "1.0");
-	water_dominance_text->SetToolTip("Range: 0.1 - 3.0 (Higher = more water)");
-	advanced_grid_sizer->Add(water_dominance_text, 1, wxEXPAND);
-	
-	advanced_grid_sizer->Add(new wxStaticText(advanced_panel, wxID_ANY, "Land Dominance:"), 0, wxALIGN_CENTER_VERTICAL);
-	land_dominance_text = new wxTextCtrl(advanced_panel, ID_LAND_DOMINANCE_TEXT, "1.0");
-	land_dominance_text->SetToolTip("Range: 0.1 - 3.0 (Higher = more land)");
-	advanced_grid_sizer->Add(land_dominance_text, 1, wxEXPAND);
-	
-	advanced_grid_sizer->Add(new wxStaticText(advanced_panel, wxID_ANY, "Mountain Dominance:"), 0, wxALIGN_CENTER_VERTICAL);
-	mountain_dominance_text = new wxTextCtrl(advanced_panel, ID_MOUNTAIN_DOMINANCE_TEXT, "1.0");
-	mountain_dominance_text->SetToolTip("Range: 0.1 - 3.0 (Higher = more mountains)");
-	advanced_grid_sizer->Add(mountain_dominance_text, 1, wxEXPAND);
-	
-	advanced_grid_sizer->Add(new wxStaticText(advanced_panel, wxID_ANY, "Island Size:"), 0, wxALIGN_CENTER_VERTICAL);
-	island_size_text = new wxTextCtrl(advanced_panel, ID_ISLAND_SIZE_TEXT, "1.0");
-	island_size_text->SetToolTip("Range: 0.3 - 3.0 (Island generation size multiplier)");
-	advanced_grid_sizer->Add(island_size_text, 1, wxEXPAND);
-	
-	advanced_params_sizer->Add(advanced_grid_sizer, 1, wxEXPAND | wxALL, 5);
-	advanced_sizer->Add(advanced_params_sizer, 1, wxEXPAND | wxALL, 5);
-	advanced_panel->SetSizer(advanced_sizer);
-	notebook->AddPage(advanced_panel, "Advanced Settings", false);
+	main_panel->SetSizer(settings_main_sizer);
+	notebook->AddPage(main_panel, "Map Generation", true);
 	
 	// === Layout Design Tab ===
 	wxPanel* layout_panel = new wxPanel(notebook);
@@ -486,8 +470,8 @@ void OTMapGenDialog::OnParameterChangeText(wxCommandEvent& event) {
 	// Optional: Auto-update preview when parameters change
 }
 
-void OTMapGenDialog::OnGenerationTypeChange(wxCommandEvent& event) {
-	// Optional: Auto-update preview when generation type changes
+void OTMapGenDialog::OnMountainTypeChange(wxCommandEvent& event) {
+	// Optional: Auto-update preview when mountain type changes
 }
 
 void OTMapGenDialog::OnFloorUp(wxCommandEvent& event) {
@@ -566,8 +550,8 @@ void OTMapGenDialog::UpdatePreviewFloor() {
 		
 		if (layerIndex < static_cast<int>(current_layers.size()) && !current_layers[layerIndex].empty()) {
 			const auto& layerData = current_layers[layerIndex];
-			int preview_width = 256;
-			int preview_height = 256;
+			int preview_width = 400;  // Updated to match the larger preview
+			int preview_height = 400; // Updated to match the larger preview
 			wxImage preview_image(preview_width, preview_height);
 			
 			// Calculate zoom-adjusted scale and center point
@@ -623,20 +607,11 @@ void OTMapGenDialog::UpdatePreviewFloor() {
 void OTMapGenDialog::UpdateFloorLabel() {
 	wxString label;
 	if (current_preview_floor == 7) {
-		label = "Floor: 7 (Ground Level - Main Terrain)";
+		label = "Floor: 7 (Ground)";
 	} else if (current_preview_floor < 7) {
-		int aboveGround = 7 - current_preview_floor;
-		if (aboveGround == 1) {
-			label = "Floor: 6 (1st Above Ground - Mountain Bases/Hills)";
-		} else if (aboveGround == 2) {
-			label = "Floor: 5 (2nd Above Ground - Mountain Plateaus)";
-		} else if (aboveGround == 3) {
-			label = "Floor: 4 (3rd Above Ground - High Mountains)";
-		} else {
-			label = wxString::Format("Floor: %d (%d Above Ground - Very High Peaks)", current_preview_floor, aboveGround);
-		}
+		label = wxString::Format("Floor: %d (Above Ground %d)", current_preview_floor, 7 - current_preview_floor);
 	} else {
-		label = wxString::Format("Floor: %d (Underground)", current_preview_floor);
+		label = wxString::Format("Floor: %d", current_preview_floor);
 	}
 	floor_label->SetLabel(label);
 }
@@ -801,17 +776,6 @@ bool OTMapGenDialog::GenerateMap() {
 		
 		if (loadSuccess) {
 			wxMessageBox("Procedural map generated and loaded successfully!", "Success", wxOK | wxICON_INFORMATION);
-			
-			// Apply auto-borderization if enabled
-			if (config.auto_borderize) {
-				progress.SetLabel("Applying brush borders...");
-				progress.Pulse();
-				
-				// TODO: Implement proper brush borderization
-				// For now, just show a message that borderization would happen here
-				// This would integrate with the existing brush system to apply borders
-			}
-			
 			return true;
 		} else {
 			wxMessageBox("Failed to load the generated map.", "Load Error", wxOK | wxICON_ERROR);
@@ -833,16 +797,15 @@ GenerationConfig OTMapGenDialog::BuildGenerationConfig() {
 	config.width = width_spin_ctrl->GetValue();
 	config.height = height_spin_ctrl->GetValue();
 	config.version = version_choice->GetStringSelection().ToStdString();
-	config.generation_type = generation_type_choice->GetStringSelection().ToStdString();
+	config.mountain_type = mountain_type_choice->GetStringSelection().ToStdString();
 	
 	// Boolean flags
 	config.terrain_only = terrain_only_checkbox->GetValue();
 	config.sand_biome = sand_biome_checkbox->GetValue();
 	config.smooth_coastline = smooth_coastline_checkbox->GetValue();
 	config.add_caves = add_caves_checkbox->GetValue();
-	config.auto_borderize = auto_borderize_checkbox->GetValue();
 	
-	// Advanced parameters - parse text inputs with validation
+	// Advanced parameters - parse text inputs with enhanced validation and ranges
 	double noise_increment = 1.0;
 	double island_distance = 0.92;
 	double cave_depth = 20.0;
@@ -861,32 +824,15 @@ GenerationConfig OTMapGenDialog::BuildGenerationConfig() {
 	if (!exponent_text->GetValue().ToDouble(&exponent)) exponent = 1.4;
 	if (!linear_text->GetValue().ToDouble(&linear)) linear = 6.0;
 	
-	// Apply bounds checking
-	noise_increment = std::max(0.01, std::min(3.0, noise_increment));
-	island_distance = std::max(0.5, std::min(0.99, island_distance));
-	cave_depth = std::max(5.0, std::min(50.0, cave_depth));
-	cave_roughness = std::max(0.1, std::min(0.8, cave_roughness));
-	cave_chance = std::max(0.01, std::min(0.2, cave_chance));
+	// Apply enhanced bounds checking with expanded ranges
+	noise_increment = std::max(0.001, std::min(100.0, noise_increment));
+	island_distance = std::max(0.001, std::min(100.0, island_distance));
+	cave_depth = std::max(1.0, std::min(100.0, cave_depth));
+	cave_roughness = std::max(0.001, std::min(100.0, cave_roughness));
+	cave_chance = std::max(0.001, std::min(1.0, cave_chance));
 	water_level = std::max(0.0, std::min(15.0, water_level));
-	exponent = std::max(1.0, std::min(3.0, exponent));
-	linear = std::max(1.0, std::min(20.0, linear));
-	
-	// Resource dominance controls
-	double water_dominance = 1.0;
-	double land_dominance = 1.0;
-	double mountain_dominance = 1.0;
-	double island_size = 1.0;
-	
-	if (!water_dominance_text->GetValue().ToDouble(&water_dominance)) water_dominance = 1.0;
-	if (!land_dominance_text->GetValue().ToDouble(&land_dominance)) land_dominance = 1.0;
-	if (!mountain_dominance_text->GetValue().ToDouble(&mountain_dominance)) mountain_dominance = 1.0;
-	if (!island_size_text->GetValue().ToDouble(&island_size)) island_size = 1.0;
-	
-	// Apply bounds checking for dominance controls
-	water_dominance = std::max(0.1, std::min(3.0, water_dominance));
-	land_dominance = std::max(0.1, std::min(3.0, land_dominance));
-	mountain_dominance = std::max(0.1, std::min(3.0, mountain_dominance));
-	island_size = std::max(0.3, std::min(3.0, island_size));
+	exponent = std::max(0.001, std::min(100.0, exponent));
+	linear = std::max(0.001, std::min(100.0, linear));
 	
 	config.noise_increment = noise_increment;
 	config.island_distance_decrement = island_distance;
@@ -897,11 +843,16 @@ GenerationConfig OTMapGenDialog::BuildGenerationConfig() {
 	config.exponent = exponent;
 	config.linear = linear;
 	
-	// New generation controls
-	config.water_dominance = water_dominance;
-	config.land_dominance = land_dominance;
-	config.mountain_dominance = mountain_dominance;
-	config.island_size = island_size;
+	// Add some default frequency settings for better island generation
+	config.frequencies.clear();
+	config.frequencies.push_back({1.0, 1.0});    // Base frequency
+	config.frequencies.push_back({2.0, 0.5});    // Higher frequency, lower weight
+	config.frequencies.push_back({4.0, 0.25});   // Even higher, even lower weight
+	config.frequencies.push_back({8.0, 0.125});  // Finest detail
+	
+	// Enhanced island generation parameters
+	config.euclidean = true; // Use euclidean distance for smoother island shapes
+	config.island_distance_exponent = 2.0; // Smooth falloff
 	
 	// Use the working terrain layers from the layout design tab
 	config.terrain_layers = working_terrain_layers;

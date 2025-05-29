@@ -34,7 +34,7 @@ public:
 	void OnSeedChange(wxCommandEvent& event);
 	void OnParameterChange(wxSpinEvent& event);
 	void OnParameterChangeText(wxCommandEvent& event);
-	void OnGenerationTypeChange(wxCommandEvent& event);
+	void OnMountainTypeChange(wxCommandEvent& event);
 	void OnFloorUp(wxCommandEvent& event);
 	void OnFloorDown(wxCommandEvent& event);
 	void OnZoomIn(wxCommandEvent& event);
@@ -75,12 +75,11 @@ protected:
 	wxSpinCtrl* width_spin_ctrl;
 	wxSpinCtrl* height_spin_ctrl;
 	wxChoice* version_choice;
-	wxChoice* generation_type_choice;
+	wxChoice* mountain_type_choice;
 	wxCheckBox* terrain_only_checkbox;
 	wxCheckBox* sand_biome_checkbox;
 	wxCheckBox* smooth_coastline_checkbox;
 	wxCheckBox* add_caves_checkbox;
-	wxCheckBox* auto_borderize_checkbox;
 	
 	// Advanced settings
 	wxTextCtrl* noise_increment_text;
@@ -91,12 +90,6 @@ protected:
 	wxTextCtrl* water_level_text;
 	wxTextCtrl* exponent_text;
 	wxTextCtrl* linear_text;
-	
-	// Resource dominance controls
-	wxTextCtrl* water_dominance_text;
-	wxTextCtrl* land_dominance_text;
-	wxTextCtrl* mountain_dominance_text;
-	wxTextCtrl* island_size_text;
 	
 	// Layout design controls (new advanced tab)
 	wxListCtrl* terrain_layer_list;
@@ -163,7 +156,7 @@ enum {
 	ID_WIDTH_SPIN,
 	ID_HEIGHT_SPIN,
 	ID_VERSION_CHOICE,
-	ID_GENERATION_TYPE_CHOICE,
+	ID_MOUNTAIN_TYPE_CHOICE,
 	ID_NOISE_INCREMENT_TEXT,
 	ID_ISLAND_DISTANCE_TEXT,
 	ID_CAVE_DEPTH_TEXT,
@@ -172,10 +165,6 @@ enum {
 	ID_WATER_LEVEL_TEXT,
 	ID_EXPONENT_TEXT,
 	ID_LINEAR_TEXT,
-	ID_WATER_DOMINANCE_TEXT,
-	ID_LAND_DOMINANCE_TEXT,
-	ID_MOUNTAIN_DOMINANCE_TEXT,
-	ID_ISLAND_SIZE_TEXT,
 	ID_FLOOR_UP,
 	ID_FLOOR_DOWN,
 	ID_ZOOM_IN,
