@@ -46,6 +46,7 @@ BEGIN_EVENT_TABLE(PreferencesWindow, wxDialog)
 EVT_BUTTON(wxID_OK, PreferencesWindow::OnClickOK)
 EVT_BUTTON(wxID_CANCEL, PreferencesWindow::OnClickCancel)
 EVT_BUTTON(wxID_APPLY, PreferencesWindow::OnClickApply)
+EVT_BUTTON(wxID_ANY, PreferencesWindow::OnForceReloadRevScripts)
 EVT_COLLAPSIBLEPANE_CHANGED(wxID_ANY, PreferencesWindow::OnCollapsiblePane)
 END_EVENT_TABLE()
 
@@ -154,6 +155,19 @@ wxNotebookPage* PreferencesWindow::CreateGeneralPage() {
 	replace_size_spin = newd wxSpinCtrl(general_page, wxID_ANY, i2ws(g_settings.getInteger(Config::REPLACE_SIZE)), wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS, 0, 100000);
 	grid_sizer->Add(replace_size_spin, 0);
 	SetWindowToolTip(tmptext, replace_size_spin, "How many items you can replace on the map using the Replace Item tool.");
+
+	grid_sizer->Add(tmptext = newd wxStaticText(general_page, wxID_ANY, "RevScript directory: "), 0);
+	revscript_directory_picker = newd wxDirPickerCtrl(general_page, wxID_ANY);
+	grid_sizer->Add(revscript_directory_picker, 1, wxEXPAND);
+	wxString revscript_dir = wxstr(g_settings.getString(Config::REVSCRIPT_DIRECTORY));
+	revscript_directory_picker->SetPath(revscript_dir);
+	SetWindowToolTip(tmptext, revscript_directory_picker, "Directory containing RevScript files (Lua scripts) for the map editor.");
+
+	grid_sizer->Add(newd wxStaticText(general_page, wxID_ANY, ""), 0); // Empty cell for alignment
+	force_reload_revscripts_btn = newd wxButton(general_page, wxID_ANY, "Force Reload RevScripts");
+	grid_sizer->Add(force_reload_revscripts_btn, 0);
+	SetWindowToolTip(force_reload_revscripts_btn, "Force reload all RevScript files from the selected directory.");
+
 
 	sizer->Add(grid_sizer, 0, wxALL, 5);
 	sizer->AddSpacer(10);
@@ -904,6 +918,21 @@ void PreferencesWindow::OnClickApply(wxCommandEvent& WXUNUSED(event)) {
 	Apply();
 }
 
+void PreferencesWindow::OnForceReloadRevScripts(wxCommandEvent& WXUNUSED(event)) {
+//this function can only be called by button so no if statement.
+		// Save the current RevScript directory setting first
+		g_settings.setString(Config::REVSCRIPT_DIRECTORY, nstr(revscript_directory_picker->GetPath()));
+		
+		// Call the GUI's reload method
+		g_gui.ReloadRevScripts();
+		
+		// Show statistics for debugging
+		std::string stats = g_gui.revscript_manager.getScanStatistics();
+		wxString message = "RevScripts reloaded!\n\n" + wxstr(stats);
+		wxMessageBox(message, "RevScript Reload Complete", wxOK | wxICON_INFORMATION, this);
+	
+}
+
 void PreferencesWindow::OnCollapsiblePane(wxCollapsiblePaneEvent& event) {
 	auto* win = (wxWindow*)event.GetEventObject();
 	win->GetParent()->Fit();
@@ -936,6 +965,9 @@ void PreferencesWindow::Apply() {
 	g_settings.setInteger(Config::COPY_POSITION_FORMAT, position_format->GetSelection());
 	g_settings.setInteger(Config::AUTO_SAVE_ENABLED, autosave_chkbox->GetValue());
 	g_settings.setInteger(Config::AUTO_SAVE_INTERVAL, autosave_interval_spin->GetValue());
+
+	// RevScript directory
+	g_settings.setString(Config::REVSCRIPT_DIRECTORY, nstr(revscript_directory_picker->GetPath()));
 
 	// LOD Settings
 	g_settings.setInteger(Config::TOOLTIP_MAX_ZOOM, tooltip_max_zoom_spin->GetValue());

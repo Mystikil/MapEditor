@@ -92,6 +92,7 @@ BEGIN_EVENT_TABLE(MainMenuBar, wxEvtHandler)
 	EVT_MENU(MenuBar::GENERATE_PROCEDURAL_MAP, MainMenuBar::OnGenerateProceduralMap)
 	EVT_MENU(MenuBar::MAP_MENU_GENERATE_ISLAND, MainMenuBar::OnGenerateIsland)
 	EVT_MENU(MenuBar::FIND_CREATURE, MainMenuBar::OnSearchForCreature)
+	EVT_MENU(MenuBar::RELOAD_REVSCRIPTS, MainMenuBar::OnReloadRevScripts)
 END_EVENT_TABLE()
 
 MainMenuBar::MainMenuBar(MainFrame* frame) :
@@ -119,6 +120,7 @@ MainMenuBar::MainMenuBar(MainFrame* frame) :
 	MAKE_ACTION(EXPORT_TILESETS, wxITEM_NORMAL, OnExportTilesets);
 
 	MAKE_ACTION(RELOAD_DATA, wxITEM_NORMAL, OnReloadDataFiles);
+	MAKE_ACTION(RELOAD_REVSCRIPTS, wxITEM_NORMAL, OnReloadRevScripts);
 	// MAKE_ACTION(RECENT_FILES, wxITEM_NORMAL, OnRecent);
 	MAKE_ACTION(PREFERENCES, wxITEM_NORMAL, OnPreferences);
 	MAKE_ACTION(EXIT, wxITEM_NORMAL, OnQuit);
@@ -404,6 +406,8 @@ void MainMenuBar::Update() {
 	EnableItem(IMPORT_MINIMAP, false);
 	EnableItem(EXPORT_MINIMAP, is_local);
 	EnableItem(EXPORT_TILESETS, loaded);
+
+	EnableItem(RELOAD_REVSCRIPTS, is_local);
 
 	EnableItem(FIND_ITEM, is_host);
 	EnableItem(REPLACE_ITEMS, is_local);
@@ -908,6 +912,10 @@ void MainMenuBar::OnReloadDataFiles(wxCommandEvent& WXUNUSED(event)) {
 	g_gui.LoadVersion(g_gui.GetCurrentVersionID(), error, warnings, true);
 	g_gui.PopupDialog("Error", error, wxOK);
 	g_gui.ListDialog("Warnings", warnings);
+}
+
+void MainMenuBar::OnReloadRevScripts(wxCommandEvent& WXUNUSED(event)) {
+	g_gui.ReloadRevScripts();
 }
 
 void MainMenuBar::OnListExtensions(wxCommandEvent& WXUNUSED(event)) {
@@ -3689,3 +3697,4 @@ void MainMenuBar::OnMapSummarize(wxCommandEvent& WXUNUSED(event)) {
 	// Show the map summary window
 	g_gui.ShowMapSummaryWindow();
 }
+

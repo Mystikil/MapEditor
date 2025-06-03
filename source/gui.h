@@ -29,6 +29,7 @@
 #include "map_tab.h"
 #include "palette_window.h"
 #include "client_version.h"
+#include "revscript_manager.h"
 #include <memory> // For smart pointers
 
 class BaseMap;
@@ -384,6 +385,9 @@ public:
 	void SaveMapAs();
 	bool LoadMap(const FileName& fileName);
 
+	// RevScript functions
+	void ReloadRevScripts();
+
 protected:
 	bool LoadDataFiles(wxString& error, wxArrayString& warnings);
 	ClientVersion* getLoadedVersion() const {
@@ -438,6 +442,7 @@ public:
 	SearchResultWindow* search_result_window;
 	MapSummaryWindow* map_summary_window;
 	GraphicManager gfx;
+	RevScriptManager revscript_manager;
 
 	BaseMap* secondary_map; // A non-owning pointer to doodad_buffer_map when needed
 	std::unique_ptr<BaseMap> doodad_buffer_map; // The map in which doodads are temporarily stored

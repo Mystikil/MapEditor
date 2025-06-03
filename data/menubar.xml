@@ -47,6 +47,7 @@
 		</menu>
 		<menu name="Reload">
 			<item name="Reload" hotkey="F5" action="RELOAD_DATA" help="Reloads all data files."/>
+			<item name="Reload RevScripts" action="RELOAD_REVSCRIPTS" help="Reloads RevScript files for the current map."/>
 		</menu>
 		<separator/>
 		<menu name="Recent Files" special="RECENT_FILES"/>

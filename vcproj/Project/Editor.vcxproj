@@ -233,6 +233,7 @@
     <ClCompile Include="..\..\source\otmapgen.cpp" />
     <ClCompile Include="..\..\source\otmapgen_dialog.cpp" />
     <ClCompile Include="..\..\source\replace_items_window.cpp" />
+    <ClCompile Include="..\..\source\revscript_manager.cpp" />
     <ClCompile Include="..\..\source\string_utils.cpp" />
     <ClCompile Include="..\..\source\tileset_window.cpp" />
     <ClCompile Include="..\..\source\welcome_dialog.cpp" />
@@ -315,6 +316,7 @@
     <ClCompile Include="..\..\source\properties_window.cpp" />
     <ClCompile Include="..\..\source\raw_brush.cpp" />
     <ClInclude Include="..\..\source\replace_items_window.h" />
+    <ClInclude Include="..\..\source\revscript_manager.h" />
     <ClInclude Include="..\..\source\rme_forward_declarations.h" />
     <ClInclude Include="..\..\source\rme_net.h" />
     <ClCompile Include="..\..\source\rme_net.cpp" />

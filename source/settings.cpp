@@ -369,6 +369,7 @@ void Settings::IO(IOMode mode) {
 	Int(USE_UPDATER, 1);
 	String(RECENT_EDITED_MAP_PATH, "");
 	String(RECENT_EDITED_MAP_POSITION, "");
+	String(REVSCRIPT_DIRECTORY, "");
 	Int(LAST_WEBSITES_OPEN_TIME, 0);
 
 	Int(FIND_ITEM_MODE, 0);

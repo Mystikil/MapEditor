@@ -37,6 +37,7 @@ namespace MenuBar {
 		EXPORT_MINIMAP,
 		EXPORT_TILESETS,
 		RELOAD_DATA,
+		RELOAD_REVSCRIPTS,
 		RECENT_FILES,
 		PREFERENCES,
 		EXIT,
@@ -226,6 +227,7 @@ public:
 	void OnExportMinimap(wxCommandEvent& event);
 	void OnExportTilesets(wxCommandEvent& event);
 	void OnReloadDataFiles(wxCommandEvent& event);
+	void OnReloadRevScripts(wxCommandEvent& event);
 
 	// Edit Menu
 	void OnUndo(wxCommandEvent& event);

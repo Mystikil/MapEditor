@@ -120,6 +120,7 @@ EVT_MENU(MAP_POPUP_MENU_PROPERTIES, MapCanvas::OnProperties)
 EVT_MENU(MAP_POPUP_MENU_BROWSE_TILE, MapCanvas::OnBrowseTile)
 // Add to the event table after other MAP_POPUP_MENU items
 EVT_MENU(MAP_POPUP_MENU_SELECTION_TO_DOODAD, MapCanvas::OnSelectionToDoodad)
+EVT_MENU(MAP_POPUP_MENU_OPEN_REVSCRIPT, MapCanvas::OnOpenRevScript)
 
 END_EVENT_TABLE()
 
@@ -2650,6 +2651,23 @@ void MapPopupMenu::Update() {
 				AppendSeparator();
 
 				Append(MAP_POPUP_MENU_PROPERTIES, "&Properties", "Properties for the current object");
+				
+				// Add RevScript menu item if the selected item has action ID or unique ID
+				if (topSelectedItem) {
+					int actionId = topSelectedItem->getActionID();
+					int uniqueId = topSelectedItem->getUniqueID();
+					if (actionId != 0 || uniqueId != 0) {
+						wxString revscriptLabel = "Open &RevScript";
+						if (actionId != 0 && uniqueId != 0) {
+							revscriptLabel = wxString::Format("Open &RevScript (AID:%d, UID:%d)", actionId, uniqueId);
+						} else if (actionId != 0) {
+							revscriptLabel = wxString::Format("Open &RevScript (AID:%d)", actionId);
+						} else {
+							revscriptLabel = wxString::Format("Open &RevScript (UID:%d)", uniqueId);
+						}
+						Append(MAP_POPUP_MENU_OPEN_REVSCRIPT, revscriptLabel, "Open the RevScript file for this item");
+					}
+				}
 			} else {
 
 				if (topCreature) {
@@ -4501,4 +4519,93 @@ bool MapCanvas::hasStairsOrLadder(Tile* tile) {
     }
     
     return false;
+}
+
+void MapCanvas::OnOpenRevScript(wxCommandEvent& WXUNUSED(event)) {
+	if (editor.selection.size() != 1) {
+		return;
+	}
+
+	Tile* tile = editor.selection.getSelectedTile();
+	if (!tile) {
+		return;
+	}
+
+	ItemVector selected_items = tile->getSelectedItems();
+	if (selected_items.empty()) {
+		return;
+	}
+
+	Item* item = selected_items.back(); // Get the top selected item
+	if (!item) {
+		return;
+	}
+
+	// Check if the RevScript manager is loaded
+	if (!g_gui.revscript_manager.isLoaded()) {
+		g_gui.PopupDialog("RevScript Error", "No RevScript directory has been loaded. Please load a map first or configure the RevScript directory.", wxOK);
+		return;
+	}
+
+	// Get action ID and unique ID from the item
+	uint16_t action_id = item->getActionID();
+	uint16_t unique_id = item->getUniqueID();
+
+	std::vector<RevScriptEntry> entries;
+
+	// Search for scripts by action ID
+	if (action_id > 0) {
+		auto aid_entries = g_gui.revscript_manager.findByActionID(action_id);
+		entries.insert(entries.end(), aid_entries.begin(), aid_entries.end());
+	}
+
+	// Search for scripts by unique ID
+	if (unique_id > 0) {
+		auto uid_entries = g_gui.revscript_manager.findByUniqueID(unique_id);
+		entries.insert(entries.end(), uid_entries.begin(), uid_entries.end());
+	}
+
+	if (entries.empty()) {
+		wxString message = "No RevScript entries found for this item.";
+		if (action_id > 0 || unique_id > 0) {
+			message += wxString::Format("\nAction ID: %d, Unique ID: %d", action_id, unique_id);
+		} else {
+			message += "\nThis item has no Action ID or Unique ID set.";
+		}
+		g_gui.PopupDialog("RevScript Not Found", message, wxOK);
+		return;
+	}
+
+	// If only one entry found, open it directly
+	if (entries.size() == 1) {
+		const RevScriptEntry& entry = entries[0];
+		if (!g_gui.revscript_manager.openRevScript(entry)) {
+			g_gui.PopupDialog("Error", "Failed to open the RevScript file. Make sure you have a text editor installed.", wxOK);
+		}
+		return;
+	}
+
+	// Multiple entries found, show a selection dialog
+	wxArrayString choices;
+	for (const auto& entry : entries) {
+		wxString choice = wxString::Format("%s:%d - %s (%s: %d)",
+			wxstr(entry.filename), entry.line_number, 
+			wxstr(entry.function_name.empty() ? "global" : entry.function_name),
+			wxstr(entry.id_type), entry.id_value);
+		choices.Add(choice);
+	}
+
+	int selection = wxGetSingleChoiceIndex(
+		"Multiple RevScript entries found. Select one to open:",
+		"Select RevScript",
+		choices,
+		g_gui.root
+	);
+
+	if (selection != -1) {
+		const RevScriptEntry& entry = entries[selection];
+		if (!g_gui.revscript_manager.openRevScript(entry)) {
+			g_gui.PopupDialog("Error", "Failed to open the RevScript file. Make sure you have a text editor installed.", wxOK);
+		}
+	}
 }
