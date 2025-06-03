@@ -796,7 +796,9 @@ bool GUI::LoadMap(const FileName& fileName) {
 
 	mapTab->GetView()->FitToMap();
 	UpdateTitle();
-	ListDialog("Map loader errors", mapTab->GetMap()->getWarnings());
+	
+
+	
 	root->DoQueryImportCreatures();
 
 	FitViewToMap(mapTab);
@@ -807,68 +809,73 @@ bool GUI::LoadMap(const FileName& fileName) {
 		minimap->PreCacheEntireMap();
 	}
 
-	// Load RevScript directory for the map
+	// Load OTS scripts directory for the map
 	wxFileName mapPath(fileName.GetFullPath());
 	wxString mapDir = mapPath.GetPath();
 	
-	// Check if we can find a RevScript directory
+	// Check if we can find an OTS data directory
 	bool scriptsLoaded = false;
 	
-	// Strategy 0: Use custom RevScript directory if set
-	std::string customScriptsPath = g_settings.getString(Config::REVSCRIPT_DIRECTORY);
-	if (!customScriptsPath.empty()) {
-		wxString customPath = wxstr(customScriptsPath);
+	// Strategy 0: Use custom OTS Data directory if set
+	std::string customDataPath = g_settings.getString(Config::OTS_DATA_DIRECTORY);
+	if (!customDataPath.empty()) {
+		wxString customPath = wxstr(customDataPath);
 		if (wxDir::Exists(customPath)) {
-			if (revscript_manager.scanRevScriptsDirectory(customScriptsPath)) {
-				SetStatusText("RevScript directory loaded (custom): " + customPath);
+			if (revscript_manager.scanRevScriptsDirectory(customDataPath)) {
+				SetStatusText("OTS data directory loaded (custom): " + customPath);
 				scriptsLoaded = true;
 			}
 		}
 	}
 	
-	// Strategy 1: Scripts in same directory as map
+	// Strategy 1: Look for data directory in same directory as map
 	if (!scriptsLoaded) {
-		wxString scriptsPath = mapDir + wxFileName::GetPathSeparator() + "scripts";
-		if (wxDir::Exists(scriptsPath)) {
-			if (revscript_manager.scanRevScriptsDirectory(nstr(scriptsPath))) {
-				SetStatusText("RevScript directory loaded: " + scriptsPath);
+		wxString dataPath = mapDir + wxFileName::GetPathSeparator() + "data";
+		if (wxDir::Exists(dataPath)) {
+			if (revscript_manager.scanRevScriptsDirectory(nstr(dataPath))) {
+				SetStatusText("OTS data directory loaded: " + dataPath);
 				scriptsLoaded = true;
 			}
 		}
 	}
 	
-	// Strategy 2: Go up one directory level and look for data/scripts
-	// This handles the common case where map is in /data/world/ and scripts are in /data/scripts/
+	// Strategy 2: Go up one directory level and look for data
+	// This handles the common case where map is in /data/world/ and we need to find /data/
 	if (!scriptsLoaded) {
 		wxFileName parentPath(mapDir);
 		if (parentPath.GetDirCount() > 0) {
 			parentPath.RemoveLastDir();  // Go up one level (from world to data)
-			wxString parentDir = parentPath.GetPath();
+			wxString parentDataPath = parentPath.GetPath();
 			
-			// Try /data/scripts from parent directory
-			wxString parentScriptsPath = parentDir + wxFileName::GetPathSeparator() + "scripts";
-			if (wxDir::Exists(parentScriptsPath)) {
-				if (revscript_manager.scanRevScriptsDirectory(nstr(parentScriptsPath))) {
-					SetStatusText("RevScript directory loaded: " + parentScriptsPath);
+			// Check if this looks like the data directory (contains scripts, actions, movements)
+			wxString scriptsCheck = parentDataPath + wxFileName::GetPathSeparator() + "scripts";
+			wxString actionsCheck = parentDataPath + wxFileName::GetPathSeparator() + "actions";
+			if (wxDir::Exists(scriptsCheck) || wxDir::Exists(actionsCheck)) {
+				if (revscript_manager.scanRevScriptsDirectory(nstr(parentDataPath))) {
+					SetStatusText("OTS data directory loaded: " + parentDataPath);
 					scriptsLoaded = true;
 				}
 			}
 		}
 	}
 	
-	// Strategy 3: Look for data/scripts relative to map directory (fallback)
+	// Strategy 3: Look for data directory as sibling to map directory
 	if (!scriptsLoaded) {
-		wxString dataScriptsPath = mapDir + wxFileName::GetPathSeparator() + "data" + wxFileName::GetPathSeparator() + "scripts";
-		if (wxDir::Exists(dataScriptsPath)) {
-			if (revscript_manager.scanRevScriptsDirectory(nstr(dataScriptsPath))) {
-				SetStatusText("RevScript directory loaded: " + dataScriptsPath);
-				scriptsLoaded = true;
+		wxFileName mapParent(mapDir);
+		if (mapParent.GetDirCount() > 0) {
+			mapParent.RemoveLastDir();  // Go up to parent of map directory
+			wxString siblingDataPath = mapParent.GetPath() + wxFileName::GetPathSeparator() + "data";
+			if (wxDir::Exists(siblingDataPath)) {
+				if (revscript_manager.scanRevScriptsDirectory(nstr(siblingDataPath))) {
+					SetStatusText("OTS data directory loaded: " + siblingDataPath);
+					scriptsLoaded = true;
+				}
 			}
 		}
 	}
 	
 	if (!scriptsLoaded) {
-		SetStatusText("No RevScript directory found");
+		SetStatusText("No OTS data directory found");
 	}
 
 	std::string path = g_settings.getString(Config::RECENT_EDITED_MAP_PATH);
@@ -886,14 +893,14 @@ bool GUI::LoadMap(const FileName& fileName) {
 
 void GUI::ReloadRevScripts() {
 	if (!IsEditorOpen()) {
-		SetStatusText("No map open - cannot reload RevScripts");
+		SetStatusText("No map open - cannot reload scripts");
 		return;
 	}
 	
 	// Get the current map file path
 	Editor* editor = GetCurrentEditor();
 	if (!editor || !editor->map.hasFile()) {
-		SetStatusText("Map has no file - cannot determine RevScript directory");
+		SetStatusText("Map has no file - cannot determine OTS data directory");
 		return;
 	}
 	
@@ -901,63 +908,68 @@ void GUI::ReloadRevScripts() {
 	wxFileName mapPath(fileName.GetFullPath());
 	wxString mapDir = mapPath.GetPath();
 	
-	// Check if we can find a RevScript directory
+	// Check if we can find an OTS data directory
 	bool scriptsLoaded = false;
 	
-	// Strategy 0: Use custom RevScript directory if set
-	std::string customScriptsPath = g_settings.getString(Config::REVSCRIPT_DIRECTORY);
-	if (!customScriptsPath.empty()) {
-		wxString customPath = wxstr(customScriptsPath);
+	// Strategy 0: Use custom OTS Data directory if set
+	std::string customDataPath = g_settings.getString(Config::OTS_DATA_DIRECTORY);
+	if (!customDataPath.empty()) {
+		wxString customPath = wxstr(customDataPath);
 		if (wxDir::Exists(customPath)) {
-			if (revscript_manager.scanRevScriptsDirectory(customScriptsPath)) {
-				SetStatusText("RevScript directory reloaded (custom): " + customPath);
+			if (revscript_manager.scanRevScriptsDirectory(customDataPath)) {
+				SetStatusText("OTS data directory reloaded (custom): " + customPath);
 				scriptsLoaded = true;
 			}
 		}
 	}
 	
-	// Strategy 1: Scripts in same directory as map
+	// Strategy 1: Look for data directory in same directory as map
 	if (!scriptsLoaded) {
-		wxString scriptsPath = mapDir + wxFileName::GetPathSeparator() + "scripts";
-		if (wxDir::Exists(scriptsPath)) {
-			if (revscript_manager.scanRevScriptsDirectory(nstr(scriptsPath))) {
-				SetStatusText("RevScript directory reloaded: " + scriptsPath);
+		wxString dataPath = mapDir + wxFileName::GetPathSeparator() + "data";
+		if (wxDir::Exists(dataPath)) {
+			if (revscript_manager.scanRevScriptsDirectory(nstr(dataPath))) {
+				SetStatusText("OTS data directory reloaded: " + dataPath);
 				scriptsLoaded = true;
 			}
 		}
 	}
 	
-	// Strategy 2: Go up one directory level and look for data/scripts
+	// Strategy 2: Go up one directory level and look for data
 	if (!scriptsLoaded) {
 		wxFileName parentPath(mapDir);
 		if (parentPath.GetDirCount() > 0) {
 			parentPath.RemoveLastDir();  // Go up one level (from world to data)
-			wxString parentDir = parentPath.GetPath();
+			wxString parentDataPath = parentPath.GetPath();
 			
-			// Try /data/scripts from parent directory
-			wxString parentScriptsPath = parentDir + wxFileName::GetPathSeparator() + "scripts";
-			if (wxDir::Exists(parentScriptsPath)) {
-				if (revscript_manager.scanRevScriptsDirectory(nstr(parentScriptsPath))) {
-					SetStatusText("RevScript directory reloaded: " + parentScriptsPath);
+			// Check if this looks like the data directory (contains scripts, actions, movements)
+			wxString scriptsCheck = parentDataPath + wxFileName::GetPathSeparator() + "scripts";
+			wxString actionsCheck = parentDataPath + wxFileName::GetPathSeparator() + "actions";
+			if (wxDir::Exists(scriptsCheck) || wxDir::Exists(actionsCheck)) {
+				if (revscript_manager.scanRevScriptsDirectory(nstr(parentDataPath))) {
+					SetStatusText("OTS data directory reloaded: " + parentDataPath);
 					scriptsLoaded = true;
 				}
 			}
 		}
 	}
 	
-	// Strategy 3: Look for data/scripts relative to map directory (fallback)
+	// Strategy 3: Look for data directory as sibling to map directory
 	if (!scriptsLoaded) {
-		wxString dataScriptsPath = mapDir + wxFileName::GetPathSeparator() + "data" + wxFileName::GetPathSeparator() + "scripts";
-		if (wxDir::Exists(dataScriptsPath)) {
-			if (revscript_manager.scanRevScriptsDirectory(nstr(dataScriptsPath))) {
-				SetStatusText("RevScript directory reloaded: " + dataScriptsPath);
-				scriptsLoaded = true;
+		wxFileName mapParent(mapDir);
+		if (mapParent.GetDirCount() > 0) {
+			mapParent.RemoveLastDir();  // Go up to parent of map directory
+			wxString siblingDataPath = mapParent.GetPath() + wxFileName::GetPathSeparator() + "data";
+			if (wxDir::Exists(siblingDataPath)) {
+				if (revscript_manager.scanRevScriptsDirectory(nstr(siblingDataPath))) {
+					SetStatusText("OTS data directory reloaded: " + siblingDataPath);
+					scriptsLoaded = true;
+				}
 			}
 		}
 	}
 	
 	if (!scriptsLoaded) {
-		SetStatusText("No RevScript directory found for reload");
+		SetStatusText("No OTS data directory found for reload");
 	}
 }
 

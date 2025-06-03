@@ -369,7 +369,7 @@ void Settings::IO(IOMode mode) {
 	Int(USE_UPDATER, 1);
 	String(RECENT_EDITED_MAP_PATH, "");
 	String(RECENT_EDITED_MAP_POSITION, "");
-	String(REVSCRIPT_DIRECTORY, "");
+	String(OTS_DATA_DIRECTORY, "");
 	Int(LAST_WEBSITES_OPEN_TIME, 0);
 
 	Int(FIND_ITEM_MODE, 0);
@@ -381,6 +381,7 @@ void Settings::IO(IOMode mode) {
 
 	Int(AUTO_SAVE_ENABLED, 0);
 	Int(AUTO_SAVE_INTERVAL, 5);
+	Int(SUPPRESS_MAP_WARNINGS, 1);
 
 	// Dark Mode
 	section("Interface");

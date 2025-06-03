@@ -157,6 +157,7 @@ protected:
 
 	// Add with other checkbox declarations
 	wxCheckBox* auto_select_raw_chkbox;
+	wxCheckBox* show_map_warnings_chkbox;
 	wxCheckBox* autosave_chkbox;
 	wxSpinCtrl* autosave_interval_spin;
 	

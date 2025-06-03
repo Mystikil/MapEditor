@@ -2652,20 +2652,48 @@ void MapPopupMenu::Update() {
 
 				Append(MAP_POPUP_MENU_PROPERTIES, "&Properties", "Properties for the current object");
 				
-				// Add RevScript menu item if the selected item has action ID or unique ID
+				// Add RevScript menu item if the selected item has scripts available
 				if (topSelectedItem) {
 					int actionId = topSelectedItem->getActionID();
 					int uniqueId = topSelectedItem->getUniqueID();
-					if (actionId != 0 || uniqueId != 0) {
+					int itemId = topSelectedItem->getID();
+					
+					bool hasActionScript = actionId != 0 && g_gui.revscript_manager.hasScriptForActionID(actionId);
+					bool hasUniqueScript = uniqueId != 0 && g_gui.revscript_manager.hasScriptForUniqueID(uniqueId);
+					bool hasItemScript = g_gui.revscript_manager.hasScriptForItemID(itemId);
+					
+					if (actionId != 0 || uniqueId != 0 || hasItemScript) {
 						wxString revscriptLabel = "Open &RevScript";
-						if (actionId != 0 && uniqueId != 0) {
-							revscriptLabel = wxString::Format("Open &RevScript (AID:%d, UID:%d)", actionId, uniqueId);
-						} else if (actionId != 0) {
-							revscriptLabel = wxString::Format("Open &RevScript (AID:%d)", actionId);
-						} else {
-							revscriptLabel = wxString::Format("Open &RevScript (UID:%d)", uniqueId);
+						wxString tooltip = "Open the script file for this item";
+						
+						// Build detailed label showing what scripts are available
+						wxArrayString scriptTypes;
+						if (hasActionScript) {
+							scriptTypes.Add(wxString::Format("AID:%d", actionId));
 						}
-						Append(MAP_POPUP_MENU_OPEN_REVSCRIPT, revscriptLabel, "Open the RevScript file for this item");
+						if (hasUniqueScript) {
+							scriptTypes.Add(wxString::Format("UID:%d", uniqueId));
+						}
+						if (hasItemScript) {
+							scriptTypes.Add(wxString::Format("ID:%d", itemId));
+						}
+						
+						// If scripts exist, show which ones. If not, show what we're looking for
+						if (hasActionScript || hasUniqueScript || hasItemScript) {
+							revscriptLabel = wxString::Format("Open &RevScript (%s)", wxJoin(scriptTypes, ','));
+							tooltip = "Open the script file(s) for this item";
+						} else {
+							// No scripts found, but show what we could look for
+							wxArrayString potentialTypes;
+							if (actionId != 0) potentialTypes.Add(wxString::Format("AID:%d", actionId));
+							if (uniqueId != 0) potentialTypes.Add(wxString::Format("UID:%d", uniqueId));
+							potentialTypes.Add(wxString::Format("ID:%d", itemId));
+							
+							revscriptLabel = wxString::Format("Look for &RevScript (%s)", wxJoin(potentialTypes, ','));
+							tooltip = "Search for script files for this item (no scripts currently found)";
+						}
+						
+						Append(MAP_POPUP_MENU_OPEN_REVSCRIPT, revscriptLabel, tooltip);
 					}
 				}
 			} else {
@@ -4543,13 +4571,14 @@ void MapCanvas::OnOpenRevScript(wxCommandEvent& WXUNUSED(event)) {
 
 	// Check if the RevScript manager is loaded
 	if (!g_gui.revscript_manager.isLoaded()) {
-		g_gui.PopupDialog("RevScript Error", "No RevScript directory has been loaded. Please load a map first or configure the RevScript directory.", wxOK);
+		g_gui.PopupDialog("Script Error", "No OTS data directory has been loaded. Please load a map first or configure the OTS data directory in preferences.", wxOK);
 		return;
 	}
 
-	// Get action ID and unique ID from the item
+	// Get action ID, unique ID, and item ID from the item
 	uint16_t action_id = item->getActionID();
 	uint16_t unique_id = item->getUniqueID();
+	uint16_t item_id = item->getID();
 
 	std::vector<RevScriptEntry> entries;
 
@@ -4565,14 +4594,21 @@ void MapCanvas::OnOpenRevScript(wxCommandEvent& WXUNUSED(event)) {
 		entries.insert(entries.end(), uid_entries.begin(), uid_entries.end());
 	}
 
+	// Search for scripts by item ID (includes XML-based actions and movements)
+	auto id_entries = g_gui.revscript_manager.findByItemID(item_id);
+	entries.insert(entries.end(), id_entries.begin(), id_entries.end());
+
 	if (entries.empty()) {
-		wxString message = "No RevScript entries found for this item.";
-		if (action_id > 0 || unique_id > 0) {
-			message += wxString::Format("\nAction ID: %d, Unique ID: %d", action_id, unique_id);
-		} else {
-			message += "\nThis item has no Action ID or Unique ID set.";
+		wxString message = "No script entries found for this item.";
+		message += wxString::Format("\nChecked: Item ID %d", item_id);
+		if (action_id > 0) {
+			message += wxString::Format(", Action ID %d", action_id);
 		}
-		g_gui.PopupDialog("RevScript Not Found", message, wxOK);
+		if (unique_id > 0) {
+			message += wxString::Format(", Unique ID %d", unique_id);
+		}
+		message += "\nSearched: RevScript files, Actions XML, and Movements XML";
+		g_gui.PopupDialog("Script Not Found", message, wxOK);
 		return;
 	}
 
@@ -4580,7 +4616,7 @@ void MapCanvas::OnOpenRevScript(wxCommandEvent& WXUNUSED(event)) {
 	if (entries.size() == 1) {
 		const RevScriptEntry& entry = entries[0];
 		if (!g_gui.revscript_manager.openRevScript(entry)) {
-			g_gui.PopupDialog("Error", "Failed to open the RevScript file. Make sure you have a text editor installed.", wxOK);
+			g_gui.PopupDialog("Error", "Failed to open the script file. Make sure you have a text editor installed.", wxOK);
 		}
 		return;
 	}
@@ -4588,16 +4624,32 @@ void MapCanvas::OnOpenRevScript(wxCommandEvent& WXUNUSED(event)) {
 	// Multiple entries found, show a selection dialog
 	wxArrayString choices;
 	for (const auto& entry : entries) {
-		wxString choice = wxString::Format("%s:%d - %s (%s: %d)",
-			wxstr(entry.filename), entry.line_number, 
-			wxstr(entry.function_name.empty() ? "global" : entry.function_name),
-			wxstr(entry.id_type), entry.id_value);
+		wxString choice;
+		if (entry.script_type == "revscript") {
+			choice = wxString::Format("[RevScript] %s:%d - %s (%s: %d)",
+				wxstr(entry.filename), entry.line_number, 
+				wxstr(entry.function_name.empty() ? "global" : entry.function_name),
+				wxstr(entry.id_type), entry.id_value);
+		} else if (entry.script_type == "action") {
+			choice = wxString::Format("[Action] %s (%s: %d)",
+				wxstr(entry.filename),
+				wxstr(entry.id_type), entry.id_value);
+		} else if (entry.script_type == "movement") {
+			choice = wxString::Format("[Movement] %s (%s: %d)",
+				wxstr(entry.filename),
+				wxstr(entry.id_type), entry.id_value);
+		} else {
+			choice = wxString::Format("[%s] %s (%s: %d)",
+				wxstr(entry.script_type),
+				wxstr(entry.filename),
+				wxstr(entry.id_type), entry.id_value);
+		}
 		choices.Add(choice);
 	}
 
 	int selection = wxGetSingleChoiceIndex(
-		"Multiple RevScript entries found. Select one to open:",
-		"Select RevScript",
+		wxString::Format("Multiple script entries found for this item (Item ID: %d). Select one to open:", item_id),
+		"Select Script",
 		choices,
 		g_gui.root
 	);
@@ -4605,7 +4657,7 @@ void MapCanvas::OnOpenRevScript(wxCommandEvent& WXUNUSED(event)) {
 	if (selection != -1) {
 		const RevScriptEntry& entry = entries[selection];
 		if (!g_gui.revscript_manager.openRevScript(entry)) {
-			g_gui.PopupDialog("Error", "Failed to open the RevScript file. Make sure you have a text editor installed.", wxOK);
+			g_gui.PopupDialog("Error", "Failed to open the script file. Make sure you have a text editor installed.", wxOK);
 		}
 	}
 }

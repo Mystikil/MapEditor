@@ -1574,7 +1574,20 @@ void MapDrawer::WriteTooltip(Tile* tile, Item* item, std::ostringstream& stream,
 	}
 
 	Teleport* tp = dynamic_cast<Teleport*>(item);
-	if (unique == 0 && action == 0 && doorId == 0 && text.empty() && !tp && zoneIds.empty()) {
+	
+	// Check if scripts exist for this item
+	bool hasScript = false;
+	if (g_gui.revscript_manager.isLoaded()) {
+		if (action > 0 && g_gui.revscript_manager.hasScriptForActionID(action)) {
+			hasScript = true;
+		} else if (unique > 0 && g_gui.revscript_manager.hasScriptForUniqueID(unique)) {
+			hasScript = true;
+		} else if (g_gui.revscript_manager.hasScriptForItemID(id)) {
+			hasScript = true;
+		}
+	}
+	
+	if (unique == 0 && action == 0 && doorId == 0 && text.empty() && !tp && zoneIds.empty() && !hasScript) {
 		return;
 	}
 
@@ -1610,6 +1623,9 @@ void MapDrawer::WriteTooltip(Tile* tile, Item* item, std::ostringstream& stream,
 	if (tp) {
 		Position& dest = tp->getDestination();
 		stream << "destination: " << dest.x << ", " << dest.y << ", " << dest.z << "\n";
+	}
+	if (hasScript) {
+		stream << "hasScript: true\n";
 	}
 }
 

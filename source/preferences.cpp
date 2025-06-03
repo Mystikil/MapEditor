@@ -116,6 +116,11 @@ wxNotebookPage* PreferencesWindow::CreateGeneralPage() {
 	auto_select_raw_chkbox->SetToolTip("Automatically selects RAW brush when right-clicking items while showing the context menu.");
 	sizer->Add(auto_select_raw_chkbox, 0, wxLEFT | wxTOP, 5);
 
+	show_map_warnings_chkbox = newd wxCheckBox(general_page, wxID_ANY, "Show map loader warnings");
+	show_map_warnings_chkbox->SetValue(!g_settings.getBoolean(Config::SUPPRESS_MAP_WARNINGS));
+	show_map_warnings_chkbox->SetToolTip("Show warnings dialog when loading maps (can be disabled with 'Don't show again' checkbox in the warnings dialog).");
+	sizer->Add(show_map_warnings_chkbox, 0, wxLEFT | wxTOP, 5);
+
 	sizer->AddSpacer(10);
 
 	// Add autosave options
@@ -156,17 +161,17 @@ wxNotebookPage* PreferencesWindow::CreateGeneralPage() {
 	grid_sizer->Add(replace_size_spin, 0);
 	SetWindowToolTip(tmptext, replace_size_spin, "How many items you can replace on the map using the Replace Item tool.");
 
-	grid_sizer->Add(tmptext = newd wxStaticText(general_page, wxID_ANY, "RevScript directory: "), 0);
+	grid_sizer->Add(tmptext = newd wxStaticText(general_page, wxID_ANY, "OTS Data directory: "), 0);
 	revscript_directory_picker = newd wxDirPickerCtrl(general_page, wxID_ANY);
 	grid_sizer->Add(revscript_directory_picker, 1, wxEXPAND);
-	wxString revscript_dir = wxstr(g_settings.getString(Config::REVSCRIPT_DIRECTORY));
+	wxString revscript_dir = wxstr(g_settings.getString(Config::OTS_DATA_DIRECTORY));
 	revscript_directory_picker->SetPath(revscript_dir);
-	SetWindowToolTip(tmptext, revscript_directory_picker, "Directory containing RevScript files (Lua scripts) for the map editor.");
+	SetWindowToolTip(tmptext, revscript_directory_picker, "Directory containing OTS data files (/data/ folder with scripts, actions, movements, etc.).");
 
 	grid_sizer->Add(newd wxStaticText(general_page, wxID_ANY, ""), 0); // Empty cell for alignment
-	force_reload_revscripts_btn = newd wxButton(general_page, wxID_ANY, "Force Reload RevScripts");
+	force_reload_revscripts_btn = newd wxButton(general_page, wxID_ANY, "Force Reload Scripts");
 	grid_sizer->Add(force_reload_revscripts_btn, 0);
-	SetWindowToolTip(force_reload_revscripts_btn, "Force reload all RevScript files from the selected directory.");
+	SetWindowToolTip(force_reload_revscripts_btn, "Force reload all script files from the selected OTS data directory.");
 
 
 	sizer->Add(grid_sizer, 0, wxALL, 5);
@@ -921,7 +926,7 @@ void PreferencesWindow::OnClickApply(wxCommandEvent& WXUNUSED(event)) {
 void PreferencesWindow::OnForceReloadRevScripts(wxCommandEvent& WXUNUSED(event)) {
 //this function can only be called by button so no if statement.
 		// Save the current RevScript directory setting first
-		g_settings.setString(Config::REVSCRIPT_DIRECTORY, nstr(revscript_directory_picker->GetPath()));
+		g_settings.setString(Config::OTS_DATA_DIRECTORY, nstr(revscript_directory_picker->GetPath()));
 		
 		// Call the GUI's reload method
 		g_gui.ReloadRevScripts();
@@ -958,6 +963,7 @@ void PreferencesWindow::Apply() {
 	g_settings.setInteger(Config::SHOW_TILESET_EDITOR, enable_tileset_editing_chkbox->GetValue());
 	
 	g_settings.setInteger(Config::AUTO_SELECT_RAW_ON_RIGHTCLICK, auto_select_raw_chkbox->GetValue());
+	g_settings.setInteger(Config::SUPPRESS_MAP_WARNINGS, !show_map_warnings_chkbox->GetValue());
 	g_settings.setInteger(Config::UNDO_SIZE, undo_size_spin->GetValue());
 	g_settings.setInteger(Config::UNDO_MEM_SIZE, undo_mem_size_spin->GetValue());
 	g_settings.setInteger(Config::WORKER_THREADS, worker_threads_spin->GetValue());
@@ -967,7 +973,7 @@ void PreferencesWindow::Apply() {
 	g_settings.setInteger(Config::AUTO_SAVE_INTERVAL, autosave_interval_spin->GetValue());
 
 	// RevScript directory
-	g_settings.setString(Config::REVSCRIPT_DIRECTORY, nstr(revscript_directory_picker->GetPath()));
+	g_settings.setString(Config::OTS_DATA_DIRECTORY, nstr(revscript_directory_picker->GetPath()));
 
 	// LOD Settings
 	g_settings.setInteger(Config::TOOLTIP_MAX_ZOOM, tooltip_max_zoom_spin->GetValue());

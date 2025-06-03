@@ -16,30 +16,36 @@ RevScriptManager::~RevScriptManager() {
     clear();
 }
 
-bool RevScriptManager::scanRevScriptsDirectory(const std::string& scripts_dir) {
+bool RevScriptManager::scanRevScriptsDirectory(const std::string& data_dir) {
     clear();
-    scripts_directory = scripts_dir;
+    data_directory = data_dir;
     
-    if (!wxDir::Exists(wxstr(scripts_dir))) {
+    if (!wxDir::Exists(wxstr(data_dir))) {
         return false;
     }
     
-    // Use recursive function to scan all directories
-    scanDirectoryRecursive(scripts_dir);
+    // Scan scripts directory (for RevScript .lua files)
+    std::string scripts_dir = data_dir + "/scripts";
+    if (wxDir::Exists(wxstr(scripts_dir))) {
+        scanDirectoryRecursive(scripts_dir);
+    }
+    
+    // Try to find and scan actions.xml and movements.xml in their respective directories
+    bool actions_loaded = scanActionsXml(data_dir);
+    bool movements_loaded = scanMovementsXml(data_dir);
     
     loaded = true;
     
-    // Debug output - count total entries found
-    int total_entries = 0;
-    for (const auto& pair : action_id_map) {
-        total_entries += pair.second.size();
-    }
-    for (const auto& pair : unique_id_map) {
-        total_entries += pair.second.size();
-    }
-    for (const auto& pair : item_id_map) {
-        total_entries += pair.second.size();
-    }
+    // Debug output
+    OutputDebugStringA(wxString::Format("RevScript scan complete:\n").mb_str());
+    OutputDebugStringA(wxString::Format("  Data directory: %s\n", wxstr(data_dir)).mb_str());
+    OutputDebugStringA(wxString::Format("  Scripts directory exists: %s\n", wxDir::Exists(wxstr(scripts_dir)) ? "yes" : "no").mb_str());
+    OutputDebugStringA(wxString::Format("  Actions XML loaded: %s\n", actions_loaded ? "yes" : "no").mb_str());
+    OutputDebugStringA(wxString::Format("  Movements XML loaded: %s\n", movements_loaded ? "yes" : "no").mb_str());
+    OutputDebugStringA(wxString::Format("  Total RevScript entries: %d AID, %d UID, %d ItemID\n", 
+           (int)action_id_entries.size(), (int)unique_id_entries.size(), (int)item_id_entries.size()).mb_str());
+    OutputDebugStringA(wxString::Format("  Total XML entries: %d actions, %d movements\n", 
+           (int)xml_action_entries.size(), (int)xml_movement_entries.size()).mb_str());
     
     return true;
 }
@@ -106,6 +112,7 @@ bool RevScriptManager::scanLuaFile(const std::string& filepath) {
             entry.line_number = line_number;
             entry.id_value = std::stoi(aid_match[2].str());
             entry.id_type = "aid";
+            entry.script_type = "revscript";
             addEntry(entry);
         }
         
@@ -118,6 +125,7 @@ bool RevScriptManager::scanLuaFile(const std::string& filepath) {
             entry.line_number = line_number;
             entry.id_value = std::stoi(uid_match[2].str());
             entry.id_type = "uid";
+            entry.script_type = "revscript";
             addEntry(entry);
         }
         
@@ -130,6 +138,7 @@ bool RevScriptManager::scanLuaFile(const std::string& filepath) {
             entry.line_number = line_number;
             entry.id_value = std::stoi(id_match[2].str());
             entry.id_type = "id";
+            entry.script_type = "revscript";
             addEntry(entry);
         }
     }
@@ -137,38 +146,280 @@ bool RevScriptManager::scanLuaFile(const std::string& filepath) {
     return true;
 }
 
+bool RevScriptManager::scanActionsXml(const std::string& base_directory) {
+    std::string actions_xml_path = base_directory + "/actions/actions.xml";
+    std::string actions_script_dir = base_directory + "/actions/scripts/";
+    
+    return parseXmlFile(actions_xml_path, "action", actions_script_dir);
+}
+
+bool RevScriptManager::scanMovementsXml(const std::string& base_directory) {
+    std::string movements_xml_path = base_directory + "/movements/movements.xml";
+    std::string movements_script_dir = base_directory + "/movements/scripts/";
+    
+    return parseXmlFile(movements_xml_path, "movement", movements_script_dir);
+}
+
+bool RevScriptManager::parseXmlFile(const std::string& xml_path, const std::string& script_type, const std::string& base_script_dir) {
+    if (!wxFile::Exists(wxstr(xml_path))) {
+        OutputDebugStringA(wxString::Format("XML file not found: %s\n", xml_path.c_str()).mb_str());
+        return false;
+    }
+    
+    pugi::xml_document doc;
+    pugi::xml_parse_result result = doc.load_file(xml_path.c_str());
+    
+    if (!result) {
+        OutputDebugStringA(wxString::Format("Failed to parse XML file: %s - %s\n", xml_path.c_str(), result.description()).mb_str());
+        return false;
+    }
+    
+    pugi::xml_node root = doc.first_child();
+    if (!root) {
+        OutputDebugStringA(wxString::Format("No root node in XML file: %s\n", xml_path.c_str()).mb_str());
+        return false;
+    }
+    
+    int entries_found = 0;
+    
+    // Find all action/movement nodes
+    for (pugi::xml_node node = root.child(script_type.c_str()); node; node = node.next_sibling(script_type.c_str())) {
+        XmlScriptEntry entry;
+        entry.script_type = script_type;
+        
+        // Get script path
+        std::string script_path = node.attribute("script").as_string();
+        if (script_path.empty()) {
+            continue;
+        }
+        
+        entry.script_path = script_path;
+        entry.full_path = base_script_dir + script_path;
+        
+        // Parse different ID attributes
+        if (node.attribute("itemid")) {
+            entry.id_attribute = "itemid";
+            entry.from_id = node.attribute("itemid").as_int();
+            entry.to_id = entry.from_id;
+        } else if (node.attribute("fromid") && node.attribute("toid")) {
+            entry.id_attribute = "itemid";
+            entry.from_id = node.attribute("fromid").as_int();
+            entry.to_id = node.attribute("toid").as_int();
+        } else if (node.attribute("actionid")) {
+            entry.id_attribute = "actionid";
+            entry.from_id = node.attribute("actionid").as_int();
+            entry.to_id = entry.from_id;
+        } else if (node.attribute("fromaid") && node.attribute("toaid")) {
+            entry.id_attribute = "actionid";
+            entry.from_id = node.attribute("fromaid").as_int();
+            entry.to_id = node.attribute("toaid").as_int();
+        } else if (node.attribute("uniqueid")) {
+            entry.id_attribute = "uniqueid";
+            entry.from_id = node.attribute("uniqueid").as_int();
+            entry.to_id = entry.from_id;
+            OutputDebugStringA(wxString::Format("Found uniqueid entry: %d -> %s\n", entry.from_id, entry.full_path.c_str()).mb_str());
+        } else if (node.attribute("fromuid") && node.attribute("touid")) {
+            entry.id_attribute = "uniqueid";
+            entry.from_id = node.attribute("fromuid").as_int();
+            entry.to_id = node.attribute("touid").as_int();
+            OutputDebugStringA(wxString::Format("Found uniqueid range entry: %d-%d -> %s\n", entry.from_id, entry.to_id, entry.full_path.c_str()).mb_str());
+        } else {
+            continue; // Skip entries without valid ID attributes
+        }
+        
+        entries_found++;
+        
+        // Store in appropriate vector
+        if (script_type == "action") {
+            xml_action_entries.push_back(entry);
+        } else if (script_type == "movement") {
+            xml_movement_entries.push_back(entry);
+        }
+    }
+    
+    OutputDebugStringA(wxString::Format("Parsed %s: found %d entries\n", xml_path.c_str(), entries_found).mb_str());
+    return true;
+}
+
 void RevScriptManager::addEntry(const RevScriptEntry& entry) {
     if (entry.id_type == "aid") {
-        action_id_map[entry.id_value].push_back(entry);
+        action_id_entries.emplace(entry.id_value, entry);
     } else if (entry.id_type == "uid") {
-        unique_id_map[entry.id_value].push_back(entry);
+        unique_id_entries.emplace(entry.id_value, entry);
     } else if (entry.id_type == "id") {
-        item_id_map[entry.id_value].push_back(entry);
+        item_id_entries.emplace(entry.id_value, entry);
     }
 }
 
 std::vector<RevScriptEntry> RevScriptManager::findByActionID(int action_id) const {
-    auto it = action_id_map.find(action_id);
-    if (it != action_id_map.end()) {
-        return it->second;
+    std::vector<RevScriptEntry> results;
+    
+    // First check RevScript entries
+    auto range = action_id_entries.equal_range(action_id);
+    for (auto it = range.first; it != range.second; ++it) {
+        results.push_back(it->second);
     }
-    return std::vector<RevScriptEntry>();
+    
+    // Then check XML action entries
+    auto xml_entries = findXmlEntriesByActionID(action_id);
+    for (const auto& xml_entry : xml_entries) {
+        RevScriptEntry entry;
+        entry.filename = xml_entry.full_path;
+        entry.function_name = "";
+        entry.line_number = 1;
+        entry.id_value = action_id;
+        entry.id_type = "aid";
+        entry.script_type = xml_entry.script_type;
+        results.push_back(entry);
+    }
+    
+    return results;
 }
 
 std::vector<RevScriptEntry> RevScriptManager::findByUniqueID(int unique_id) const {
-    auto it = unique_id_map.find(unique_id);
-    if (it != unique_id_map.end()) {
-        return it->second;
+    std::vector<RevScriptEntry> results;
+    
+    // First check RevScript entries
+    auto range = unique_id_entries.equal_range(unique_id);
+    for (auto it = range.first; it != range.second; ++it) {
+        results.push_back(it->second);
     }
-    return std::vector<RevScriptEntry>();
+    
+    // Then check XML entries
+    auto xml_entries = findXmlEntriesByUniqueID(unique_id);
+    for (const auto& xml_entry : xml_entries) {
+        RevScriptEntry entry;
+        entry.filename = xml_entry.full_path;
+        entry.function_name = "";
+        entry.line_number = 1;
+        entry.id_value = unique_id;
+        entry.id_type = "uid";
+        entry.script_type = xml_entry.script_type;
+        results.push_back(entry);
+    }
+    
+    return results;
 }
 
 std::vector<RevScriptEntry> RevScriptManager::findByItemID(int item_id) const {
-    auto it = item_id_map.find(item_id);
-    if (it != item_id_map.end()) {
-        return it->second;
+    std::vector<RevScriptEntry> results;
+    
+    // First check RevScript entries
+    auto range = item_id_entries.equal_range(item_id);
+    for (auto it = range.first; it != range.second; ++it) {
+        results.push_back(it->second);
     }
-    return std::vector<RevScriptEntry>();
+    
+    // Then check XML action entries for item IDs
+    auto xml_action_entries = findXmlEntriesByItemID(item_id, "action");
+    for (const auto& xml_entry : xml_action_entries) {
+        RevScriptEntry entry;
+        entry.filename = xml_entry.full_path;
+        entry.function_name = "";
+        entry.line_number = 1;
+        entry.id_value = item_id;
+        entry.id_type = "id";
+        entry.script_type = xml_entry.script_type;
+        results.push_back(entry);
+    }
+    
+    // Check XML movement entries for item IDs
+    auto xml_movement_entries = findXmlEntriesByItemID(item_id, "movement");
+    for (const auto& xml_entry : xml_movement_entries) {
+        RevScriptEntry entry;
+        entry.filename = xml_entry.full_path;
+        entry.function_name = "";
+        entry.line_number = 1;
+        entry.id_value = item_id;
+        entry.id_type = "id";
+        entry.script_type = xml_entry.script_type;
+        results.push_back(entry);
+    }
+    
+    return results;
+}
+
+bool RevScriptManager::hasScriptForActionID(int action_id) const {
+    // Check RevScript entries
+    if (action_id_entries.find(action_id) != action_id_entries.end()) {
+        return true;
+    }
+    
+    // Check XML entries
+    return !findXmlEntriesByActionID(action_id).empty();
+}
+
+bool RevScriptManager::hasScriptForUniqueID(int unique_id) const {
+    // Check RevScript entries  
+    if (unique_id_entries.find(unique_id) != unique_id_entries.end()) {
+        return true;
+    }
+    
+    // Check XML entries
+    return !findXmlEntriesByUniqueID(unique_id).empty();
+}
+
+bool RevScriptManager::hasScriptForItemID(int item_id) const {
+    // Check RevScript entries
+    if (item_id_entries.find(item_id) != item_id_entries.end()) {
+        return true;
+    }
+    
+    // Check XML entries for both actions and movements
+    return !findXmlEntriesByItemID(item_id, "action").empty() || 
+           !findXmlEntriesByItemID(item_id, "movement").empty();
+}
+
+std::vector<XmlScriptEntry> RevScriptManager::findXmlEntriesByItemID(int item_id, const std::string& script_type) const {
+    std::vector<XmlScriptEntry> results;
+    
+    const std::vector<XmlScriptEntry>* entries;
+    if (script_type == "action") {
+        entries = &xml_action_entries;
+    } else if (script_type == "movement") {
+        entries = &xml_movement_entries;
+    } else {
+        return results;
+    }
+    
+    for (const auto& entry : *entries) {
+        if (entry.id_attribute == "itemid" && entry.isInRange(item_id)) {
+            results.push_back(entry);
+        }
+    }
+    
+    return results;
+}
+
+std::vector<XmlScriptEntry> RevScriptManager::findXmlEntriesByActionID(int action_id) const {
+    std::vector<XmlScriptEntry> results;
+    
+    for (const auto& entry : xml_action_entries) {
+        if (entry.id_attribute == "actionid" && entry.isInRange(action_id)) {
+            results.push_back(entry);
+        }
+    }
+    
+    return results;
+}
+
+std::vector<XmlScriptEntry> RevScriptManager::findXmlEntriesByUniqueID(int unique_id) const {
+    std::vector<XmlScriptEntry> results;
+    
+    // Check both action and movement entries for unique IDs
+    for (const auto& entry : xml_action_entries) {
+        if (entry.id_attribute == "uniqueid" && entry.isInRange(unique_id)) {
+            results.push_back(entry);
+        }
+    }
+    
+    for (const auto& entry : xml_movement_entries) {
+        if (entry.id_attribute == "uniqueid" && entry.isInRange(unique_id)) {
+            results.push_back(entry);
+        }
+    }
+    
+    return results;
 }
 
 bool RevScriptManager::openRevScript(const RevScriptEntry& entry) const {
@@ -184,32 +435,35 @@ std::string RevScriptManager::getDefaultEditor() const {
 }
 
 void RevScriptManager::clear() {
-    action_id_map.clear();
-    unique_id_map.clear();
-    item_id_map.clear();
+    action_id_entries.clear();
+    unique_id_entries.clear();
+    item_id_entries.clear();
+    xml_action_entries.clear();
+    xml_movement_entries.clear();
     loaded = false;
-    scripts_directory.clear();
+    data_directory.clear();
 }
 
 std::string RevScriptManager::getScanStatistics() const {
     int action_ids = 0, unique_ids = 0, item_ids = 0;
     
-    for (const auto& pair : action_id_map) {
-        action_ids += pair.second.size();
-    }
-    for (const auto& pair : unique_id_map) {
-        unique_ids += pair.second.size();
-    }
-    for (const auto& pair : item_id_map) {
-        item_ids += pair.second.size();
-    }
+    // Count RevScript entries
+    action_ids = action_id_entries.size();
+    unique_ids = unique_id_entries.size();
+    item_ids = item_id_entries.size();
+    
+    // Count XML entries
+    int xml_action_count = xml_action_entries.size();
+    int xml_movement_count = xml_movement_entries.size();
     
     std::string result = "RevScript Statistics:\n";
-    result += "Directory: " + scripts_directory + "\n";
-    result += "Action IDs: " + std::to_string(action_ids) + "\n";
-    result += "Unique IDs: " + std::to_string(unique_ids) + "\n";
-    result += "Item IDs: " + std::to_string(item_ids) + "\n";
-    result += "Total entries: " + std::to_string(action_ids + unique_ids + item_ids);
+    result += "Directory: " + data_directory + "\n";
+    result += "RevScript Action IDs: " + std::to_string(action_ids) + "\n";
+    result += "RevScript Unique IDs: " + std::to_string(unique_ids) + "\n";
+    result += "RevScript Item IDs: " + std::to_string(item_ids) + "\n";
+    result += "XML Action entries: " + std::to_string(xml_action_count) + "\n";
+    result += "XML Movement entries: " + std::to_string(xml_movement_count) + "\n";
+    result += "Total entries: " + std::to_string(action_ids + unique_ids + item_ids + xml_action_count + xml_movement_count);
     
     return result;
 } 
