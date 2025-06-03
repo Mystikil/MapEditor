@@ -399,6 +399,9 @@
     <ClInclude Include="..\..\source\color_utils.h" />
     <ClInclude Include="..\..\source\add_creature_dialog.h" />
     <ClInclude Include="..\..\source\map_summary_window.h" />
+    <ClInclude Include="..\..\source\otmapgen_dialog.h" />
+    <ClInclude Include="..\..\source\otmapgen.h" />
+    <ClInclude Include="..\..\source\revscript_manager.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\source\json\json_spirit_reader.cpp">
@@ -706,6 +709,9 @@
     <ClCompile Include="..\..\source\find_creature_window.cpp" />
     <ClCompile Include="..\..\source\add_creature_dialog.cpp" />
     <ClCompile Include="..\..\source\map_summary_window.cpp" />
+    <ClCompile Include="..\..\source\otmapgen.cpp" />
+    <ClCompile Include="..\..\source\otmapgen_dialog.cpp" />
+    <ClCompile Include="..\..\source\revscript_manager.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="Editor.rc">

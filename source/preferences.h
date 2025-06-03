@@ -36,6 +36,8 @@ public:
 	void OnClickOK(wxCommandEvent&);
 	void OnClickCancel(wxCommandEvent&);
 
+	void OnForceReloadRevScripts(wxCommandEvent&);
+
 	void OnCollapsiblePane(wxCollapsiblePaneEvent&);
 
 	void UpdateClientOverride();
@@ -77,6 +79,8 @@ protected:
 	wxChoice* icon_background_choice;
 	wxCheckBox* use_memcached_chkbox;
 	wxDirPickerCtrl* screenshot_directory_picker;
+	wxDirPickerCtrl* revscript_directory_picker;
+	wxButton* force_reload_revscripts_btn;
 	wxChoice* screenshot_format_choice;
 	wxCheckBox* hide_items_when_zoomed_chkbox;
 	wxColourPickerCtrl* cursor_color_pick;

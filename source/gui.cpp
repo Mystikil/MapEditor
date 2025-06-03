@@ -150,6 +150,7 @@
 #include "main.h"
 
 #include <wx/display.h>
+#include <wx/dir.h>
 
 #include "gui.h"
 #include "main_menubar.h"
@@ -806,6 +807,70 @@ bool GUI::LoadMap(const FileName& fileName) {
 		minimap->PreCacheEntireMap();
 	}
 
+	// Load RevScript directory for the map
+	wxFileName mapPath(fileName.GetFullPath());
+	wxString mapDir = mapPath.GetPath();
+	
+	// Check if we can find a RevScript directory
+	bool scriptsLoaded = false;
+	
+	// Strategy 0: Use custom RevScript directory if set
+	std::string customScriptsPath = g_settings.getString(Config::REVSCRIPT_DIRECTORY);
+	if (!customScriptsPath.empty()) {
+		wxString customPath = wxstr(customScriptsPath);
+		if (wxDir::Exists(customPath)) {
+			if (revscript_manager.scanRevScriptsDirectory(customScriptsPath)) {
+				SetStatusText("RevScript directory loaded (custom): " + customPath);
+				scriptsLoaded = true;
+			}
+		}
+	}
+	
+	// Strategy 1: Scripts in same directory as map
+	if (!scriptsLoaded) {
+		wxString scriptsPath = mapDir + wxFileName::GetPathSeparator() + "scripts";
+		if (wxDir::Exists(scriptsPath)) {
+			if (revscript_manager.scanRevScriptsDirectory(nstr(scriptsPath))) {
+				SetStatusText("RevScript directory loaded: " + scriptsPath);
+				scriptsLoaded = true;
+			}
+		}
+	}
+	
+	// Strategy 2: Go up one directory level and look for data/scripts
+	// This handles the common case where map is in /data/world/ and scripts are in /data/scripts/
+	if (!scriptsLoaded) {
+		wxFileName parentPath(mapDir);
+		if (parentPath.GetDirCount() > 0) {
+			parentPath.RemoveLastDir();  // Go up one level (from world to data)
+			wxString parentDir = parentPath.GetPath();
+			
+			// Try /data/scripts from parent directory
+			wxString parentScriptsPath = parentDir + wxFileName::GetPathSeparator() + "scripts";
+			if (wxDir::Exists(parentScriptsPath)) {
+				if (revscript_manager.scanRevScriptsDirectory(nstr(parentScriptsPath))) {
+					SetStatusText("RevScript directory loaded: " + parentScriptsPath);
+					scriptsLoaded = true;
+				}
+			}
+		}
+	}
+	
+	// Strategy 3: Look for data/scripts relative to map directory (fallback)
+	if (!scriptsLoaded) {
+		wxString dataScriptsPath = mapDir + wxFileName::GetPathSeparator() + "data" + wxFileName::GetPathSeparator() + "scripts";
+		if (wxDir::Exists(dataScriptsPath)) {
+			if (revscript_manager.scanRevScriptsDirectory(nstr(dataScriptsPath))) {
+				SetStatusText("RevScript directory loaded: " + dataScriptsPath);
+				scriptsLoaded = true;
+			}
+		}
+	}
+	
+	if (!scriptsLoaded) {
+		SetStatusText("No RevScript directory found");
+	}
+
 	std::string path = g_settings.getString(Config::RECENT_EDITED_MAP_PATH);
 	if (!path.empty()) {
 		FileName file(path);
@@ -817,6 +882,83 @@ bool GUI::LoadMap(const FileName& fileName) {
 		}
 	}
 	return true;
+}
+
+void GUI::ReloadRevScripts() {
+	if (!IsEditorOpen()) {
+		SetStatusText("No map open - cannot reload RevScripts");
+		return;
+	}
+	
+	// Get the current map file path
+	Editor* editor = GetCurrentEditor();
+	if (!editor || !editor->map.hasFile()) {
+		SetStatusText("Map has no file - cannot determine RevScript directory");
+		return;
+	}
+	
+	FileName fileName(wxstr(editor->map.getFilename()));
+	wxFileName mapPath(fileName.GetFullPath());
+	wxString mapDir = mapPath.GetPath();
+	
+	// Check if we can find a RevScript directory
+	bool scriptsLoaded = false;
+	
+	// Strategy 0: Use custom RevScript directory if set
+	std::string customScriptsPath = g_settings.getString(Config::REVSCRIPT_DIRECTORY);
+	if (!customScriptsPath.empty()) {
+		wxString customPath = wxstr(customScriptsPath);
+		if (wxDir::Exists(customPath)) {
+			if (revscript_manager.scanRevScriptsDirectory(customScriptsPath)) {
+				SetStatusText("RevScript directory reloaded (custom): " + customPath);
+				scriptsLoaded = true;
+			}
+		}
+	}
+	
+	// Strategy 1: Scripts in same directory as map
+	if (!scriptsLoaded) {
+		wxString scriptsPath = mapDir + wxFileName::GetPathSeparator() + "scripts";
+		if (wxDir::Exists(scriptsPath)) {
+			if (revscript_manager.scanRevScriptsDirectory(nstr(scriptsPath))) {
+				SetStatusText("RevScript directory reloaded: " + scriptsPath);
+				scriptsLoaded = true;
+			}
+		}
+	}
+	
+	// Strategy 2: Go up one directory level and look for data/scripts
+	if (!scriptsLoaded) {
+		wxFileName parentPath(mapDir);
+		if (parentPath.GetDirCount() > 0) {
+			parentPath.RemoveLastDir();  // Go up one level (from world to data)
+			wxString parentDir = parentPath.GetPath();
+			
+			// Try /data/scripts from parent directory
+			wxString parentScriptsPath = parentDir + wxFileName::GetPathSeparator() + "scripts";
+			if (wxDir::Exists(parentScriptsPath)) {
+				if (revscript_manager.scanRevScriptsDirectory(nstr(parentScriptsPath))) {
+					SetStatusText("RevScript directory reloaded: " + parentScriptsPath);
+					scriptsLoaded = true;
+				}
+			}
+		}
+	}
+	
+	// Strategy 3: Look for data/scripts relative to map directory (fallback)
+	if (!scriptsLoaded) {
+		wxString dataScriptsPath = mapDir + wxFileName::GetPathSeparator() + "data" + wxFileName::GetPathSeparator() + "scripts";
+		if (wxDir::Exists(dataScriptsPath)) {
+			if (revscript_manager.scanRevScriptsDirectory(nstr(dataScriptsPath))) {
+				SetStatusText("RevScript directory reloaded: " + dataScriptsPath);
+				scriptsLoaded = true;
+			}
+		}
+	}
+	
+	if (!scriptsLoaded) {
+		SetStatusText("No RevScript directory found for reload");
+	}
 }
 
 Editor* GUI::GetCurrentEditor() {
@@ -2912,3 +3054,4 @@ bool GUI::IsCurrentActionIDEnabled() const {
     }
     return false;
 }
+	

@@ -99,6 +99,7 @@ public:
 	// ---
 	void OnProperties(wxCommandEvent& event);
 	void OnFill(wxCommandEvent& event);
+	void OnOpenRevScript(wxCommandEvent& event);
 
 	void Refresh();
 
