@@ -182,17 +182,19 @@ bool RevScriptManager::parseXmlFile(const std::string& xml_path, const std::stri
     
     int entries_found = 0;
     
+    // For movements, we need to look for "movevent" nodes, for actions we look for "action" nodes
+    const char* node_name = (script_type == "movement") ? "movevent" : script_type.c_str();
+    
     // Find all action/movement nodes
-    for (pugi::xml_node node = root.child(script_type.c_str()); node; node = node.next_sibling(script_type.c_str())) {
-        XmlScriptEntry entry;
-        entry.script_type = script_type;
-        
-        // Get script path
+    for (pugi::xml_node node = root.child(node_name); node; node = node.next_sibling(node_name)) {
+        // For movements: only process entries that have a "script" attribute (ignore "function" ones)
         std::string script_path = node.attribute("script").as_string();
         if (script_path.empty()) {
-            continue;
+            continue; // Skip entries without script attribute (e.g., those with "function" attribute)
         }
         
+        XmlScriptEntry entry;
+        entry.script_type = script_type;
         entry.script_path = script_path;
         entry.full_path = base_script_dir + script_path;
         
@@ -228,6 +230,13 @@ bool RevScriptManager::parseXmlFile(const std::string& xml_path, const std::stri
         }
         
         entries_found++;
+        
+        // Debug output for movements with event info
+        if (script_type == "movement") {
+            std::string event = node.attribute("event").as_string();
+            OutputDebugStringA(wxString::Format("Found %s movement event '%s': %s %d -> %s\n", 
+                entry.id_attribute.c_str(), event.c_str(), entry.id_attribute.c_str(), entry.from_id, entry.full_path.c_str()).mb_str());
+        }
         
         // Store in appropriate vector
         if (script_type == "action") {
