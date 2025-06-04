@@ -34,7 +34,12 @@
 		<item name="Open..." hotkey="Ctrl+O" action="OPEN" help="Open another map."/>
 		<item name="Save" hotkey="Ctrl+S" action="SAVE" help="Save the current map."/>
 		<item name="Save As..." hotkey="Ctrl+Alt+S" action="SAVE_AS" help="Save the current map as a new file."/>
-		<item name="Generate Map" action="GENERATE_MAP" help="Generate a new map."/>
+		<separator/>
+		<menu name="Generate">
+			<item name="Procedural Map..." action="GENERATE_PROCEDURAL_MAP" help="Generate a procedural map with terrain layers."/>
+			<item name="Island Map..." action="GENERATE_ISLAND_MAP" help="Generate an island map."/>
+			<item name="Dungeon Map..." action="GENERATE_DUNGEON_MAP" help="Generate a dungeon map."/>
+		</menu>
 		<item name="Close" hotkey="Ctrl+Q" action="CLOSE" help="Closes the currently open map."/>
 		<separator/>
 		<menu name="Import">
