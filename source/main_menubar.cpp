@@ -90,8 +90,7 @@ BEGIN_EVENT_TABLE(MainMenuBar, wxEvtHandler)
 	EVT_MENU(MenuBar::SAVE_AS, MainMenuBar::OnSaveAs)
 	EVT_MENU(MenuBar::GENERATE_MAP, MainMenuBar::OnGenerateMap)
 	EVT_MENU(MenuBar::GENERATE_PROCEDURAL_MAP, MainMenuBar::OnGenerateProceduralMap)
-	EVT_MENU(MenuBar::GENERATE_ISLAND_MAP, MainMenuBar::OnGenerateIslandMap)
-	EVT_MENU(MenuBar::GENERATE_DUNGEON_MAP, MainMenuBar::OnGenerateDungeonMap)
+
 	
 	EVT_MENU(MenuBar::FIND_CREATURE, MainMenuBar::OnSearchForCreature)
 	EVT_MENU(MenuBar::RELOAD_REVSCRIPTS, MainMenuBar::OnReloadRevScripts)
@@ -113,8 +112,7 @@ MainMenuBar::MainMenuBar(MainFrame* frame) :
 	MAKE_ACTION(SAVE_AS, wxITEM_NORMAL, OnSaveAs);
 	MAKE_ACTION(GENERATE_MAP, wxITEM_NORMAL, OnGenerateMap);
 	MAKE_ACTION(GENERATE_PROCEDURAL_MAP, wxITEM_NORMAL, OnGenerateProceduralMap);
-	MAKE_ACTION(GENERATE_ISLAND_MAP, wxITEM_NORMAL, OnGenerateIslandMap);
-	MAKE_ACTION(GENERATE_DUNGEON_MAP, wxITEM_NORMAL, OnGenerateDungeonMap);
+
 	MAKE_ACTION(CLOSE, wxITEM_NORMAL, OnClose);
 
 	MAKE_ACTION(IMPORT_MAP, wxITEM_NORMAL, OnImportMap);
@@ -821,30 +819,6 @@ void MainMenuBar::OnGenerateProceduralMap(wxCommandEvent& WXUNUSED(event)) {
 	}
 }
 
-void MainMenuBar::OnGenerateIslandMap(wxCommandEvent& WXUNUSED(event)) {
-	if (!g_gui.IsVersionLoaded()) {
-		return;
-	}
-
-	if (MapTab* tab = g_gui.GetCurrentMapTab()) {
-		if (MapWindow* window = tab->GetView()) {
-			window->ShowIslandGeneratorDialog();
-		}
-	}
-}
-
-void MainMenuBar::OnGenerateDungeonMap(wxCommandEvent& WXUNUSED(event)) {
-	if (!g_gui.IsVersionLoaded()) {
-		return;
-	}
-
-	if (MapTab* tab = g_gui.GetCurrentMapTab()) {
-		if (MapWindow* window = tab->GetView()) {
-			// For now, show a simple message dialog until we implement the dungeon dialog
-			wxMessageBox("Dungeon generation will be available in separate windows soon!", "Dungeon Generator", wxOK | wxICON_INFORMATION);
-		}
-	}
-}
 
 void MainMenuBar::OnOpenRecent(wxCommandEvent& event) {
 	FileName fn(recentFiles.GetHistoryFile(event.GetId() - recentFiles.GetBaseId()));
@@ -3679,17 +3653,7 @@ void MainMenuBar::OnRefreshItems(wxCommandEvent& WXUNUSED(event)) {
     dialog.Destroy();
 }
 
-void MainMenuBar::OnGenerateIsland(wxCommandEvent& WXUNUSED(event)) {
-    if (!g_gui.IsVersionLoaded()) {
-        return;
-    }
 
-    if (MapTab* tab = g_gui.GetCurrentMapTab()) {
-        if (MapWindow* window = tab->GetView()) {
-            window->ShowIslandGeneratorDialog();
-        }
-    }
-}
 
 void MainMenuBar::OnMapValidateGround(wxCommandEvent& WXUNUSED(event)) {
     if (!g_gui.IsEditorOpen()) {

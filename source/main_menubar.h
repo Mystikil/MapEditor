@@ -214,8 +214,7 @@ public:
 	void OnOpen(wxCommandEvent& event);
 	void OnGenerateMap(wxCommandEvent& event);
 	void OnGenerateProceduralMap(wxCommandEvent& event);
-	void OnGenerateIslandMap(wxCommandEvent& event);
-	void OnGenerateDungeonMap(wxCommandEvent& event);
+
 	void OnOpenRecent(wxCommandEvent& event);
 	void OnSave(wxCommandEvent& event);
 	void OnSaveAs(wxCommandEvent& event);

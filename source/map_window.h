@@ -20,7 +20,7 @@
 
 #include "position.h"
 #include "replace_items_window.h"
-#include "island_generator_dialog.h"
+
 #include "ground_validation_dialog.h"
 
 class MapCanvas;
@@ -107,7 +107,7 @@ protected:
 
 private:
 	ReplaceItemsDialog* replaceItemsDialog;
-	IslandGeneratorDialog* islandGeneratorDialog;
+
 	GroundValidationDialog* groundValidationDialog;
 	Position previous_position;
 

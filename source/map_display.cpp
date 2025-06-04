@@ -90,7 +90,7 @@ EVT_MENU(MAP_POPUP_MENU_COPY_POSITION, MapCanvas::OnCopyPosition)
 EVT_MENU(MAP_POPUP_MENU_PASTE, MapCanvas::OnPaste)
 EVT_MENU(MAP_POPUP_MENU_DELETE, MapCanvas::OnDelete)
 EVT_MENU(MAP_POPUP_MENU_FILL, MapCanvas::OnFill)
-EVT_MENU(MAP_POPUP_MENU_GENERATE_ISLAND, MapCanvas::OnGenerateIsland)
+
 EVT_MENU(MAP_POPUP_MENU_CREATE_HOUSE, MapCanvas::OnCreateHouse)
 EVT_MENU(MAP_POPUP_MENU_FIND_SIMILAR_ITEMS, MapCanvas::OnFindSimilarItems)
 //----
@@ -3628,20 +3628,7 @@ void MapCanvas::OnFindSimilarItems(wxCommandEvent& WXUNUSED(event)) {
     dialog->Destroy();
 }
 
-void MapCanvas::OnGenerateIsland(wxCommandEvent& event) {
-    // Get cursor position for island generation
-    int map_x, map_y;
-    MouseToMap(&map_x, &map_y);
 
-    // Create and show the island generator dialog
-	IslandGeneratorDialog dialog(this);
-    
-    // Set the initial position to the clicked location
-	dialog.SetStartPosition(Position(map_x, map_y, floor));
-	
-	dialog.ShowModal();
-	Refresh();
-}
 
 void MapCanvas::OnCreateHouse(wxCommandEvent& event) {
     int start_map_x = last_click_map_x;
