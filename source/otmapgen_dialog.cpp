@@ -257,7 +257,7 @@ OTMapGenDialog::OTMapGenDialog(wxWindow* parent) :
 	noise_grid->Add(island_noise_lacunarity_text, 1, wxEXPAND);
 	
 	// Row 3: Roll Dice button spanning 2 columns
-	island_roll_dice_button = new wxButton(island_panel, ID_ISLAND_ROLL_DICE, "🎲 Roll Dice");
+	island_roll_dice_button = new wxButton(island_panel, ID_ISLAND_ROLL_DICE, "Roll Dice");
 	island_roll_dice_button->SetToolTip("Randomize all noise parameters");
 	noise_grid->Add(island_roll_dice_button, 1, wxEXPAND);
 	noise_grid->Add(new wxStaticText(island_panel, wxID_ANY, ""), 0); // spacer
@@ -946,7 +946,7 @@ OTMapGenDialog::OTMapGenDialog(wxWindow* parent) :
 	
 	// Roll dice and preview buttons
 	wxBoxSizer* dungeon_button_sizer = new wxBoxSizer(wxHORIZONTAL);
-	dungeon_roll_dice_button = new wxButton(dungeon_panel, ID_DUNGEON_ROLL_DICE, "🎲 Roll Dice");
+	dungeon_roll_dice_button = new wxButton(dungeon_panel, ID_DUNGEON_ROLL_DICE, "Roll Dice");
 	dungeon_roll_dice_button->SetToolTip("Randomize all dungeon parameters");
 	dungeon_button_sizer->Add(dungeon_roll_dice_button, 0, wxALL, 2);
 	
@@ -1047,14 +1047,14 @@ void OTMapGenDialog::OnGenerate(wxCommandEvent& event) {
 	int currentTab = notebook->GetSelection();
 	
 	bool success = false;
-	if (currentTab == 0 && current_generator_type == GENERATOR_ISLAND) {
+	if (currentTab == 0) {
 		// Island generator tab
 		success = GenerateIslandMap();
-	} else if (currentTab == 2 && current_generator_type == GENERATOR_DUNGEON) {
+	} else if (currentTab == 3) { // Dungeon tab is index 3
 		// Dungeon generator tab
 		success = GenerateDungeonMap();
 	} else {
-		// Legacy generator or other tabs
+		// Procedural generator or other tabs
 		success = GenerateMap();
 	}
 	
@@ -1068,7 +1068,16 @@ void OTMapGenDialog::OnCancel(wxCommandEvent& event) {
 }
 
 void OTMapGenDialog::OnPreview(wxCommandEvent& event) {
-	UpdatePreview();
+	// Check which tab is currently active for preview
+	int currentTab = notebook->GetSelection();
+	
+	if (currentTab == 3) { // Dungeon tab is index 3
+		// Dungeon generator tab - use dungeon preview
+		UpdateDungeonPreview();
+	} else {
+		// Other tabs - use regular preview
+		UpdatePreview();
+	}
 }
 
 void OTMapGenDialog::OnSeedChange(wxCommandEvent& event) {
@@ -1945,7 +1954,7 @@ void OTMapGenDialog::OnTabChanged(wxBookCtrlEvent& event) {
 		width_spin_ctrl = island_width_spin_ctrl;
 		height_spin_ctrl = island_height_spin_ctrl;
 		version_choice = island_version_choice;
-	} else if (selection == 2) { // Dungeon tab (before Layout Design tab)
+	} else if (selection == 3) { // Dungeon tab is index 3
 		current_generator_type = GENERATOR_DUNGEON;
 		// Disable floor controls for dungeon generator (always floor 7)
 		floor_up_button->Enable(false);
@@ -2416,7 +2425,7 @@ int OTMapGenDialog::GetCurrentWidth() {
 	int currentTab = notebook->GetSelection();
 	if (currentTab == 0) {
 		return island_width_spin_ctrl->GetValue();
-	} else if (currentTab == 2) { // Dungeon tab
+	} else if (currentTab == 3) { // Dungeon tab is index 3
 		return dungeon_width_spin_ctrl->GetValue();
 	} else {
 		return main_width_spin_ctrl->GetValue();
@@ -2427,7 +2436,7 @@ int OTMapGenDialog::GetCurrentHeight() {
 	int currentTab = notebook->GetSelection();
 	if (currentTab == 0) {
 		return island_height_spin_ctrl->GetValue();
-	} else if (currentTab == 2) { // Dungeon tab
+	} else if (currentTab == 3) { // Dungeon tab is index 3
 		return dungeon_height_spin_ctrl->GetValue();
 	} else {
 		return main_height_spin_ctrl->GetValue();
@@ -2438,7 +2447,7 @@ std::string OTMapGenDialog::GetCurrentSeed() {
 	int currentTab = notebook->GetSelection();
 	if (currentTab == 0) {
 		return island_seed_text_ctrl->GetValue().ToStdString();
-	} else if (currentTab == 2) { // Dungeon tab
+	} else if (currentTab == 3) { // Dungeon tab is index 3
 		return dungeon_seed_text_ctrl->GetValue().ToStdString();
 	} else {
 		return main_seed_text_ctrl->GetValue().ToStdString();
@@ -2449,7 +2458,7 @@ std::string OTMapGenDialog::GetCurrentVersion() {
 	int currentTab = notebook->GetSelection();
 	if (currentTab == 0) {
 		return island_version_choice->GetStringSelection().ToStdString();
-	} else if (currentTab == 2) { // Dungeon tab
+	} else if (currentTab == 3) { // Dungeon tab is index 3
 		return dungeon_version_choice->GetStringSelection().ToStdString();
 	} else {
 		return main_version_choice->GetStringSelection().ToStdString();
@@ -2762,6 +2771,10 @@ DungeonConfig OTMapGenDialog::BuildDungeonConfig() {
 		config.wall_id = 1026; // Default to brick wall
 	}
 	
+	// Set default ground and fill IDs
+	config.ground_id = 351; // Stone floor for corridors and rooms
+	config.fill_id = 101;   // Earth/stone fill for solid areas
+	
 	// Layout parameters
 	if (dungeon_corridor_width_spin) {
 		config.corridor_width = dungeon_corridor_width_spin->GetValue();
@@ -3043,4 +3056,82 @@ bool OTMapGenDialog::GenerateDungeonMap() {
 	}
 	
 	return false;
+}
+
+void OTMapGenDialog::UpdateDungeonPreview() {
+	// Set the preview button state
+	if (dungeon_preview_button) {
+		dungeon_preview_button->SetLabel("Generating...");
+		dungeon_preview_button->Enable(false);
+	}
+	
+	try {
+		// Generate dungeon preview
+		DungeonConfig config = BuildDungeonConfig();
+		
+		// Cache values for performance
+		int width = GetCurrentWidth();
+		int height = GetCurrentHeight();
+		std::string seed = GetCurrentSeed();
+		
+		// OPTIMIZATION: For large maps, generate a smaller preview for speed
+		int preview_width_gen = width;
+		int preview_height_gen = height;
+		bool use_fast_preview = false;
+		
+		// If map is larger than 512x512, generate a smaller preview
+		if (width > 512 || height > 512) {
+			use_fast_preview = true;
+			// Scale down to maximum 256x256 for dungeon preview (dungeons are more detailed)
+			double scale = std::min(256.0 / width, 256.0 / height);
+			preview_width_gen = (int)(width * scale);
+			preview_height_gen = (int)(height * scale);
+			
+			// Ensure minimum size
+			preview_width_gen = std::max(32, preview_width_gen);
+			preview_height_gen = std::max(32, preview_height_gen);
+			
+			// Update button to show it's a fast preview
+			if (dungeon_preview_button) {
+				dungeon_preview_button->SetLabel(wxString::Format("Generating fast preview (%dx%d)...", preview_width_gen, preview_height_gen));
+			}
+		}
+		
+		// Generate dungeon preview using C++ implementation
+		OTMapGenerator generator;
+		auto dungeonLayer = generator.generateDungeonLayer(config, preview_width_gen, preview_height_gen, seed);
+		
+		// Convert 2D dungeon layer to the format expected by current_layers
+		current_layers.clear();
+		current_layers.resize(1); // Only floor 7 for dungeons
+		
+		// Flatten the 2D vector into 1D for current_layers format
+		current_layers[0].clear();
+		for (int y = 0; y < preview_height_gen; ++y) {
+			for (int x = 0; x < preview_width_gen; ++x) {
+				current_layers[0].push_back(dungeonLayer[y][x]);
+			}
+		}
+		
+		// Store the actual preview dimensions for UpdatePreviewFloor to use
+		preview_actual_width = preview_width_gen;
+		preview_actual_height = preview_height_gen;
+		preview_is_scaled = use_fast_preview;
+		
+		// Update the preview for the current floor
+		UpdatePreviewFloor();
+		
+	} catch (const std::exception& e) {
+		wxMessageBox(wxString::Format("Failed to generate dungeon preview: %s", e.what()), "Preview Error", wxOK | wxICON_ERROR);
+	}
+	
+	// Reset button state
+	if (dungeon_preview_button) {
+		if (preview_is_scaled) {
+			dungeon_preview_button->SetLabel("Generate Fast Preview");
+		} else {
+			dungeon_preview_button->SetLabel("Generate Preview");
+		}
+		dungeon_preview_button->Enable(true);
+	}
 }

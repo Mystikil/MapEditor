@@ -96,6 +96,7 @@ public:
 	bool GenerateIslandMapBatched(const IslandConfig& config, int width, int height, const std::string& seed);
 	bool GenerateDungeonMap();
 	void UpdatePreview();
+	void UpdateDungeonPreview();
 	void UpdatePreviewFloor();
 	void UpdateFloorLabel();
 	void UpdateZoomLabel();
