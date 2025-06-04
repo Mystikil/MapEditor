@@ -30,6 +30,9 @@
 #include <random>
 #include <queue>
 #include <map>
+#include <numeric>
+#include <vector>  // if you're using std::vector
+#include <algorithm> // if using other STL algorithms
 
 // SimplexNoise implementation
 const double SimplexNoise::F2 = 0.5 * (sqrt(3.0) - 1.0);
@@ -1363,46 +1366,80 @@ std::vector<std::vector<uint16_t>> OTMapGenerator::generateDungeonLayer(const Du
 std::vector<OTMapGenerator::Room> OTMapGenerator::generateRooms(const DungeonConfig& config, int width, int height) {
 	std::vector<Room> rooms;
 	
-	// Try to place rooms with random positions and sizes
-	for (int i = 0; i < config.room_count * 3; ++i) { // Try 3x more attempts than needed
-		if (rooms.size() >= static_cast<size_t>(config.room_count)) {
-			break;
-		}
+	// Calculate minimum and actual room counts
+	int min_rooms = config.room_count;
+	int max_rooms = std::min(min_rooms * 2, (width * height) / 200); // Prevent overcrowding
+	
+	// Calculate area-based room count for better distribution
+	int area = width * height;
+	int recommended_rooms = std::max(min_rooms, area / 1000); // 1 room per 1000 sqm roughly
+	int actual_room_count = std::min(recommended_rooms, max_rooms);
+	
+	std::uniform_int_distribution<> x_dist(config.room_max_size + 2, width - config.room_max_size - 2);
+	std::uniform_int_distribution<> y_dist(config.room_max_size + 2, height - config.room_max_size - 2);
+	std::uniform_int_distribution<> size_dist(config.room_min_size, config.room_max_size);
+	std::uniform_real_distribution<> shape_dist(0.0, 1.0);
+	
+	int attempts = 0;
+	const int max_attempts = actual_room_count * 20; // Allow more attempts for better placement
+	
+	while (rooms.size() < static_cast<size_t>(actual_room_count) && attempts < max_attempts) {
+		attempts++;
 		
-		Room room;
+		Room newRoom;
+		newRoom.centerX = x_dist(rng);
+		newRoom.centerY = y_dist(rng);
+		newRoom.radius = size_dist(rng);
+		newRoom.isCircular = config.circular_rooms && (shape_dist(rng) < 0.5);
 		
-		// Random size within bounds
-		std::uniform_int_distribution<> size_dist(config.room_min_size, config.room_max_size);
-		room.radius = size_dist(rng);
-		
-		// Random position with padding
-		int padding = room.radius + 2;
-		if (width <= 2 * padding || height <= 2 * padding) {
-			continue; // Map too small for this room
-		}
-		
-		std::uniform_int_distribution<> x_dist(padding, width - padding - 1);
-		std::uniform_int_distribution<> y_dist(padding, height - padding - 1);
-		room.centerX = x_dist(rng);
-		room.centerY = y_dist(rng);
-		room.isCircular = config.circular_rooms;
-		
-		// Check if room overlaps with existing rooms
+		// Check for overlap with existing rooms (with minimum separation)
 		bool overlaps = false;
-		for (const auto& existingRoom : rooms) {
-			int dx = room.centerX - existingRoom.centerX;
-			int dy = room.centerY - existingRoom.centerY;
-			double distance = std::sqrt(dx * dx + dy * dy);
-			double minDistance = room.radius + existingRoom.radius + 3; // 3 tile minimum gap
+		int min_separation = config.room_max_size + 3; // Ensure rooms have space between them
+		
+		for (const Room& existing : rooms) {
+			int distance = abs(newRoom.centerX - existing.centerX) + abs(newRoom.centerY - existing.centerY);
+			int min_distance = newRoom.radius + existing.radius + min_separation;
 			
-			if (distance < minDistance) {
+			if (distance < min_distance) {
 				overlaps = true;
 				break;
 			}
 		}
 		
 		if (!overlaps) {
-			rooms.push_back(room);
+			rooms.push_back(newRoom);
+		}
+	}
+	
+	// Ensure we have at least the minimum number of rooms
+	if (rooms.size() < static_cast<size_t>(min_rooms)) {
+		// If we couldn't place enough rooms, reduce size requirements and try again
+		while (rooms.size() < static_cast<size_t>(min_rooms) && attempts < max_attempts * 2) {
+			attempts++;
+			
+			Room newRoom;
+			newRoom.centerX = x_dist(rng);
+			newRoom.centerY = y_dist(rng);
+			newRoom.radius = std::max(2, config.room_min_size - 1); // Smaller rooms
+			newRoom.isCircular = config.circular_rooms && (shape_dist(rng) < 0.5);
+			
+			// Check for overlap with reduced separation
+			bool overlaps = false;
+			int min_separation = 2; // Reduced separation for tight spaces
+			
+			for (const Room& existing : rooms) {
+				int distance = abs(newRoom.centerX - existing.centerX) + abs(newRoom.centerY - existing.centerY);
+				int min_distance = newRoom.radius + existing.radius + min_separation;
+				
+				if (distance < min_distance) {
+					overlaps = true;
+					break;
+				}
+			}
+			
+			if (!overlaps) {
+				rooms.push_back(newRoom);
+			}
 		}
 	}
 	
@@ -1440,231 +1477,182 @@ void OTMapGenerator::generateCorridors(std::vector<std::vector<int>>& grid, cons
 		return; // Need at least 2 rooms to connect
 	}
 	
-	// Connect each room to the next one (creating a minimum spanning tree)
-	for (size_t i = 0; i < rooms.size() - 1; ++i) {
-		const Room& roomA = rooms[i];
-		const Room& roomB = rooms[i + 1];
-		
-		// Use smart corridor creation to prevent massive tunnels
-		createSmartCorridor(grid, roomA.centerX, roomA.centerY, roomB.centerX, roomB.centerY, config, width, height);
+	// Calculate minimum corridors needed for connectivity
+	int min_corridors_for_connectivity = static_cast<int>(rooms.size()) - 1;
+	int min_corridors_user = config.corridor_count;
+	int actual_min_corridors = std::max(min_corridors_for_connectivity, min_corridors_user);
+	
+	// Calculate maximum reasonable corridors (prevent over-connection)
+	int max_corridors = std::min(actual_min_corridors * 3, static_cast<int>(rooms.size() * (rooms.size() - 1) / 2));
+	
+	// Use Minimum Spanning Tree (MST) algorithm to ensure all rooms are connected
+	// This guarantees connectivity while minimizing total corridor length
+	
+	std::vector<bool> connected(rooms.size(), false);
+	std::vector<std::tuple<double, int, int>> edges; // distance, room1, room2
+	
+	// Calculate all possible room-to-room distances
+	for (size_t i = 0; i < rooms.size(); ++i) {
+		for (size_t j = i + 1; j < rooms.size(); ++j) {
+			int dx = rooms[i].centerX - rooms[j].centerX;
+			int dy = rooms[i].centerY - rooms[j].centerY;
+			double distance = std::sqrt(dx * dx + dy * dy);
+			edges.push_back(std::make_tuple(distance, static_cast<int>(i), static_cast<int>(j)));
+		}
 	}
 	
-	// Add some additional random connections for complexity
-	std::uniform_real_distribution<> complexity_dist(0.0, 1.0);
-	for (size_t i = 0; i < rooms.size(); ++i) {
-		for (size_t j = i + 2; j < rooms.size(); ++j) { // Skip adjacent rooms (already connected)
-			if (complexity_dist(rng) < config.complexity) {
-				const Room& roomA = rooms[i];
-				const Room& roomB = rooms[j];
-				createSmartCorridor(grid, roomA.centerX, roomA.centerY, roomB.centerX, roomB.centerY, config, width, height);
+	// Sort edges by distance (shortest first)
+	std::sort(edges.begin(), edges.end());
+	
+	// Build MST using Kruskal's algorithm
+	std::vector<int> parent(rooms.size());
+	// Initialize union-find manually (replaced std::iota for compatibility)
+	for (size_t i = 0; i < parent.size(); ++i) {
+		parent[i] = i;
+	}
+	
+	std::function<int(int)> find = [&](int x) {
+		if (parent[x] != x) {
+			parent[x] = find(parent[x]);
+		}
+		return parent[x];
+	};
+	
+	auto unite = [&](int x, int y) {
+		int px = find(x);
+		int py = find(y);
+		if (px != py) {
+			parent[px] = py;
+			return true;
+		}
+		return false;
+	};
+	
+	// Phase 1: Connect all rooms using MST (guarantees connectivity)
+	std::vector<std::pair<int, int>> essential_connections;
+	int connections_made = 0;
+	
+	for (const auto& edge : edges) {
+		int room1 = std::get<1>(edge);
+		int room2 = std::get<2>(edge);
+		
+		if (unite(room1, room2)) {
+			essential_connections.push_back({room1, room2});
+			connections_made++;
+			
+			// If we've connected all rooms, we have a spanning tree
+			if (connections_made == static_cast<int>(rooms.size()) - 1) {
+				break;
 			}
 		}
 	}
-}
-
-void OTMapGenerator::createSmartCorridor(std::vector<std::vector<int>>& grid, int x1, int y1, int x2, int y2, const DungeonConfig& config, int width, int height) {
-    // Calculate direct distance
-    int dx = abs(x2 - x1);
-    int dy = abs(y2 - y1);
-    int directDistance = dx + dy; // Manhattan distance
-    
-    // If distance is within limit and smart pathfinding is disabled, use simple corridor
-    if (directDistance <= config.max_corridor_length && !config.use_smart_pathfinding) {
-        createCorridor(grid, x1, y1, x2, y2, config, width, height);
-        return;
-    }
-    
-    // Use smart pathfinding for long distances or when enabled
-    if (config.use_smart_pathfinding) {
-        auto path = findShortestPath(grid, x1, y1, x2, y2, width, height, config.max_corridor_length);
-        if (!path.empty()) {
-            createCorridorSegments(grid, path, config, width, height);
-            return;
-        }
-    }
-    
-    // Fallback: break long corridors into segments with waypoints
-    if (directDistance > config.max_corridor_length) {
-        // Create intermediate waypoints
-        int segments = (directDistance / config.max_corridor_length) + 1;
-        segments = std::min(segments, config.corridor_segments);
-        
-        int prevX = x1, prevY = y1;
-        for (int i = 1; i < segments; ++i) {
-            // Calculate waypoint position
-            double factor = static_cast<double>(i) / segments;
-            int waypointX = x1 + static_cast<int>((x2 - x1) * factor);
-            int waypointY = y1 + static_cast<int>((y2 - y1) * factor);
-            
-            // Add some randomness to avoid straight lines
-            std::uniform_int_distribution<> offset_dist(-3, 3);
-            waypointX += offset_dist(rng);
-            waypointY += offset_dist(rng);
-            
-            // Clamp to valid bounds
-            waypointX = std::max(2, std::min(width - 3, waypointX));
-            waypointY = std::max(2, std::min(height - 3, waypointY));
-            
-            // Create corridor segment
-            createCorridor(grid, prevX, prevY, waypointX, waypointY, config, width, height);
-            prevX = waypointX;
-            prevY = waypointY;
-        }
-        
-        // Final segment to destination
-        createCorridor(grid, prevX, prevY, x2, y2, config, width, height);
-    } else {
-        // Direct corridor for reasonable distances
-        createCorridor(grid, x1, y1, x2, y2, config, width, height);
-    }
-}
-
-std::vector<std::pair<int, int>> OTMapGenerator::findShortestPath(const std::vector<std::vector<int>>& grid, int x1, int y1, int x2, int y2, int width, int height, int maxLength) {
-    // Simple A* pathfinding implementation
-    struct Node {
-        int x, y;
-        int gCost, hCost;
-        int fCost() const { return gCost + hCost; }
-        std::pair<int, int> parent;
-        
-        Node(int x, int y, int g, int h, std::pair<int, int> p) : x(x), y(y), gCost(g), hCost(h), parent(p) {}
-    };
-    
-    auto heuristic = [](int x1, int y1, int x2, int y2) {
-        return abs(x1 - x2) + abs(y1 - y2); // Manhattan distance
-    };
-    
-    std::vector<Node> openSet;
-    std::vector<std::vector<bool>> closedSet(height, std::vector<bool>(width, false));
-    std::map<std::pair<int, int>, int> gScore;
-    
-    openSet.emplace_back(x1, y1, 0, heuristic(x1, y1, x2, y2), std::make_pair(-1, -1));
-    gScore[{x1, y1}] = 0;
-    
-    const int dx[] = {-1, 1, 0, 0};
-    const int dy[] = {0, 0, -1, 1};
-    
-    while (!openSet.empty()) {
-        // Find node with lowest fCost
-        auto current = std::min_element(openSet.begin(), openSet.end(), 
-            [](const Node& a, const Node& b) { return a.fCost() < b.fCost(); });
-        
-        Node currentNode = *current;
-        openSet.erase(current);
-        
-        if (currentNode.x == x2 && currentNode.y == y2) {
-            // Reconstruct path
-            std::vector<std::pair<int, int>> path;
-            std::pair<int, int> pos = {currentNode.x, currentNode.y};
-            
-            while (pos.first != -1 && pos.second != -1) {
-                path.push_back(pos);
-                // Find parent node
-                bool found = false;
-                for (const auto& node : openSet) {
-                    if (node.x == pos.first && node.y == pos.second) {
-                        pos = node.parent;
-                        found = true;
-                        break;
-                    }
-                }
-                if (!found) break;
-            }
-            
-            std::reverse(path.begin(), path.end());
-            return path.size() <= static_cast<size_t>(maxLength) ? path : std::vector<std::pair<int, int>>();
-        }
-        
-        closedSet[currentNode.y][currentNode.x] = true;
-        
-        // Check neighbors
-        for (int i = 0; i < 4; ++i) {
-            int nx = currentNode.x + dx[i];
-            int ny = currentNode.y + dy[i];
-            
-            if (nx < 0 || nx >= width || ny < 0 || ny >= height || closedSet[ny][nx]) {
-                continue;
-            }
-            
-            int tentativeG = currentNode.gCost + 1;
-            
-            if (gScore.find({nx, ny}) == gScore.end() || tentativeG < gScore[{nx, ny}]) {
-                gScore[{nx, ny}] = tentativeG;
-                int h = heuristic(nx, ny, x2, y2);
-                openSet.emplace_back(nx, ny, tentativeG, h, std::make_pair(currentNode.x, currentNode.y));
-            }
-        }
-        
-        // Prevent infinite loops on very long paths
-        if (currentNode.gCost > maxLength * 2) {
-            break;
-        }
-    }
-    
-    return {}; // No path found within distance limit
-}
-
-void OTMapGenerator::createCorridorSegments(std::vector<std::vector<int>>& grid, const std::vector<std::pair<int, int>>& path, const DungeonConfig& config, int width, int height) {
-    // Create corridor along the path
-    for (size_t i = 0; i < path.size(); ++i) {
-        int x = path[i].first;
-        int y = path[i].second;
-        
-        // Create corridor with specified width
-        for (int w = 0; w < config.corridor_width; ++w) {
-            for (int h = 0; h < config.corridor_width; ++h) {
-                int px = x + w - config.corridor_width / 2;
-                int py = y + h - config.corridor_width / 2;
-                
-                if (px >= 0 && px < width && py >= 0 && py < height) {
-                    grid[py][px] = 1; // Mark as corridor
-                }
-            }
-        }
-    }
-}
-
-std::pair<int, int> OTMapGenerator::findNearestIntersection(const std::vector<Intersection>& intersections, int x, int y) {
-    if (intersections.empty()) {
-        return {-1, -1}; // No intersections available
-    }
-    
-    int nearestIdx = 0;
-    int minDistance = INT_MAX;
-    
-    for (size_t i = 0; i < intersections.size(); ++i) {
-        int dx = intersections[i].centerX - x;
-        int dy = intersections[i].centerY - y;
-        int distance = dx * dx + dy * dy; // Squared distance for comparison
-        
-        if (distance < minDistance) {
-            minDistance = distance;
-            nearestIdx = i;
-        }
-    }
-    
-    return {intersections[nearestIdx].centerX, intersections[nearestIdx].centerY};
+	
+	// Phase 2: Add additional corridors for redundancy and meeting minimum requirements
+	std::vector<std::pair<int, int>> additional_connections;
+	int additional_needed = actual_min_corridors - connections_made;
+	
+	if (additional_needed > 0) {
+		// Add the shortest remaining edges
+		for (const auto& edge : edges) {
+			if (additional_connections.size() >= static_cast<size_t>(additional_needed)) {
+				break;
+			}
+			
+			int room1 = std::get<1>(edge);
+			int room2 = std::get<2>(edge);
+			
+			// Check if this connection already exists
+			bool already_connected = false;
+			for (const auto& existing : essential_connections) {
+				if ((existing.first == room1 && existing.second == room2) ||
+					(existing.first == room2 && existing.second == room1)) {
+					already_connected = true;
+					break;
+				}
+			}
+			
+			if (!already_connected) {
+				additional_connections.push_back({room1, room2});
+			}
+		}
+	}
+	
+	// Phase 3: Create all the corridor connections
+	auto all_connections = essential_connections;
+	all_connections.insert(all_connections.end(), additional_connections.begin(), additional_connections.end());
+	
+	for (const auto& connection : all_connections) {
+		int room1 = connection.first;
+		int room2 = connection.second;
+		
+		int x1 = rooms[room1].centerX;
+		int y1 = rooms[room1].centerY;
+		int x2 = rooms[room2].centerX;
+		int y2 = rooms[room2].centerY;
+		
+		// Use smart corridor creation if enabled
+		if (config.use_smart_pathfinding) {
+			createSmartCorridor(grid, x1, y1, x2, y2, config, width, height);
+		} else {
+			createImprovedCorridor(grid, x1, y1, x2, y2, config, width, height);
+		}
+	}
+	
+	// Phase 4: Add intersections if requested
+	if ((config.add_triple_intersections || config.add_quad_intersections) && config.intersection_count > 0) {
+		auto intersections = generateIntersections(config, rooms, width, height);
+		
+		// Place intersection areas
+		for (const auto& intersection : intersections) {
+			placeIntersection(grid, intersection, config);
+		}
+		
+		// Connect some rooms via intersections for variety
+		if (config.prefer_intersections && !intersections.empty()) {
+			connectRoomsViaIntersections(grid, rooms, intersections, config, width, height);
+		}
+	}
 }
 
 void OTMapGenerator::createCorridor(std::vector<std::vector<int>>& grid, int x1, int y1, int x2, int y2, const DungeonConfig& config, int width, int height) {
+	// This is the old simple corridor - replace with improved version
+	createImprovedCorridor(grid, x1, y1, x2, y2, config, width, height);
+}
+
+void OTMapGenerator::createImprovedCorridor(std::vector<std::vector<int>>& grid, int x1, int y1, int x2, int y2, const DungeonConfig& config, int width, int height) {
+	// Create L-shaped corridor (horizontal then vertical) for better layout
 	int currentX = x1;
 	int currentY = y1;
 	
-	// Horizontal segment only - no vertical movement
+	// Horizontal segment first
 	while (currentX != x2) {
-		// Create corridor with specified width
-		for (int w = 0; w < config.corridor_width; ++w) {
-			for (int h = 0; h < config.corridor_width; ++h) {
-				int px = currentX + w - config.corridor_width / 2;
-				int py = currentY + h - config.corridor_width / 2;
-				
-				if (px >= 0 && px < width && py >= 0 && py < height) {
-					grid[py][px] = 1; // Mark as corridor
-				}
+		createCorridorTile(grid, currentX, currentY, config, width, height);
+		currentX += (x2 > x1) ? 1 : -1;
+	}
+	
+	// Vertical segment
+	while (currentY != y2) {
+		createCorridorTile(grid, currentX, currentY, config, width, height);
+		currentY += (y2 > y1) ? 1 : -1;
+	}
+	
+	// Final destination tile
+	createCorridorTile(grid, x2, y2, config, width, height);
+}
+
+void OTMapGenerator::createCorridorTile(std::vector<std::vector<int>>& grid, int centerX, int centerY, const DungeonConfig& config, int width, int height) {
+	// Create corridor with specified width centered on the position
+	int half_width = config.corridor_width / 2;
+	
+	for (int dy = -half_width; dy <= half_width; ++dy) {
+		for (int dx = -half_width; dx <= half_width; ++dx) {
+			int x = centerX + dx;
+			int y = centerY + dy;
+			
+			if (x >= 1 && x < width - 1 && y >= 1 && y < height - 1) {
+				grid[y][x] = 1; // Mark as corridor
 			}
 		}
-		
-		currentX += (x2 > x1) ? 1 : -1;
 	}
 }
 
@@ -1924,4 +1912,137 @@ bool OTMapGenerator::findIntersectionPath(const std::vector<std::vector<int>>& g
     }
     
     return false; // No path found
+}
+
+void OTMapGenerator::createSmartCorridor(std::vector<std::vector<int>>& grid, int x1, int y1, int x2, int y2, const DungeonConfig& config, int width, int height) {
+	// Use smart pathfinding to create shorter, more logical corridors
+	if (config.use_smart_pathfinding) {
+		// Try to find shortest path with length limit
+		auto path = findShortestPath(grid, x1, y1, x2, y2, width, height, config.max_corridor_length);
+		
+		if (!path.empty()) {
+			// Create corridor using the found path
+			createCorridorSegments(grid, path, config, width, height);
+			return;
+		}
+	}
+	
+	// Fallback to improved corridor if smart pathfinding fails
+	createImprovedCorridor(grid, x1, y1, x2, y2, config, width, height);
+}
+
+std::vector<std::pair<int, int>> OTMapGenerator::findShortestPath(const std::vector<std::vector<int>>& grid, int x1, int y1, int x2, int y2, int width, int height, int maxLength) {
+	// Simple A* pathfinding implementation
+	struct Node {
+		int x, y;
+		int gCost, hCost;
+		std::pair<int, int> parent;
+		
+		int fCost() const { return gCost + hCost; }
+	};
+	
+	// Priority queue for open set (min heap by fCost)
+	auto cmp = [](const Node& a, const Node& b) { return a.fCost() > b.fCost(); };
+	std::priority_queue<Node, std::vector<Node>, decltype(cmp)> openSet(cmp);
+	
+	std::vector<std::vector<bool>> closedSet(height, std::vector<bool>(width, false));
+	std::vector<std::vector<Node>> nodeGrid(height, std::vector<Node>(width));
+	
+	// Initialize start node
+	Node startNode = {x1, y1, 0, abs(x2 - x1) + abs(y2 - y1), {-1, -1}};
+	openSet.push(startNode);
+	nodeGrid[y1][x1] = startNode;
+	
+	std::vector<std::pair<int, int>> directions = {{0, 1}, {1, 0}, {0, -1}, {-1, 0}};
+	
+	while (!openSet.empty()) {
+		Node current = openSet.top();
+		openSet.pop();
+		
+		// Check if we reached the target
+		if (current.x == x2 && current.y == y2) {
+			// Reconstruct path
+			std::vector<std::pair<int, int>> path;
+			Node* node = &nodeGrid[current.y][current.x];
+			
+			while (node->parent.first != -1) {
+				path.push_back({node->x, node->y});
+				node = &nodeGrid[node->parent.second][node->parent.first];
+			}
+			path.push_back({x1, y1});
+			
+			std::reverse(path.begin(), path.end());
+			
+			// Check if path is within length limit
+			if (static_cast<int>(path.size()) <= maxLength) {
+				return path;
+			} else {
+				return {}; // Path too long
+			}
+		}
+		
+		closedSet[current.y][current.x] = true;
+		
+		// Check neighbors
+		for (const auto& dir : directions) {
+			int newX = current.x + dir.first;
+			int newY = current.y + dir.second;
+			
+			// Check bounds
+			if (newX < 0 || newX >= width || newY < 0 || newY >= height) {
+				continue;
+			}
+			
+			// Skip if already in closed set
+			if (closedSet[newY][newX]) {
+				continue;
+			}
+			
+			// Skip if wall (but allow if it's the target)
+			if (grid[newY][newX] == 1 && !(newX == x2 && newY == y2)) {
+				continue;
+			}
+			
+			int newGCost = current.gCost + 1;
+			int newHCost = abs(x2 - newX) + abs(y2 - newY);
+			
+			Node newNode = {newX, newY, newGCost, newHCost, {current.x, current.y}};
+			
+			// Check if this path to newNode is better
+			if (nodeGrid[newY][newX].fCost() == 0 || newGCost < nodeGrid[newY][newX].gCost) {
+				nodeGrid[newY][newX] = newNode;
+				openSet.push(newNode);
+			}
+		}
+	}
+	
+	return {}; // No path found
+}
+
+void OTMapGenerator::createCorridorSegments(std::vector<std::vector<int>>& grid, const std::vector<std::pair<int, int>>& path, const DungeonConfig& config, int width, int height) {
+	// Create corridor along the path with specified width
+	for (const auto& point : path) {
+		createCorridorTile(grid, point.first, point.second, config, width, height);
+	}
+}
+
+std::pair<int, int> OTMapGenerator::findNearestIntersection(const std::vector<Intersection>& intersections, int x, int y) {
+	if (intersections.empty()) {
+		return {-1, -1}; // No intersections available
+	}
+	
+	int nearestX = intersections[0].centerX;
+	int nearestY = intersections[0].centerY;
+	int minDistance = abs(intersections[0].centerX - x) + abs(intersections[0].centerY - y);
+	
+	for (const auto& intersection : intersections) {
+		int distance = abs(intersection.centerX - x) + abs(intersection.centerY - y);
+		if (distance < minDistance) {
+			minDistance = distance;
+			nearestX = intersection.centerX;
+			nearestY = intersection.centerY;
+		}
+	}
+	
+	return {nearestX, nearestY};
 }

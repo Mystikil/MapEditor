@@ -852,9 +852,9 @@ OTMapGenDialog::OTMapGenDialog(wxWindow* parent) :
 	dungeon_corridor_width_spin->SetToolTip("Gap between walls for corridors (1-4 sqm)");
 	layout_grid->Add(dungeon_corridor_width_spin, 1, wxEXPAND);
 	
-	layout_grid->Add(new wxStaticText(dungeon_panel, wxID_ANY, "Room Count:"), 0, wxALIGN_CENTER_VERTICAL);
+	layout_grid->Add(new wxStaticText(dungeon_panel, wxID_ANY, "Min Room Count:"), 0, wxALIGN_CENTER_VERTICAL);
 	dungeon_room_count_spin = new wxSpinCtrl(dungeon_panel, ID_DUNGEON_ROOM_COUNT_SPIN, "8", wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS, 4, 20, 8);
-	dungeon_room_count_spin->SetToolTip("Number of rooms to generate (4-20)");
+	dungeon_room_count_spin->SetToolTip("MINIMUM number of rooms to generate (4-20) - more may be added for proper connectivity");
 	layout_grid->Add(dungeon_room_count_spin, 1, wxEXPAND);
 	
 	// Row 2: Room Min Size and Max Size
@@ -869,9 +869,9 @@ OTMapGenDialog::OTMapGenDialog(wxWindow* parent) :
 	layout_grid->Add(dungeon_room_max_size_spin, 1, wxEXPAND);
 	
 	// Row 3: Corridor Count and Complexity
-	layout_grid->Add(new wxStaticText(dungeon_panel, wxID_ANY, "Corridor Count:"), 0, wxALIGN_CENTER_VERTICAL);
+	layout_grid->Add(new wxStaticText(dungeon_panel, wxID_ANY, "Min Corridor Count:"), 0, wxALIGN_CENTER_VERTICAL);
 	dungeon_corridor_count_spin = new wxSpinCtrl(dungeon_panel, ID_DUNGEON_CORRIDOR_COUNT_SPIN, "12", wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS, 8, 30, 12);
-	dungeon_corridor_count_spin->SetToolTip("Number of corridor segments (8-30)");
+	dungeon_corridor_count_spin->SetToolTip("MINIMUM number of corridor connections (8-30) - more will be added to ensure all rooms are connected");
 	layout_grid->Add(dungeon_corridor_count_spin, 1, wxEXPAND);
 	
 	layout_grid->Add(new wxStaticText(dungeon_panel, wxID_ANY, "Complexity:"), 0, wxALIGN_CENTER_VERTICAL);
@@ -1134,7 +1134,7 @@ void OTMapGenDialog::UpdatePreview() {
 	int currentTab = notebook->GetSelection();
 	if (currentTab == 0) {
 		target_button = island_preview_button;
-	} else if (currentTab == 2) {
+	} else if (currentTab == 3) {
 		target_button = dungeon_preview_button;
 	} else {
 		target_button = main_preview_button;
@@ -1309,7 +1309,7 @@ void OTMapGenDialog::UpdatePreviewFloor() {
 	int currentTab = notebook->GetSelection();
 	if (currentTab == 0) {
 		target_preview = island_preview_bitmap;  // Island tab
-	} else if (currentTab == 2) {
+	} else if (currentTab == 3) { // Dungeon tab is index 3
 		target_preview = dungeon_preview_bitmap;    // Dungeon tab
 	} else {
 		target_preview = main_preview_bitmap;    // Map Generation tab
@@ -1914,6 +1914,28 @@ void OTMapGenDialog::GetTilePreviewColor(uint16_t tileId, unsigned char& r, unsi
 		// Snow tiles (white)
 		case 670: case 671:
 			r = 240; g = 240; b = 250;
+			break;
+		
+		// Dungeon wall tiles (brown/brick)
+		case 1026: case 1027: case 1028: // Brick walls
+			r = 160; g = 100; b = 60;
+			break;
+		case 1050: case 1051: case 1052: // Stone walls
+			r = 140; g = 140; b = 140;
+			break;
+		case 1037: case 1038: case 1039: // Framework walls
+			r = 120; g = 80; b = 40;
+			break;
+		case 5262: case 5263: case 5264: // Wooden walls
+			r = 139; g = 69; b = 19;
+			break;
+		
+		// Dungeon floor tiles (gray)
+		 case 353: // Stone floors
+			r = 100; g = 100; b = 100;
+			break;
+		case 400: case 401: case 402: // Marble floors
+			r = 180; g = 180; b = 180;
 			break;
 		
 		// Default color for unknown tiles (magenta for debugging)

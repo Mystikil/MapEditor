@@ -357,6 +357,8 @@ public:
     void placeRoom(std::vector<std::vector<int>>& grid, const Room& room, const DungeonConfig& config);
     void generateCorridors(std::vector<std::vector<int>>& grid, const std::vector<Room>& rooms, const DungeonConfig& config, int width, int height);
     void createCorridor(std::vector<std::vector<int>>& grid, int x1, int y1, int x2, int y2, const DungeonConfig& config, int width, int height);
+    void createImprovedCorridor(std::vector<std::vector<int>>& grid, int x1, int y1, int x2, int y2, const DungeonConfig& config, int width, int height);
+    void createCorridorTile(std::vector<std::vector<int>>& grid, int centerX, int centerY, const DungeonConfig& config, int width, int height);
     void addDeadEnds(std::vector<std::vector<int>>& grid, const DungeonConfig& config, int width, int height);
     bool isWallPosition(const std::vector<std::vector<int>>& grid, int x, int y, int width, int height);
     
