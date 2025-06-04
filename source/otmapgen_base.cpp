@@ -326,77 +326,15 @@ const TerrainLayer* OTMapGeneratorBase::selectTerrainLayer(double height, double
 }
 
 uint16_t OTMapGeneratorBase::getTerrainTileId(double height, double moisture, const GenerationConfig& config) {
-    const TerrainLayer* layer = selectTerrainLayer(height, moisture, config);
-    return layer ? layer->item_id : 100; // Default fallback
-}
-
-// GenerationConfig implementation
-void GenerationConfig::initializeDefaultLayers() {
-    terrain_layers.clear();
+    // Select terrain layer based on height and reduced moisture influence
+    const TerrainLayer* selectedLayer = selectTerrainLayer(height, moisture, config);
     
-    // Default Water layer
-    TerrainLayer waterLayer;
-    waterLayer.name = "Water";
-    waterLayer.brush_name = "sea";
-    waterLayer.item_id = 4608;
-    waterLayer.height_min = -1.0;
-    waterLayer.height_max = 0.2;
-    waterLayer.moisture_min = -1.0;
-    waterLayer.moisture_max = 1.0;
-    waterLayer.noise_scale = 1.0;
-    waterLayer.coverage = 1.0;
-    waterLayer.z_order = 100;
-    waterLayer.use_borders = true;
-    waterLayer.enabled = true;
-    terrain_layers.push_back(waterLayer);
+    if (selectedLayer) {
+        return selectedLayer->item_id;
+    }
     
-    // Default Sand layer
-    TerrainLayer sandLayer;
-    sandLayer.name = "Sand";
-    sandLayer.brush_name = "sand";
-    sandLayer.item_id = 231;
-    sandLayer.height_min = 0.1;
-    sandLayer.height_max = 0.3;
-    sandLayer.moisture_min = -1.0;
-    sandLayer.moisture_max = 0.5;
-    sandLayer.noise_scale = 1.0;
-    sandLayer.coverage = 1.0;
-    sandLayer.z_order = 200;
-    sandLayer.use_borders = true;
-    sandLayer.enabled = true;
-    terrain_layers.push_back(sandLayer);
-    
-    // Default Grass layer
-    TerrainLayer grassLayer;
-    grassLayer.name = "Grass";
-    grassLayer.brush_name = "grass";
-    grassLayer.item_id = 4526;
-    grassLayer.height_min = 0.2;
-    grassLayer.height_max = 0.7;
-    grassLayer.moisture_min = 0.0;
-    grassLayer.moisture_max = 1.0;
-    grassLayer.noise_scale = 1.0;
-    grassLayer.coverage = 1.0;
-    grassLayer.z_order = 300;
-    grassLayer.use_borders = true;
-    grassLayer.enabled = true;
-    terrain_layers.push_back(grassLayer);
-    
-    // Default Mountain layer
-    TerrainLayer mountainLayer;
-    mountainLayer.name = "Mountain";
-    mountainLayer.brush_name = "mountain";
-    mountainLayer.item_id = 919;
-    mountainLayer.height_min = 0.6;
-    mountainLayer.height_max = 1.0;
-    mountainLayer.moisture_min = -1.0;
-    mountainLayer.moisture_max = 1.0;
-    mountainLayer.noise_scale = 1.0;
-    mountainLayer.coverage = 1.0;
-    mountainLayer.z_order = 400;
-    mountainLayer.use_borders = true;
-    mountainLayer.enabled = true;
-    terrain_layers.push_back(mountainLayer);
+    // Fallback to water if no layer matches
+    return config.water_item_id;
 }
 
 // Utility functions

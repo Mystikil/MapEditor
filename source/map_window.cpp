@@ -26,10 +26,7 @@ MapWindow::MapWindow(wxWindow* parent, Editor& editor) :
 	wxPanel(parent, PANE_MAIN),
 	editor(editor),
 	replaceItemsDialog(nullptr),
-	islandGeneratorDialog(nullptr),
-	proceduralGeneratorDialog(nullptr),
-	dungeonGeneratorDialog(nullptr),
-	groundValidationDialog(nullptr) {
+	islandGeneratorDialog(nullptr) {
 	int GL_settings[3];
 	GL_settings[0] = WX_GL_RGBA;
 	GL_settings[1] = WX_GL_DOUBLEBUFFER;
@@ -106,54 +103,6 @@ void MapWindow::OnIslandGeneratorDialogClose(wxCloseEvent& event) {
 	}
 }
 
-void MapWindow::ShowProceduralGeneratorDialog() {
-	if (proceduralGeneratorDialog) {
-		return;
-	}
-
-	proceduralGeneratorDialog = new ProceduralGeneratorDialog(this);
-	proceduralGeneratorDialog->Connect(wxEVT_CLOSE_WINDOW, wxCloseEventHandler(MapWindow::OnProceduralGeneratorDialogClose), NULL, this);
-	proceduralGeneratorDialog->Show();
-}
-
-void MapWindow::CloseProceduralGeneratorDialog() {
-	if (proceduralGeneratorDialog) {
-		proceduralGeneratorDialog->Close();
-	}
-}
-
-void MapWindow::OnProceduralGeneratorDialogClose(wxCloseEvent& event) {
-	if (proceduralGeneratorDialog) {
-		proceduralGeneratorDialog->Disconnect(wxEVT_CLOSE_WINDOW, wxCloseEventHandler(MapWindow::OnProceduralGeneratorDialogClose), NULL, this);
-		proceduralGeneratorDialog->Destroy();
-		proceduralGeneratorDialog = nullptr;
-	}
-}
-
-void MapWindow::ShowDungeonGeneratorDialog() {
-	if (dungeonGeneratorDialog) {
-		return;
-	}
-
-	dungeonGeneratorDialog = new DungeonGeneratorDialog(this);
-	dungeonGeneratorDialog->Connect(wxEVT_CLOSE_WINDOW, wxCloseEventHandler(MapWindow::OnDungeonGeneratorDialogClose), NULL, this);
-	dungeonGeneratorDialog->Show();
-}
-
-void MapWindow::CloseDungeonGeneratorDialog() {
-	if (dungeonGeneratorDialog) {
-		dungeonGeneratorDialog->Close();
-	}
-}
-
-void MapWindow::OnDungeonGeneratorDialogClose(wxCloseEvent& event) {
-	if (dungeonGeneratorDialog) {
-		dungeonGeneratorDialog->Disconnect(wxEVT_CLOSE_WINDOW, wxCloseEventHandler(MapWindow::OnDungeonGeneratorDialogClose), NULL, this);
-		dungeonGeneratorDialog->Destroy();
-		dungeonGeneratorDialog = nullptr;
-	}
-}
-
 void MapWindow::ShowGroundValidationDialog() {
 	if (groundValidationDialog) {
 		return;
@@ -180,20 +129,6 @@ void MapWindow::ShowGroundValidationDialog() {
 
 	groundValidationDialog->Destroy();
 	groundValidationDialog = nullptr;
-}
-
-void MapWindow::CloseGroundValidationDialog() {
-	if (groundValidationDialog) {
-		groundValidationDialog->Close();
-	}
-}
-
-void MapWindow::OnGroundValidationDialogClose(wxCloseEvent& event) {
-	if (groundValidationDialog) {
-		groundValidationDialog->Disconnect(wxEVT_CLOSE_WINDOW, wxCloseEventHandler(MapWindow::OnGroundValidationDialogClose), NULL, this);
-		groundValidationDialog->Destroy();
-		groundValidationDialog = nullptr;
-	}
 }
 
 void MapWindow::SetSize(int x, int y, bool center) {
@@ -223,15 +158,6 @@ void MapWindow::UpdateDialogs(bool show) {
 	}
 	if (islandGeneratorDialog) {
 		islandGeneratorDialog->Show(show);
-	}
-	if (proceduralGeneratorDialog) {
-		proceduralGeneratorDialog->Show(show);
-	}
-	if (dungeonGeneratorDialog) {
-		dungeonGeneratorDialog->Show(show);
-	}
-	if (groundValidationDialog) {
-		groundValidationDialog->Show(show);
 	}
 }
 

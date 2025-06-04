@@ -49,14 +49,13 @@ struct DungeonConfig {
     uint16_t ground_id;
     uint16_t wall_id;
     uint16_t fill_id;
-    std::string wall_brush;
     
     DungeonConfig() :
         room_count(8), room_min_size(3), room_max_size(7), circular_rooms(false),
         corridor_count(10), corridor_width(1), complexity(0.3), add_dead_ends(true),
         max_corridor_length(50), use_smart_pathfinding(true), prefer_intersections(true), corridor_segments(4),
         add_triple_intersections(true), add_quad_intersections(false), intersection_count(3), intersection_size(2), intersection_probability(0.5),
-        ground_id(4526), wall_id(1025), fill_id(919), wall_brush("brick wall") {}
+        ground_id(4526), wall_id(1025), fill_id(919) {}
 };
 
 // Room structure

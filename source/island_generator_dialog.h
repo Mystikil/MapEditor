@@ -19,135 +19,125 @@
 #define RME_ISLAND_GENERATOR_DIALOG_H_
 
 #include "main.h"
-#include "otmapgen_island.h"
-#include <wx/dialog.h>
-#include <wx/panel.h>
-#include <wx/sizer.h>
-#include <wx/button.h>
-#include <wx/textctrl.h>
-#include <wx/spinctrl.h>
-#include <wx/choice.h>
-#include <wx/checkbox.h>
-#include <wx/stattext.h>
-#include <wx/statbmp.h>
-#include <wx/bitmap.h>
-#include <wx/dcmemory.h>
+#include "common_windows.h"
+#include "dcbutton.h"
+#include "editor.h"
+#include "brush.h"
+#include "ground_brush.h"
 
-// Control IDs
+// Event IDs
 enum {
-    ID_ISLAND_SEED_TEXT = wxID_HIGHEST + 1000,
-    ID_ISLAND_WIDTH_SPIN,
-    ID_ISLAND_HEIGHT_SPIN,
-    ID_ISLAND_VERSION_CHOICE,
-    ID_ISLAND_NOISE_SCALE,
-    ID_ISLAND_NOISE_OCTAVES,
-    ID_ISLAND_NOISE_PERSISTENCE,
-    ID_ISLAND_NOISE_LACUNARITY,
-    ID_ISLAND_SIZE,
-    ID_ISLAND_FALLOFF,
-    ID_ISLAND_THRESHOLD,
-    ID_ISLAND_WATER_LEVEL,
-    ID_ISLAND_WATER_ID,
-    ID_ISLAND_GROUND_ID,
-    ID_ISLAND_ENABLE_CLEANUP,
-    ID_ISLAND_MIN_PATCH_SIZE,
-    ID_ISLAND_MAX_HOLE_SIZE,
-    ID_ISLAND_SMOOTHING_PASSES,
-    ID_ISLAND_ROLL_DICE,
-    ID_ISLAND_PREVIEW,
-    ID_ISLAND_GENERATE,
-    ID_ISLAND_PRESET_CHOICE,
-    ID_ISLAND_PRESET_SAVE,
-    ID_ISLAND_PRESET_DELETE
+    ID_ISLAND_GENERATE_SINGLE = 34000,
+    ID_ISLAND_GENERATE_MULTIPLE,
+    ID_ISLAND_CANCEL,
+    ID_ISLAND_RANDOM_SEED,
+    ID_ISLAND_SHAPE_SELECT,
+    ID_ISLAND_SIZE_CHANGE,
+    ID_ISLAND_ROUGHNESS_CHANGE,
+    ID_ISLAND_SEED_TEXT,
+    ID_ISLAND_BORDER_SELECT,
+    ID_ISLAND_BORDER_PREVIEW
 };
 
-// Preset structure for island generation
-struct IslandPreset {
-    std::string name;
-    IslandConfig config;
-    int width;
-    int height;
-    std::string version;
-    std::string seed;
+class IslandPreviewButton : public DCButton {
+public:
+    IslandPreviewButton(wxWindow* parent);
+    ~IslandPreviewButton() { }
+
+    uint16_t GetItemId() const { return m_id; }
+    void SetItemId(uint16_t id);
+
+private:
+    uint16_t m_id;
 };
 
 class IslandGeneratorDialog : public wxDialog {
 public:
     IslandGeneratorDialog(wxWindow* parent);
-    virtual ~IslandGeneratorDialog();
-    
-    // Event handlers
-    void OnGenerate(wxCommandEvent& event);
-    void OnPreview(wxCommandEvent& event);
-    void OnCancel(wxCommandEvent& event);
-    void OnRollDice(wxCommandEvent& event);
-    void OnParameterChange(wxCommandEvent& event);
-    void OnParameterSpin(wxSpinEvent& event);
-    void OnPresetLoad(wxCommandEvent& event);
-    void OnPresetSave(wxCommandEvent& event);
-    void OnPresetDelete(wxCommandEvent& event);
-    
+    ~IslandGeneratorDialog();
+
+    void SetStartPosition(const Position& pos) {
+        start_position = pos;
+        pos_x_spin->SetValue(pos.x);
+        pos_y_spin->SetValue(pos.y);
+        pos_z_spin->SetValue(pos.z);
+    }
+
+    // UI Event Handlers
+    void OnGroundClick(wxMouseEvent& event);
+    void OnWaterClick(wxMouseEvent& event);
+    void OnGenerateClick(wxCommandEvent& event);
+    void OnCancelClick(wxCommandEvent& event);
+    void OnShapeSelect(wxCommandEvent& event);
+    void OnSeedText(wxCommandEvent& event);
+    void OnSizeChange(wxSpinEvent& event);
+    void OnRoughnessChange(wxSpinEvent& event);
+    void OnRandomizeSeed(wxCommandEvent& event);
+    void OnPreviewUpdate(wxCommandEvent& event);
+    void OnGenerateMultiple(wxCommandEvent& event);
+    void OnBorderSelect(wxCommandEvent& event);
+    void OnBorderPreview(wxCommandEvent& event);
+
 private:
-    // UI Controls
-    wxTextCtrl* seed_text_ctrl;
-    wxSpinCtrl* width_spin_ctrl;
-    wxSpinCtrl* height_spin_ctrl;
-    wxChoice* version_choice;
-    
-    // Noise parameters
-    wxTextCtrl* noise_scale_text;
-    wxSpinCtrl* noise_octaves_spin;
-    wxTextCtrl* noise_persistence_text;
-    wxTextCtrl* noise_lacunarity_text;
-    
-    // Island shape parameters
-    wxTextCtrl* island_size_text;
-    wxTextCtrl* island_falloff_text;
-    wxTextCtrl* island_threshold_text;
-    wxTextCtrl* water_level_text;
-    
-    // Tile configuration
-    wxSpinCtrl* water_id_spin;
-    wxSpinCtrl* ground_id_spin;
-    
-    // Cleanup settings
-    wxCheckBox* enable_cleanup_checkbox;
-    wxSpinCtrl* min_patch_size_spin;
-    wxSpinCtrl* max_hole_size_spin;
-    wxSpinCtrl* smoothing_passes_spin;
-    
-    // Preview
-    wxStaticBitmap* preview_bitmap;
-    wxBitmap* current_preview;
-    
-    // Buttons
-    wxButton* roll_dice_button;
-    wxButton* preview_button;
-    wxButton* generate_button;
-    wxButton* cancel_button;
-    
-    // Preset management
-    wxChoice* preset_choice;
-    wxTextCtrl* preset_name_text;
-    wxButton* preset_save_button;
-    wxButton* preset_delete_button;
-    
-    // Helper methods
-    IslandConfig BuildIslandConfig();
-    bool GenerateIslandMap();
+    void UpdateWidgets();
     void UpdatePreview();
-    void RollIslandDice();
-    void LoadPresets();
-    void SavePresets();
-    void LoadPreset(const std::string& presetName);
-    void SaveCurrentAsPreset(const std::string& presetName);
-    void GetTilePreviewColor(uint16_t tileId, unsigned char& r, unsigned char& g, unsigned char& b);
-    
-    // Data
-    std::vector<IslandPreset> presets;
-    std::string presets_file_path;
-    
+    void GenerateIsland();
+    void GenerateMultipleIslands(int count, int spacing);
+    wxString GetDataDirectoryForVersion(const wxString& versionStr);
+    std::vector<std::pair<uint16_t, uint16_t>> ParseRangeString(const wxString& input);
+    void OnIdInput(wxCommandEvent& event);
+    void LoadBorderChoices();
+    void UpdateBorderPreview();
+
+    struct BorderData {
+        wxString name;
+        int id;
+        std::vector<uint16_t> items;
+        wxBitmap preview;
+    };
+
+    // UI Controls
+    IslandPreviewButton* ground_button;
+    IslandPreviewButton* water_button;
+    wxTextCtrl* ground_range_input;
+    wxTextCtrl* water_range_input;
+    wxChoice* shape_choice;
+    wxSpinCtrl* size_spin;
+    wxSpinCtrl* roughness_spin;
+    wxTextCtrl* seed_input;
+    wxButton* random_seed_button;
+    wxButton* generate_button;
+    wxButton* generate_multiple_button;
+    wxButton* cancel_button;
+    wxGauge* progress;
+    wxStaticBitmap* preview_bitmap;
+    wxCheckBox* use_automagic;
+
+    // Border controls
+    wxListBox* border_list;
+    wxStaticBitmap* border_preview;
+    std::vector<BorderData> border_data;
+    int selected_border_id;
+
+    // Position controls
+    wxSpinCtrl* pos_x_spin;
+    wxSpinCtrl* pos_y_spin;
+    wxSpinCtrl* pos_z_spin;
+
+    // Multiple islands controls
+    wxSpinCtrl* islands_count_spin;
+    wxSpinCtrl* islands_spacing_spin;
+
+    // Generation parameters
+    uint16_t ground_id;
+    uint16_t water_id;
+    int island_size;
+    int roughness;
+    wxString seed;
+    wxString selected_shape;
+    Position start_position;
+
     DECLARE_EVENT_TABLE()
 };
 
-#endif 
+#endif // RME_ISLAND_GENERATOR_DIALOG_H_ 

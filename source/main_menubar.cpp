@@ -808,14 +808,16 @@ void MainMenuBar::OnGenerateMap(wxCommandEvent& WXUNUSED(event)) {
 }
 
 void MainMenuBar::OnGenerateProceduralMap(wxCommandEvent& WXUNUSED(event)) {
-	if (!g_gui.IsVersionLoaded()) {
+	if (!g_gui.IsEditorOpen()) {
+		wxMessageBox("Please create or open a map first before generating procedural content.", "No Map Open", wxOK | wxICON_WARNING);
 		return;
 	}
-
-	if (MapTab* tab = g_gui.GetCurrentMapTab()) {
-		if (MapWindow* window = tab->GetView()) {
-			window->ShowProceduralGeneratorDialog();
-		}
+	
+	OTMapGenDialog dialog(frame);
+	if (dialog.ShowModal() == wxID_OK) {
+		// Map was generated successfully
+		g_gui.RefreshView();
+		g_gui.UpdateMinimap();
 	}
 }
 
@@ -838,7 +840,8 @@ void MainMenuBar::OnGenerateDungeonMap(wxCommandEvent& WXUNUSED(event)) {
 
 	if (MapTab* tab = g_gui.GetCurrentMapTab()) {
 		if (MapWindow* window = tab->GetView()) {
-			window->ShowDungeonGeneratorDialog();
+			// For now, show a simple message dialog until we implement the dungeon dialog
+			wxMessageBox("Dungeon generation will be available in separate windows soon!", "Dungeon Generator", wxOK | wxICON_INFORMATION);
 		}
 	}
 }

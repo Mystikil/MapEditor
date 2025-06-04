@@ -46,31 +46,22 @@ struct TerrainLayer {
     double height_max;
     double moisture_min;
     double moisture_max;
-    double noise_scale;
     double coverage;
     int z_order;
-    bool use_borders;
     bool enabled;
     
     TerrainLayer() : 
         item_id(0), height_min(0.0), height_max(1.0), 
-        moisture_min(-1.0), moisture_max(1.0), noise_scale(1.0), coverage(1.0), 
-        z_order(0), use_borders(true), enabled(true) {}
+        moisture_min(-1.0), moisture_max(1.0), coverage(1.0), 
+        z_order(0), enabled(true) {}
 };
 
 struct GenerationConfig {
     std::string seed;
-    std::string version;
     int width;
     int height;
     int base_floor;
     int water_level;
-    std::string mountain_type;
-    
-    // Boolean flags
-    bool terrain_only;
-    bool sand_biome;
-    bool smooth_coastline;
     
     // Noise settings
     double noise_increment;
@@ -83,6 +74,7 @@ struct GenerationConfig {
     // Terrain settings
     std::vector<TerrainLayer> terrain_layers;
     uint16_t water_item_id;
+    bool terrain_only;
     
     // Cave settings
     bool add_caves;
@@ -90,26 +82,18 @@ struct GenerationConfig {
     double cave_roughness;
     double cave_chance;
     uint16_t cave_item_id;
-    std::string cave_brush_name;
-    
-    // Water settings
-    std::string water_brush_name;
     
     // Multi-floor settings
     int floors_to_generate;
     
     std::vector<FrequencyWeight> frequencies;
     
-    // Initialize default terrain layers
-    void initializeDefaultLayers();
-    
     GenerationConfig() :
-        seed("default"), version("10.98"), width(100), height(100), base_floor(7), water_level(7),
-        mountain_type("MOUNTAIN"), terrain_only(false), sand_biome(true), smooth_coastline(true),
+        seed("default"), width(100), height(100), base_floor(7), water_level(7),
         noise_increment(0.1), exponent(1.0), linear(1.0), 
         island_distance_exponent(2.0), island_distance_decrement(1.0), euclidean(true),
-        water_item_id(4608), add_caves(false), cave_depth(3), cave_roughness(0.05), 
-        cave_chance(0.1), cave_item_id(351), cave_brush_name("cave"), water_brush_name("sea"),
+        water_item_id(4608), terrain_only(false),
+        add_caves(false), cave_depth(3), cave_roughness(0.05), cave_chance(0.1), cave_item_id(351),
         floors_to_generate(1) {}
 };
 
