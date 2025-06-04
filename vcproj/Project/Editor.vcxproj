@@ -235,6 +235,7 @@
     <ClCompile Include="..\..\source\revscript_manager.cpp" />
     <ClCompile Include="..\..\source\string_utils.cpp" />
     <ClCompile Include="..\..\source\tileset_window.cpp" />
+    <ClCompile Include="..\..\source\wallize_window.cpp" />
     <ClCompile Include="..\..\source\welcome_dialog.cpp" />
     <ClInclude Include="..\..\source\add_creature_dialog.h" />
     <ClInclude Include="..\..\source\add_item_window.h" />
@@ -426,6 +427,7 @@
     <ClCompile Include="..\..\source\tile.cpp" />
     <ClInclude Include="..\..\source\town.h" />
     <ClCompile Include="..\..\source\town.cpp" />
+    <ClInclude Include="..\..\source\wallize_window.h" />
     <ClInclude Include="..\..\source\wall_brush.h" />
     <ClCompile Include="..\..\source\wall_brush.cpp" />
     <ClInclude Include="..\..\source\waypoints.h" />

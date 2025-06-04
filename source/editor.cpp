@@ -41,6 +41,7 @@
 #include "live_action.h"
 #include "minimap_window.h"
 #include "borderize_window.h"
+#include "wallize_window.h"
 
 Editor::Editor(CopyBuffer& copybuffer) :
 	live_server(nullptr),
@@ -847,6 +848,37 @@ void Editor::borderizeMap(bool showdialog) {
 	}
 
 	BorderizeWindow* window = newd BorderizeWindow(g_gui.root, *this);
+	window->Start();
+	window->Destroy();
+}
+
+void Editor::wallizeSelection() {
+	if (selection.size() == 0) {
+		g_gui.SetStatusText("No items selected. Can't wallize.");
+		return;
+	}
+
+	// Create a custom wallize window similar to BorderizeWindow
+	WallizeWindow* window = newd WallizeWindow(g_gui.root, *this);
+	window->Start();
+	window->Destroy();
+}
+
+void Editor::wallizeMap(bool showdialog) {
+	if (!showdialog) {
+		// Old immediate processing for automated calls
+		uint64_t tiles_done = 0;
+		for (TileLocation* tileLocation : map) {
+			Tile* tile = tileLocation->get();
+			ASSERT(tile);
+			tile->wallize(&map);
+			++tiles_done;
+		}
+		return;
+	}
+
+	// Create a custom wallize window similar to BorderizeWindow
+	WallizeWindow* window = newd WallizeWindow(g_gui.root, *this);
 	window->Start();
 	window->Destroy();
 }

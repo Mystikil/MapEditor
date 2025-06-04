@@ -1543,10 +1543,10 @@ bool OTMapGenDialog::GenerateMap() {
 			return false;
 		}
 		
+		// Load the generated map into the editor
 		progress.SetLabel("Loading generated map...");
 		progress.Pulse();
 		
-		// Load the temporary file into the editor
 		bool loadSuccess = false;
 		try {
 			// Use the GUI's LoadMap function which handles everything properly
@@ -1554,19 +1554,12 @@ bool OTMapGenDialog::GenerateMap() {
 		} catch (...) {
 			loadSuccess = false;
 		}
+		// Clean up temporary file
+		wxRemoveFile(tempFilePath);
 		
-		// Clean up the temporary file
-		if (wxFileExists(tempFilePath)) {
-			wxRemoveFile(tempFilePath);
-		}
-		
-		if (loadSuccess) {
-			wxMessageBox("Procedural map generated and loaded successfully!", "Success", wxOK | wxICON_INFORMATION);
-			return true;
-		} else {
-			wxMessageBox("Failed to load the generated map.", "Load Error", wxOK | wxICON_ERROR);
-			return false;
-		}
+		// Success - no need for success dialog as the map is already loaded
+		// Just return true to close the generation dialog
+		return true;
 		
 	} catch (const std::exception& e) {
 		wxMessageBox(wxString::Format("Map generation failed with error: %s", e.what()), "Generation Error", wxOK | wxICON_ERROR);
@@ -2099,12 +2092,15 @@ bool OTMapGenDialog::GenerateIslandMap() {
 		}
 		
 		if (loadSuccess) {
-			wxMessageBox("Island generated and loaded successfully!", "Success", wxOK | wxICON_INFORMATION);
+			// Success - no need for success dialog as the map is already loaded
+			// wxMessageBox("Island generated and loaded successfully!", "Success", wxOK | wxICON_INFORMATION);
+			progress.Destroy(); // Ensure progress dialog closes immediately
 			return true;
 		} else {
 			wxMessageBox("Failed to load the generated island.", "Load Error", wxOK | wxICON_ERROR);
 			return false;
 		}
+		
 		
 	} catch (const std::exception& e) {
 		wxMessageBox(wxString::Format("Island generation failed with error: %s", e.what()), "Generation Error", wxOK | wxICON_ERROR);
@@ -2215,8 +2211,9 @@ bool OTMapGenDialog::GenerateIslandMapBatched(const IslandConfig& config, int wi
 			bool loadSuccess = g_gui.LoadMap(FileName(tempFilePath));
 			if (loadSuccess) {
 				g_gui.SetStatusText(wxString::Format("Large island map (%dx%d) generated successfully!", width, height));
-				wxMessageBox(wxString::Format("Large island map (%dx%d) generated successfully!\n\nGenerated in %d batches for optimal performance.", 
-					width, height, totalBatches), "Large Map Generated", wxOK | wxICON_INFORMATION);
+				// Success - no need for success dialog as the map is already loaded
+				// wxMessageBox(wxString::Format("Large island map (%dx%d) generated successfully!\n\nGenerated in %d batches for optimal performance.", 
+				//	width, height, totalBatches), "Large Map Generated", wxOK | wxICON_INFORMATION);
 			} else {
 				wxMessageBox("Failed to load generated large island into editor.", "Import Error", wxOK | wxICON_ERROR);
 				return false;
@@ -3066,7 +3063,9 @@ bool OTMapGenDialog::GenerateDungeonMap() {
 		}
 		
 		if (loadSuccess) {
-			wxMessageBox("Dungeon generated and loaded successfully!", "Success", wxOK | wxICON_INFORMATION);
+			// Success - no need for success dialog as the map is already loaded
+			// Just return true to close the generation dialog
+			progress.Destroy(); // Ensure progress dialog closes immediately
 			return true;
 		} else {
 			wxMessageBox("Failed to load the generated dungeon.", "Load Error", wxOK | wxICON_ERROR);

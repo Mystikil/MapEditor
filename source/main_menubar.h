@@ -71,6 +71,8 @@ namespace MenuBar {
 		// AUTOMAGIC removed - now controlled by 'A' hotkey
 		BORDERIZE_SELECTION,
 		BORDERIZE_MAP,
+		WALLIZE_SELECTION,
+		WALLIZE_MAP,
 		RANDOMIZE_SELECTION,
 		RANDOMIZE_MAP,
 		GOTO_PREVIOUS_POSITION,
@@ -237,6 +239,8 @@ public:
 	void OnRedo(wxCommandEvent& event);
 	void OnBorderizeSelection(wxCommandEvent& event);
 	void OnBorderizeMap(wxCommandEvent& event);
+	void OnWallizeSelection(wxCommandEvent& event);
+	void OnWallizeMap(wxCommandEvent& event);
 	void OnRandomizeSelection(wxCommandEvent& event);
 	void OnRandomizeMap(wxCommandEvent& event);
 	void OnJumpToBrush(wxCommandEvent& event);

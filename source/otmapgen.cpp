@@ -1377,7 +1377,7 @@ std::vector<OTMapGenerator::Room> OTMapGenerator::generateRooms(const DungeonCon
 	
 	std::uniform_int_distribution<> x_dist(config.room_max_size + 2, width - config.room_max_size - 2);
 	std::uniform_int_distribution<> y_dist(config.room_max_size + 2, height - config.room_max_size - 2);
-	std::uniform_int_distribution<> size_dist(config.room_min_size, config.room_max_size);
+		std::uniform_int_distribution<> size_dist(config.room_min_size, config.room_max_size);
 	std::uniform_real_distribution<> shape_dist(0.0, 1.0);
 	
 	int attempts = 0;
@@ -1424,7 +1424,7 @@ std::vector<OTMapGenerator::Room> OTMapGenerator::generateRooms(const DungeonCon
 			newRoom.isCircular = config.circular_rooms && (shape_dist(rng) < 0.5);
 			
 			// Check for overlap with reduced separation
-			bool overlaps = false;
+		bool overlaps = false;
 			int min_separation = 2; // Reduced separation for tight spaces
 			
 			for (const Room& existing : rooms) {
@@ -1432,12 +1432,12 @@ std::vector<OTMapGenerator::Room> OTMapGenerator::generateRooms(const DungeonCon
 				int min_distance = newRoom.radius + existing.radius + min_separation;
 				
 				if (distance < min_distance) {
-					overlaps = true;
-					break;
-				}
+				overlaps = true;
+				break;
 			}
-			
-			if (!overlaps) {
+		}
+		
+		if (!overlaps) {
 				rooms.push_back(newRoom);
 			}
 		}
@@ -1542,9 +1542,9 @@ void OTMapGenerator::generateCorridors(std::vector<std::vector<int>>& grid, cons
 			
 			// If we've connected all rooms, we have a spanning tree
 			if (connections_made == static_cast<int>(rooms.size()) - 1) {
-				break;
-			}
-		}
+                        break;
+                    }
+                }
 	}
 	
 	// Phase 2: Add additional corridors for redundancy and meeting minimum requirements

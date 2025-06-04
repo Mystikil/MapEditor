@@ -401,6 +401,7 @@
     <ClInclude Include="..\..\source\otmapgen_dialog.h" />
     <ClInclude Include="..\..\source\otmapgen.h" />
     <ClInclude Include="..\..\source\revscript_manager.h" />
+    <ClInclude Include="..\..\source\wallize_window.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\source\json\json_spirit_reader.cpp">
@@ -710,6 +711,7 @@
     <ClCompile Include="..\..\source\otmapgen.cpp" />
     <ClCompile Include="..\..\source\otmapgen_dialog.cpp" />
     <ClCompile Include="..\..\source\revscript_manager.cpp" />
+    <ClCompile Include="..\..\source\wallize_window.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="Editor.rc">

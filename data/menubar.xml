@@ -71,6 +71,8 @@
 			<separator/>
 			<item name="Borderize Selection" hotkey="Ctrl+B" action="BORDERIZE_SELECTION" help="Creates automatic borders in the entire selected area."/>
 			<item name="Borderize Map" action="BORDERIZE_MAP" help="Reborders the entire map."/>
+			<item name="Wallize Selection" hotkey="Ctrl+W" action="WALLIZE_SELECTION" help="Creates automatic walls in the entire selected area."/>
+			<item name="Wallize Map" action="WALLIZE_MAP" help="Rewallizes the entire map."/>
 			<item name="Randomize Selection" action="RANDOMIZE_SELECTION" help="Randomizes the ground tiles of the selected area."/>
 			<item name="Randomize Map" action="RANDOMIZE_MAP" help="Randomizes all tiles of the entire map."/>
 		</menu>
@@ -143,6 +145,7 @@
 		</menu>
 		<separator/>
 		<item name="Borderize Selection" hotkey="Ctrl+B" action="BORDERIZE_SELECTION" help="Creates automatic borders in the entire selected area."/>
+		<item name="Wallize Selection" hotkey="Ctrl+W" action="WALLIZE_SELECTION" help="Creates automatic walls in the entire selected area."/>
 		<item name="Randomize Selection" action="RANDOMIZE_SELECTION" help="Randomizes the ground tiles of the selected area."/>
 	</menu>
 	<menu name="View">
@@ -242,8 +245,7 @@
 	<!-- all context menus that have been changed from vanilla functionalities -->
 		<item name="Hotkeys" hotkey="" action="SHOW_HOTKEYS" help="Hotkeys"/>
 		<separator/>
-		<item name="Generate Procedural Map..." action="GENERATE_PROCEDURAL_MAP" help="Generate a procedural map using OTMapGen"/>
-		<separator/>
+		
 		<item name="Remove Items by ID..." action="MAP_REMOVE_ITEMS" help="Removes all items with the selected ID from the map."/>
 			<item name="Remove Duplicates..." action="MAP_REMOVE_DUPLICATES" help="Removes all duplicate items from the map."/>
 			<item name="Remove all Corpses..." action="MAP_REMOVE_CORPSES" help="Removes all corpses from the map."/>
@@ -256,7 +258,8 @@
 		<item name="Replace Items..." hotkey="" action="REPLACE_ITEMS" help="Replaces all occurrences of one item with another."/>
 		<item name="Refresh Items" action="REFRESH_ITEMS" help="Refresh items to fix flags"/>
 		<!-- clickable buttons that toggle some settings such as select right click RAw toggle button and toggle button to disable map display right click context menu then.-->
-			
+			<item name="Generate Procedural Map..." action="GENERATE_PROCEDURAL_MAP" help="Generate a procedural map using OTMapGen"/>
+		<separator/>
 
 	</menu>
 </menubar>

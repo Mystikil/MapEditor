@@ -157,6 +157,8 @@ MainMenuBar::MainMenuBar(MainFrame* frame) :
 	
 	MAKE_ACTION(BORDERIZE_SELECTION, wxITEM_NORMAL, OnBorderizeSelection);
 	MAKE_ACTION(BORDERIZE_MAP, wxITEM_NORMAL, OnBorderizeMap);
+	MAKE_ACTION(WALLIZE_SELECTION, wxITEM_NORMAL, OnWallizeSelection);
+	MAKE_ACTION(WALLIZE_MAP, wxITEM_NORMAL, OnWallizeMap);
 	MAKE_ACTION(RANDOMIZE_SELECTION, wxITEM_NORMAL, OnRandomizeSelection);
 	MAKE_ACTION(RANDOMIZE_MAP, wxITEM_NORMAL, OnRandomizeMap);
 	MAKE_ACTION(GOTO_PREVIOUS_POSITION, wxITEM_NORMAL, OnGotoPreviousPosition);
@@ -432,6 +434,8 @@ void MainMenuBar::Update() {
 
 	EnableItem(BORDERIZE_SELECTION, has_map && has_selection);
 	EnableItem(BORDERIZE_MAP, is_local);
+	EnableItem(WALLIZE_SELECTION, has_map && has_selection);
+	EnableItem(WALLIZE_MAP, is_local);
 	EnableItem(RANDOMIZE_SELECTION, has_map && has_selection);
 	EnableItem(RANDOMIZE_MAP, is_local);
 
@@ -1574,6 +1578,29 @@ void MainMenuBar::OnBorderizeMap(wxCommandEvent& WXUNUSED(event)) {
         "Do you want to borderize the entire map? This will process the map in chunks.", wxYES | wxNO);
     if (ret == wxID_YES) {
         g_gui.GetCurrentEditor()->borderizeMap(true);
+    }
+
+    g_gui.RefreshView();
+}
+
+void MainMenuBar::OnWallizeSelection(wxCommandEvent& WXUNUSED(event)) {
+	if (!g_gui.IsEditorOpen()) {
+		return;
+	}
+
+	g_gui.GetCurrentEditor()->wallizeSelection();
+	g_gui.RefreshView();
+}
+
+void MainMenuBar::OnWallizeMap(wxCommandEvent& WXUNUSED(event)) {
+    if (!g_gui.IsEditorOpen()) {
+        return;
+    }
+
+    int ret = g_gui.PopupDialog("Wallize Map", 
+        "Do you want to wallize the entire map? This will process the map in chunks.", wxYES | wxNO);
+    if (ret == wxID_YES) {
+        g_gui.GetCurrentEditor()->wallizeMap(true);
     }
 
     g_gui.RefreshView();
