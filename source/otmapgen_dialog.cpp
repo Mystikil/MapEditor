@@ -118,56 +118,6 @@ wxBEGIN_EVENT_TABLE(OTMapGenDialog, wxDialog)
 	EVT_COMMAND(ID_CAVE_ITEM_ID_SPIN, wxEVT_COMMAND_SPINCTRL_UPDATED, OTMapGenDialog::OnItemIdChange)
 	EVT_CHOICE(ID_WATER_BRUSH_CHOICE, OTMapGenDialog::OnBrushChoice)
 	EVT_COMMAND(ID_WATER_ITEM_ID_SPIN, wxEVT_COMMAND_SPINCTRL_UPDATED, OTMapGenDialog::OnItemIdChange)
-	
-	// Island generator events
-	EVT_TEXT(ID_ISLAND_NOISE_SCALE, OTMapGenDialog::OnIslandParameterChange)
-	EVT_SPINCTRL(ID_ISLAND_NOISE_OCTAVES, OTMapGenDialog::OnIslandParameterSpin)
-	EVT_TEXT(ID_ISLAND_NOISE_PERSISTENCE, OTMapGenDialog::OnIslandParameterChange)
-	EVT_TEXT(ID_ISLAND_NOISE_LACUNARITY, OTMapGenDialog::OnIslandParameterChange)
-	EVT_TEXT(ID_ISLAND_SIZE, OTMapGenDialog::OnIslandParameterChange)
-	EVT_TEXT(ID_ISLAND_FALLOFF, OTMapGenDialog::OnIslandParameterChange)
-	EVT_TEXT(ID_ISLAND_THRESHOLD, OTMapGenDialog::OnIslandParameterChange)
-	EVT_SPINCTRL(ID_ISLAND_WATER_ID, OTMapGenDialog::OnIslandParameterSpin)
-	EVT_SPINCTRL(ID_ISLAND_GROUND_ID, OTMapGenDialog::OnIslandParameterSpin)
-	EVT_TEXT(ID_ISLAND_WATER_LEVEL, OTMapGenDialog::OnIslandParameterChange)
-	EVT_BUTTON(ID_ISLAND_ROLL_DICE, OTMapGenDialog::OnRollDice)
-	
-	// Island cleanup events
-	EVT_CHECKBOX(ID_ISLAND_ENABLE_CLEANUP, OTMapGenDialog::OnIslandParameterChange)
-	EVT_SPINCTRL(ID_ISLAND_MIN_PATCH_SIZE, OTMapGenDialog::OnIslandParameterSpin)
-	EVT_SPINCTRL(ID_ISLAND_MAX_HOLE_SIZE, OTMapGenDialog::OnIslandParameterSpin)
-	EVT_SPINCTRL(ID_ISLAND_SMOOTHING_PASSES, OTMapGenDialog::OnIslandParameterSpin)
-	
-	// Island item preview button events
-	EVT_BUTTON(ID_ISLAND_WATER_ID_BUTTON, OTMapGenDialog::OnWaterIdButtonClick)
-	EVT_BUTTON(ID_ISLAND_GROUND_ID_BUTTON, OTMapGenDialog::OnGroundIdButtonClick)
-	EVT_TEXT(ID_ISLAND_WATER_ID_TEXT, OTMapGenDialog::OnItemIdTextChange)
-	EVT_TEXT(ID_ISLAND_GROUND_ID_TEXT, OTMapGenDialog::OnItemIdTextChange)
-	
-	// Dungeon generator events
-	EVT_TEXT(ID_DUNGEON_SEED_TEXT, OTMapGenDialog::OnDungeonParameterChange)
-	EVT_SPINCTRL(ID_DUNGEON_WIDTH_SPIN, OTMapGenDialog::OnDungeonParameterSpin)
-	EVT_SPINCTRL(ID_DUNGEON_HEIGHT_SPIN, OTMapGenDialog::OnDungeonParameterSpin)
-	EVT_CHOICE(ID_DUNGEON_VERSION_CHOICE, OTMapGenDialog::OnDungeonParameterChange)
-	EVT_CHOICE(ID_DUNGEON_WALL_BRUSH_CHOICE, OTMapGenDialog::OnDungeonWallBrushChange)
-	EVT_SPINCTRL(ID_DUNGEON_CORRIDOR_WIDTH_SPIN, OTMapGenDialog::OnDungeonParameterSpin)
-	EVT_SPINCTRL(ID_DUNGEON_ROOM_MIN_SIZE_SPIN, OTMapGenDialog::OnDungeonParameterSpin)
-	EVT_SPINCTRL(ID_DUNGEON_ROOM_MAX_SIZE_SPIN, OTMapGenDialog::OnDungeonParameterSpin)
-	EVT_SPINCTRL(ID_DUNGEON_ROOM_COUNT_SPIN, OTMapGenDialog::OnDungeonParameterSpin)
-	EVT_SPINCTRL(ID_DUNGEON_CORRIDOR_COUNT_SPIN, OTMapGenDialog::OnDungeonParameterSpin)
-	EVT_TEXT(ID_DUNGEON_COMPLEXITY_TEXT, OTMapGenDialog::OnDungeonParameterChange)
-	EVT_CHECKBOX(ID_DUNGEON_ADD_DEAD_ENDS, OTMapGenDialog::OnDungeonParameterChange)
-	EVT_CHECKBOX(ID_DUNGEON_CIRCULAR_ROOMS, OTMapGenDialog::OnDungeonParameterChange)
-	EVT_BUTTON(ID_DUNGEON_ROLL_DICE, OTMapGenDialog::OnDungeonRollDice)
-	EVT_BUTTON(ID_DUNGEON_PREVIEW, OTMapGenDialog::OnPreview)
-	
-	// Preset management events
-	EVT_CHOICE(ID_PRESET_CHOICE, OTMapGenDialog::OnPresetLoad)
-	EVT_BUTTON(ID_PRESET_SAVE, OTMapGenDialog::OnPresetSave)
-	EVT_BUTTON(ID_PRESET_DELETE, OTMapGenDialog::OnPresetDelete)
-	
-	// Tab change event
-	EVT_NOTEBOOK_PAGE_CHANGED(ID_NOTEBOOK_TAB_CHANGED, OTMapGenDialog::OnTabChanged)
 wxEND_EVENT_TABLE()
 
 OTMapGenDialog::OTMapGenDialog(wxWindow* parent) : 
@@ -188,253 +138,9 @@ OTMapGenDialog::OTMapGenDialog(wxWindow* parent) :
 	// Create notebook for tabs
 	notebook = new wxNotebook(this, ID_NOTEBOOK_TAB_CHANGED);
 	
-	// === Island Generator Tab ===
-	island_panel = new wxPanel(notebook);
-	wxBoxSizer* island_main_sizer = new wxBoxSizer(wxHORIZONTAL);
-	
-	// Left side - Island Settings
-	wxBoxSizer* island_left_sizer = new wxBoxSizer(wxVERTICAL);
-	
-	// Basic settings (shared)
-	wxStaticBoxSizer* basic_settings_sizer = new wxStaticBoxSizer(wxVERTICAL, island_panel, "Basic Settings");
-	wxFlexGridSizer* basic_grid = new wxFlexGridSizer(2, 4, 5, 5);
-	basic_grid->AddGrowableCol(1);
-	basic_grid->AddGrowableCol(3);
-	
-	// Row 1: Seed and Width
-	basic_grid->Add(new wxStaticText(island_panel, wxID_ANY, "Seed:"), 0, wxALIGN_CENTER_VERTICAL);
-	island_seed_text_ctrl = new wxTextCtrl(island_panel, ID_SEED_TEXT, wxString::Format("%lld", (long long)time(nullptr) * 1000));
-	island_seed_text_ctrl->SetToolTip("Enter any integer value (supports 64-bit seeds)");
-	basic_grid->Add(island_seed_text_ctrl, 1, wxEXPAND);
-	
-	basic_grid->Add(new wxStaticText(island_panel, wxID_ANY, "Width:"), 0, wxALIGN_CENTER_VERTICAL);
-	island_width_spin_ctrl = new wxSpinCtrl(island_panel, ID_WIDTH_SPIN, "256", wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS, 64, 8192, 256);
-	basic_grid->Add(island_width_spin_ctrl, 1, wxEXPAND);
-	
-	// Row 2: Height and Version
-	basic_grid->Add(new wxStaticText(island_panel, wxID_ANY, "Height:"), 0, wxALIGN_CENTER_VERTICAL);
-	island_height_spin_ctrl = new wxSpinCtrl(island_panel, ID_HEIGHT_SPIN, "256", wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS, 64, 8192, 256);
-	basic_grid->Add(island_height_spin_ctrl, 1, wxEXPAND);
-	
-	basic_grid->Add(new wxStaticText(island_panel, wxID_ANY, "Version:"), 0, wxALIGN_CENTER_VERTICAL);
-	wxArrayString versions;
-	versions.Add("10.98");
-	versions.Add("11.00");
-	versions.Add("12.00");
-	island_version_choice = new wxChoice(island_panel, ID_VERSION_CHOICE, wxDefaultPosition, wxDefaultSize, versions);
-	island_version_choice->SetSelection(0);
-	basic_grid->Add(island_version_choice, 1, wxEXPAND);
-	
-	basic_settings_sizer->Add(basic_grid, 0, wxEXPAND | wxALL, 5);
-	island_left_sizer->Add(basic_settings_sizer, 0, wxEXPAND | wxALL, 5);
-	
-	// Island-specific noise settings
-	wxStaticBoxSizer* noise_settings_sizer = new wxStaticBoxSizer(wxVERTICAL, island_panel, "Noise Parameters");
-	wxFlexGridSizer* noise_grid = new wxFlexGridSizer(3, 4, 5, 5);
-	noise_grid->AddGrowableCol(1);
-	noise_grid->AddGrowableCol(3);
-	
-	// Row 1: Noise Scale and Octaves
-	noise_grid->Add(new wxStaticText(island_panel, wxID_ANY, "Noise Scale:"), 0, wxALIGN_CENTER_VERTICAL);
-	island_noise_scale_text = new wxTextCtrl(island_panel, ID_ISLAND_NOISE_SCALE, "0.01");
-	island_noise_scale_text->SetToolTip("Size of noise features (0.001 - 1.0)");
-	noise_grid->Add(island_noise_scale_text, 1, wxEXPAND);
-	
-	noise_grid->Add(new wxStaticText(island_panel, wxID_ANY, "Octaves:"), 0, wxALIGN_CENTER_VERTICAL);
-	island_noise_octaves_spin = new wxSpinCtrl(island_panel, ID_ISLAND_NOISE_OCTAVES, "4", wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS, 1, 8, 4);
-	island_noise_octaves_spin->SetToolTip("Number of noise layers (1-8)");
-	noise_grid->Add(island_noise_octaves_spin, 1, wxEXPAND);
-	
-	// Row 2: Persistence and Lacunarity
-	noise_grid->Add(new wxStaticText(island_panel, wxID_ANY, "Persistence:"), 0, wxALIGN_CENTER_VERTICAL);
-	island_noise_persistence_text = new wxTextCtrl(island_panel, ID_ISLAND_NOISE_PERSISTENCE, "0.5");
-	island_noise_persistence_text->SetToolTip("Amplitude decay between octaves (0.1 - 1.0)");
-	noise_grid->Add(island_noise_persistence_text, 1, wxEXPAND);
-	
-	noise_grid->Add(new wxStaticText(island_panel, wxID_ANY, "Lacunarity:"), 0, wxALIGN_CENTER_VERTICAL);
-	island_noise_lacunarity_text = new wxTextCtrl(island_panel, ID_ISLAND_NOISE_LACUNARITY, "2.0");
-	island_noise_lacunarity_text->SetToolTip("Frequency increase between octaves (1.5 - 4.0)");
-	noise_grid->Add(island_noise_lacunarity_text, 1, wxEXPAND);
-	
-	// Row 3: Roll Dice button spanning 2 columns
-	island_roll_dice_button = new wxButton(island_panel, ID_ISLAND_ROLL_DICE, "🎲 Roll Dice");
-	island_roll_dice_button->SetToolTip("Randomize all noise parameters");
-	noise_grid->Add(island_roll_dice_button, 1, wxEXPAND);
-	noise_grid->Add(new wxStaticText(island_panel, wxID_ANY, ""), 0); // spacer
-	noise_grid->Add(new wxStaticText(island_panel, wxID_ANY, ""), 0); // spacer
-	noise_grid->Add(new wxStaticText(island_panel, wxID_ANY, ""), 0); // spacer
-	
-	noise_settings_sizer->Add(noise_grid, 0, wxEXPAND | wxALL, 5);
-	island_left_sizer->Add(noise_settings_sizer, 0, wxEXPAND | wxALL, 5);
-	
-	// Island shape settings
-	wxStaticBoxSizer* shape_settings_sizer = new wxStaticBoxSizer(wxVERTICAL, island_panel, "Island Shape");
-	wxFlexGridSizer* shape_grid = new wxFlexGridSizer(2, 4, 5, 5);
-	shape_grid->AddGrowableCol(1);
-	shape_grid->AddGrowableCol(3);
-	
-	// Row 1: Island Size and Falloff
-	shape_grid->Add(new wxStaticText(island_panel, wxID_ANY, "Island Size:"), 0, wxALIGN_CENTER_VERTICAL);
-	island_size_text = new wxTextCtrl(island_panel, ID_ISLAND_SIZE, "0.8");
-	island_size_text->SetToolTip("Overall size of the island (0.1 - 2.0)");
-	shape_grid->Add(island_size_text, 1, wxEXPAND);
-	
-	shape_grid->Add(new wxStaticText(island_panel, wxID_ANY, "Falloff:"), 0, wxALIGN_CENTER_VERTICAL);
-	island_falloff_text = new wxTextCtrl(island_panel, ID_ISLAND_FALLOFF, "2.0");
-	island_falloff_text->SetToolTip("Edge sharpness (0.5 - 5.0)");
-	shape_grid->Add(island_falloff_text, 1, wxEXPAND);
-	
-	// Row 2: Threshold and Water Level
-	shape_grid->Add(new wxStaticText(island_panel, wxID_ANY, "Land Threshold:"), 0, wxALIGN_CENTER_VERTICAL);
-	island_threshold_text = new wxTextCtrl(island_panel, ID_ISLAND_THRESHOLD, "0.3");
-	island_threshold_text->SetToolTip("Height threshold for land vs water (0.0 - 1.0)");
-	shape_grid->Add(island_threshold_text, 1, wxEXPAND);
-	
-	shape_grid->Add(new wxStaticText(island_panel, wxID_ANY, "Water Level:"), 0, wxALIGN_CENTER_VERTICAL);
-	island_water_level_text = new wxTextCtrl(island_panel, ID_ISLAND_WATER_LEVEL, "0.5");
-	island_water_level_text->SetToolTip("Base water level adjustment (0.0 - 1.0)");
-	shape_grid->Add(island_water_level_text, 1, wxEXPAND);
-	
-	shape_settings_sizer->Add(shape_grid, 0, wxEXPAND | wxALL, 5);
-	island_left_sizer->Add(shape_settings_sizer, 0, wxEXPAND | wxALL, 5);
-	
-	// Tile ID settings
-	wxStaticBoxSizer* tile_settings_sizer = new wxStaticBoxSizer(wxVERTICAL, island_panel, "Tile Configuration");
-	wxFlexGridSizer* tile_grid = new wxFlexGridSizer(1, 4, 5, 5);
-	tile_grid->AddGrowableCol(1);
-	tile_grid->AddGrowableCol(3);
-	
-	tile_grid->Add(new wxStaticText(island_panel, wxID_ANY, "Water ID:"), 0, wxALIGN_CENTER_VERTICAL);
-	island_water_id_spin = new wxSpinCtrl(island_panel, ID_ISLAND_WATER_ID, "4608", wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS, 100, 65535, 4608);
-	island_water_id_spin->SetToolTip("Item ID for water tiles");
-	tile_grid->Add(island_water_id_spin, 1, wxEXPAND);
-	
-	tile_grid->Add(new wxStaticText(island_panel, wxID_ANY, "Ground ID:"), 0, wxALIGN_CENTER_VERTICAL);
-	island_ground_id_spin = new wxSpinCtrl(island_panel, ID_ISLAND_GROUND_ID, "4526", wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS, 100, 65535, 4526);
-	island_ground_id_spin->SetToolTip("Item ID for ground/grass tiles");
-	tile_grid->Add(island_ground_id_spin, 1, wxEXPAND);
-	
-	tile_settings_sizer->Add(tile_grid, 0, wxEXPAND | wxALL, 5);
-	island_left_sizer->Add(tile_settings_sizer, 0, wxEXPAND | wxALL, 5);
-	
-	// Preset management
-	wxStaticBoxSizer* preset_settings_sizer = new wxStaticBoxSizer(wxVERTICAL, island_panel, "Generation Presets");
-	wxFlexGridSizer* preset_grid = new wxFlexGridSizer(2, 3, 5, 5);
-	preset_grid->AddGrowableCol(1);
-	
-	// Row 1: Preset choice and name input
-	preset_grid->Add(new wxStaticText(island_panel, wxID_ANY, "Load Preset:"), 0, wxALIGN_CENTER_VERTICAL);
-	preset_choice = new wxChoice(island_panel, ID_PRESET_CHOICE);
-	preset_choice->SetToolTip("Select a saved generation preset");
-	preset_grid->Add(preset_choice, 1, wxEXPAND);
-	
-	preset_grid->Add(new wxStaticText(island_panel, wxID_ANY, "Preset Name:"), 0, wxALIGN_CENTER_VERTICAL);
-	preset_name_text = new wxTextCtrl(island_panel, ID_PRESET_NAME_TEXT, "Custom Preset");
-	preset_name_text->SetToolTip("Enter name for new preset");
-	preset_grid->Add(preset_name_text, 1, wxEXPAND);
-	
-	// Row 2: Save and Delete buttons
-	preset_save_button = new wxButton(island_panel, ID_PRESET_SAVE, "💾 Save Preset");
-	preset_save_button->SetToolTip("Save current settings as a preset");
-	preset_grid->Add(preset_save_button, 1, wxEXPAND);
-	
-	preset_delete_button = new wxButton(island_panel, ID_PRESET_DELETE, "🗑️ Delete Preset");
-	preset_delete_button->SetToolTip("Delete selected preset");
-	preset_grid->Add(preset_delete_button, 1, wxEXPAND);
-	
-	preset_settings_sizer->Add(preset_grid, 0, wxEXPAND | wxALL, 5);
-	island_left_sizer->Add(preset_settings_sizer, 0, wxEXPAND | wxALL, 5);
-	
-	// Cleanup settings
-	wxStaticBoxSizer* cleanup_settings_sizer = new wxStaticBoxSizer(wxVERTICAL, island_panel, "Cleanup & Smoothing");
-	wxFlexGridSizer* cleanup_grid = new wxFlexGridSizer(2, 4, 5, 5);
-	cleanup_grid->AddGrowableCol(1);
-	cleanup_grid->AddGrowableCol(3);
-	
-	// Row 1: Enable Cleanup and Min Patch Size
-	island_enable_cleanup_checkbox = new wxCheckBox(island_panel, ID_ISLAND_ENABLE_CLEANUP, "Enable Cleanup");
-	island_enable_cleanup_checkbox->SetValue(true);
-	island_enable_cleanup_checkbox->SetToolTip("Enable post-processing to improve border generation");
-	cleanup_grid->Add(island_enable_cleanup_checkbox, 0, wxALIGN_CENTER_VERTICAL);
-	cleanup_grid->Add(new wxStaticText(island_panel, wxID_ANY, ""), 0); // spacer
-	
-	cleanup_grid->Add(new wxStaticText(island_panel, wxID_ANY, "Min Patch Size:"), 0, wxALIGN_CENTER_VERTICAL);
-	island_min_patch_size_spin = new wxSpinCtrl(island_panel, ID_ISLAND_MIN_PATCH_SIZE, "4", wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS, 1, 20, 4);
-	island_min_patch_size_spin->SetToolTip("Minimum land patch size (removes smaller patches)");
-	cleanup_grid->Add(island_min_patch_size_spin, 1, wxEXPAND);
-	
-	// Row 2: Max Hole Size and Smoothing Passes
-	cleanup_grid->Add(new wxStaticText(island_panel, wxID_ANY, "Max Hole Size:"), 0, wxALIGN_CENTER_VERTICAL);
-	island_max_hole_size_spin = new wxSpinCtrl(island_panel, ID_ISLAND_MAX_HOLE_SIZE, "3", wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS, 1, 10, 3);
-	island_max_hole_size_spin->SetToolTip("Maximum water hole size to fill within land");
-	cleanup_grid->Add(island_max_hole_size_spin, 1, wxEXPAND);
-	
-	cleanup_grid->Add(new wxStaticText(island_panel, wxID_ANY, "Smoothing Passes:"), 0, wxALIGN_CENTER_VERTICAL);
-	island_smoothing_passes_spin = new wxSpinCtrl(island_panel, ID_ISLAND_SMOOTHING_PASSES, "2", wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS, 0, 5, 2);
-	island_smoothing_passes_spin->SetToolTip("Number of smoothing passes (0 = no smoothing)");
-	cleanup_grid->Add(island_smoothing_passes_spin, 1, wxEXPAND);
-	
-	cleanup_settings_sizer->Add(cleanup_grid, 0, wxEXPAND | wxALL, 5);
-	island_left_sizer->Add(cleanup_settings_sizer, 0, wxEXPAND | wxALL, 5);
-	
-	// Add left side to island panel
-	island_main_sizer->Add(island_left_sizer, 1, wxEXPAND | wxALL, 5);
-	
-	// Right side - Preview for island tab
-	wxBoxSizer* island_right_sizer = new wxBoxSizer(wxVERTICAL);
-	
-	// Preview section
-	wxStaticBoxSizer* preview_sizer = new wxStaticBoxSizer(wxVERTICAL, island_panel, "Preview (Floor 7 Only)");
-	
-	// Preview controls
-	wxBoxSizer* preview_controls_sizer = new wxBoxSizer(wxHORIZONTAL);
-	island_preview_button = new wxButton(island_panel, ID_PREVIEW, "Generate Preview");
-	floor_up_button = new wxButton(island_panel, ID_FLOOR_UP, "Floor +");
-	floor_down_button = new wxButton(island_panel, ID_FLOOR_DOWN, "Floor -");
-	floor_label = new wxStaticText(island_panel, wxID_ANY, "Floor: 7");
-	zoom_in_button = new wxButton(island_panel, ID_ZOOM_IN, "Zoom +");
-	zoom_out_button = new wxButton(island_panel, ID_ZOOM_OUT, "Zoom -");
-	zoom_label = new wxStaticText(island_panel, wxID_ANY, "Zoom: 100%");
-	
-	// Disable floor controls for island generator (always floor 7)
-	floor_up_button->Enable(false);
-	floor_down_button->Enable(false);
-	
-	preview_controls_sizer->Add(island_preview_button, 0, wxALL, 2);
-	preview_controls_sizer->Add(floor_down_button, 0, wxALL, 2);
-	preview_controls_sizer->Add(floor_label, 0, wxALIGN_CENTER_VERTICAL | wxALL, 2);
-	preview_controls_sizer->Add(floor_up_button, 0, wxALL, 2);
-	preview_controls_sizer->Add(zoom_out_button, 0, wxALL, 2);
-	preview_controls_sizer->Add(zoom_label, 0, wxALIGN_CENTER_VERTICAL | wxALL, 2);
-	preview_controls_sizer->Add(zoom_in_button, 0, wxALL, 2);
-	
-	preview_sizer->Add(preview_controls_sizer, 0, wxEXPAND | wxALL, 5);
-	
-	// Preview bitmap
-	wxBitmap initial_bitmap(400, 400);
-	wxMemoryDC dc(initial_bitmap);
-	dc.SetBackground(*wxLIGHT_GREY_BRUSH);
-	dc.Clear();
-	dc.DrawText("Click 'Generate Preview' to see island", 50, 180);
-	
-	island_preview_bitmap = new wxStaticBitmap(island_panel, wxID_ANY, initial_bitmap);
-	preview_sizer->Add(island_preview_bitmap, 1, wxEXPAND | wxALL, 5);
-	
-	island_right_sizer->Add(preview_sizer, 1, wxEXPAND | wxALL, 5);
-	
-	// Add right side to island panel
-	island_main_sizer->Add(island_right_sizer, 1, wxEXPAND | wxALL, 5);
-	
-	island_panel->SetSizer(island_main_sizer);
-	notebook->AddPage(island_panel, "Island Generator", true);
-	
-	// === Legacy Generator Tab (existing functionality) ===
-	wxPanel* legacy_panel = new wxPanel(notebook);
-	wxBoxSizer* legacy_main_sizer = new wxBoxSizer(wxHORIZONTAL);
-	
-	// === Main Settings Tab (merged basic + advanced) ===
+	// === Main Procedural Generator Tab ===
 	wxPanel* main_panel = new wxPanel(notebook);
-	wxBoxSizer* settings_main_sizer = new wxBoxSizer(wxHORIZONTAL);
+	wxBoxSizer* main_sizer_tab = new wxBoxSizer(wxHORIZONTAL);
 	
 	// Left side - All Settings
 	wxBoxSizer* left_main_sizer = new wxBoxSizer(wxVERTICAL);
@@ -457,6 +163,10 @@ OTMapGenDialog::OTMapGenDialog(wxWindow* parent) :
 	
 	// Row 2: Version and Height
 	basic_grid_sizer->Add(new wxStaticText(main_panel, wxID_ANY, "Version:"), 0, wxALIGN_CENTER_VERTICAL);
+	wxArrayString versions;
+	versions.Add("10.98");
+	versions.Add("11.00");
+	versions.Add("12.00");
 	main_version_choice = new wxChoice(main_panel, ID_VERSION_CHOICE, wxDefaultPosition, wxDefaultSize, versions);
 	main_version_choice->SetSelection(0);
 	basic_grid_sizer->Add(main_version_choice, 1, wxEXPAND);
@@ -612,381 +322,11 @@ OTMapGenDialog::OTMapGenDialog(wxWindow* parent) :
 	right_main_sizer->Add(main_preview_sizer, 1, wxEXPAND | wxALL, 5);
 	
 	// Add left and right sides to main tab
-	settings_main_sizer->Add(left_main_sizer, 0, wxEXPAND | wxALL, 5);
-	settings_main_sizer->Add(right_main_sizer, 1, wxEXPAND | wxALL, 5);
-	
-	main_panel->SetSizer(settings_main_sizer);
-	notebook->AddPage(main_panel, "Map Generation", false);  // Changed to false since Island tab should be selected by default
-	
-	// === Layout Design Tab ===
-	wxPanel* layout_panel = new wxPanel(notebook);
-	wxBoxSizer* layout_sizer = new wxBoxSizer(wxVERTICAL);
-	
-	// Terrain Layers section
-	wxStaticBoxSizer* terrain_layers_sizer = new wxStaticBoxSizer(wxHORIZONTAL, layout_panel, "Terrain Layers");
-	
-	// Terrain layer list
-	terrain_layer_list = new wxListCtrl(layout_panel, ID_TERRAIN_LAYER_LIST, wxDefaultPosition, wxSize(300, 200), 
-		wxLC_REPORT | wxLC_SINGLE_SEL);
-	terrain_layer_list->InsertColumn(0, "Name", wxLIST_FORMAT_LEFT, 100);
-	terrain_layer_list->InsertColumn(1, "Brush", wxLIST_FORMAT_LEFT, 100);
-	terrain_layer_list->InsertColumn(2, "Item ID", wxLIST_FORMAT_LEFT, 60);
-	terrain_layer_list->InsertColumn(3, "Height", wxLIST_FORMAT_LEFT, 80);
-	terrain_layer_list->InsertColumn(4, "Enabled", wxLIST_FORMAT_LEFT, 60);
-	
-	terrain_layers_sizer->Add(terrain_layer_list, 1, wxEXPAND | wxALL, 5);
-	
-	// Layer control buttons
-	wxBoxSizer* layer_buttons_sizer = new wxBoxSizer(wxVERTICAL);
-	add_layer_button = new wxButton(layout_panel, ID_ADD_LAYER, "Add Layer");
-	remove_layer_button = new wxButton(layout_panel, ID_REMOVE_LAYER, "Remove Layer");
-	move_up_button = new wxButton(layout_panel, ID_MOVE_UP_LAYER, "Move Up");
-	move_down_button = new wxButton(layout_panel, ID_MOVE_DOWN_LAYER, "Move Down");
-	edit_layer_button = new wxButton(layout_panel, ID_EDIT_LAYER, "Edit Layer");
-	
-	layer_buttons_sizer->Add(add_layer_button, 0, wxEXPAND | wxALL, 2);
-	layer_buttons_sizer->Add(remove_layer_button, 0, wxEXPAND | wxALL, 2);
-	layer_buttons_sizer->Add(move_up_button, 0, wxEXPAND | wxALL, 2);
-	layer_buttons_sizer->Add(move_down_button, 0, wxEXPAND | wxALL, 2);
-	layer_buttons_sizer->Add(edit_layer_button, 0, wxEXPAND | wxALL, 2);
-	layer_buttons_sizer->AddStretchSpacer();
-	
-	terrain_layers_sizer->Add(layer_buttons_sizer, 0, wxEXPAND | wxALL, 5);
-	
-	// Layer Properties section
-	wxStaticBoxSizer* layer_props_sizer = new wxStaticBoxSizer(wxVERTICAL, layout_panel, "Layer Properties");
-	layer_properties_panel = new wxPanel(layout_panel);
-	wxFlexGridSizer* props_grid_sizer = new wxFlexGridSizer(5, 4, 5, 10);
-	props_grid_sizer->AddGrowableCol(1);
-	props_grid_sizer->AddGrowableCol(3);
-	
-	// Row 1: Name and Brush
-	props_grid_sizer->Add(new wxStaticText(layer_properties_panel, wxID_ANY, "Name:"), 0, wxALIGN_CENTER_VERTICAL);
-	layer_name_text = new wxTextCtrl(layer_properties_panel, wxID_ANY, "");
-	props_grid_sizer->Add(layer_name_text, 1, wxEXPAND);
-	
-	props_grid_sizer->Add(new wxStaticText(layer_properties_panel, wxID_ANY, "Brush:"), 0, wxALIGN_CENTER_VERTICAL);
-	layer_brush_choice = new wxChoice(layer_properties_panel, ID_LAYER_BRUSH_CHOICE);
-	props_grid_sizer->Add(layer_brush_choice, 1, wxEXPAND);
-	
-	// Row 2: Item ID and Z-Order
-	props_grid_sizer->Add(new wxStaticText(layer_properties_panel, wxID_ANY, "Item ID:"), 0, wxALIGN_CENTER_VERTICAL);
-	layer_item_id_spin = new wxSpinCtrl(layer_properties_panel, ID_LAYER_ITEM_ID_SPIN, "100", wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS, 100, 65535, 100);
-	props_grid_sizer->Add(layer_item_id_spin, 1, wxEXPAND);
-	
-	props_grid_sizer->Add(new wxStaticText(layer_properties_panel, wxID_ANY, "Z-Order:"), 0, wxALIGN_CENTER_VERTICAL);
-	z_order_spin = new wxSpinCtrl(layer_properties_panel, wxID_ANY, "1000", wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS, 0, 10000, 1000);
-	props_grid_sizer->Add(z_order_spin, 1, wxEXPAND);
-	
-	// Row 3: Height range
-	props_grid_sizer->Add(new wxStaticText(layer_properties_panel, wxID_ANY, "Height Min:"), 0, wxALIGN_CENTER_VERTICAL);
-	height_min_text = new wxTextCtrl(layer_properties_panel, wxID_ANY, "0.0");
-	props_grid_sizer->Add(height_min_text, 1, wxEXPAND);
-	
-	props_grid_sizer->Add(new wxStaticText(layer_properties_panel, wxID_ANY, "Height Max:"), 0, wxALIGN_CENTER_VERTICAL);
-	height_max_text = new wxTextCtrl(layer_properties_panel, wxID_ANY, "1.0");
-	props_grid_sizer->Add(height_max_text, 1, wxEXPAND);
-	
-	// Row 4: Moisture range
-	props_grid_sizer->Add(new wxStaticText(layer_properties_panel, wxID_ANY, "Moisture Min:"), 0, wxALIGN_CENTER_VERTICAL);
-	moisture_min_text = new wxTextCtrl(layer_properties_panel, wxID_ANY, "-1.0");
-	props_grid_sizer->Add(moisture_min_text, 1, wxEXPAND);
-	
-	props_grid_sizer->Add(new wxStaticText(layer_properties_panel, wxID_ANY, "Moisture Max:"), 0, wxALIGN_CENTER_VERTICAL);
-	moisture_max_text = new wxTextCtrl(layer_properties_panel, wxID_ANY, "1.0");
-	props_grid_sizer->Add(moisture_max_text, 1, wxEXPAND);
-	
-	// Row 5: Noise scale and Coverage
-	props_grid_sizer->Add(new wxStaticText(layer_properties_panel, wxID_ANY, "Noise Scale:"), 0, wxALIGN_CENTER_VERTICAL);
-	noise_scale_text = new wxTextCtrl(layer_properties_panel, wxID_ANY, "1.0");
-	props_grid_sizer->Add(noise_scale_text, 1, wxEXPAND);
-	
-	props_grid_sizer->Add(new wxStaticText(layer_properties_panel, wxID_ANY, "Coverage:"), 0, wxALIGN_CENTER_VERTICAL);
-	coverage_text = new wxTextCtrl(layer_properties_panel, wxID_ANY, "1.0");
-	props_grid_sizer->Add(coverage_text, 1, wxEXPAND);
-	
-	layer_properties_panel->SetSizer(props_grid_sizer);
-	layer_props_sizer->Add(layer_properties_panel, 1, wxEXPAND | wxALL, 5);
-	
-	// Checkboxes for layer options
-	wxBoxSizer* layer_options_sizer = new wxBoxSizer(wxHORIZONTAL);
-	use_borders_checkbox = new wxCheckBox(layout_panel, wxID_ANY, "Use Borders");
-	use_borders_checkbox->SetValue(true);
-	layer_enabled_checkbox = new wxCheckBox(layout_panel, wxID_ANY, "Layer Enabled");
-	layer_enabled_checkbox->SetValue(true);
-	
-	layer_options_sizer->Add(use_borders_checkbox, 0, wxALL, 5);
-	layer_options_sizer->Add(layer_enabled_checkbox, 0, wxALL, 5);
-	layer_props_sizer->Add(layer_options_sizer, 0, wxEXPAND | wxALL, 5);
-	
-	layout_sizer->Add(layer_props_sizer, 0, wxEXPAND | wxALL, 5);
-	
-	// Cave and Water Configuration section
-	wxStaticBoxSizer* special_terrain_sizer = new wxStaticBoxSizer(wxHORIZONTAL, layout_panel, "Cave & Water Configuration");
-	
-	// Cave configuration
-	wxBoxSizer* cave_config_sizer = new wxBoxSizer(wxVERTICAL);
-	cave_config_sizer->Add(new wxStaticText(layout_panel, wxID_ANY, "Cave Configuration"), 0, wxALL, 2);
-	
-	wxFlexGridSizer* cave_grid_sizer = new wxFlexGridSizer(2, 2, 5, 10);
-	cave_grid_sizer->AddGrowableCol(1);
-	
-	cave_grid_sizer->Add(new wxStaticText(layout_panel, wxID_ANY, "Cave Brush:"), 0, wxALIGN_CENTER_VERTICAL);
-	cave_brush_choice = new wxChoice(layout_panel, ID_CAVE_BRUSH_CHOICE);
-	cave_grid_sizer->Add(cave_brush_choice, 1, wxEXPAND);
-	
-	cave_grid_sizer->Add(new wxStaticText(layout_panel, wxID_ANY, "Cave Item ID:"), 0, wxALIGN_CENTER_VERTICAL);
-	cave_item_id_spin = new wxSpinCtrl(layout_panel, ID_CAVE_ITEM_ID_SPIN, "351", wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS, 100, 65535, 351);
-	cave_grid_sizer->Add(cave_item_id_spin, 1, wxEXPAND);
-	
-	cave_config_sizer->Add(cave_grid_sizer, 0, wxEXPAND | wxALL, 5);
-	special_terrain_sizer->Add(cave_config_sizer, 1, wxEXPAND | wxALL, 5);
-	
-	// Water configuration
-	wxBoxSizer* water_config_sizer = new wxBoxSizer(wxVERTICAL);
-	water_config_sizer->Add(new wxStaticText(layout_panel, wxID_ANY, "Water Configuration"), 0, wxALL, 2);
-	
-	wxFlexGridSizer* water_grid_sizer = new wxFlexGridSizer(2, 2, 5, 10);
-	water_grid_sizer->AddGrowableCol(1);
-	
-	water_grid_sizer->Add(new wxStaticText(layout_panel, wxID_ANY, "Water Brush:"), 0, wxALIGN_CENTER_VERTICAL);
-	water_brush_choice = new wxChoice(layout_panel, ID_WATER_BRUSH_CHOICE);
-	water_grid_sizer->Add(water_brush_choice, 1, wxEXPAND);
-	
-	water_grid_sizer->Add(new wxStaticText(layout_panel, wxID_ANY, "Water Item ID:"), 0, wxALIGN_CENTER_VERTICAL);
-	water_item_id_spin = new wxSpinCtrl(layout_panel, ID_WATER_ITEM_ID_SPIN, "4608", wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS, 100, 65535, 4608);
-	water_grid_sizer->Add(water_item_id_spin, 1, wxEXPAND);
-	
-	water_config_sizer->Add(water_grid_sizer, 0, wxEXPAND | wxALL, 5);
-	special_terrain_sizer->Add(water_config_sizer, 1, wxEXPAND | wxALL, 5);
-	
-	layout_sizer->Add(special_terrain_sizer, 0, wxEXPAND | wxALL, 5);
-	layout_sizer->Add(terrain_layers_sizer, 1, wxEXPAND | wxALL, 5);
-	
-	layout_panel->SetSizer(layout_sizer);
-	notebook->AddPage(layout_panel, "Layout Design", false);
-	
-	// === Dungeon Generator Tab ===
-	dungeon_panel = new wxPanel(notebook);
-	wxBoxSizer* dungeon_main_sizer = new wxBoxSizer(wxHORIZONTAL);
-	
-	// Left side - Dungeon Settings
-	wxBoxSizer* dungeon_left_sizer = new wxBoxSizer(wxVERTICAL);
-	
-	// Basic settings
-	wxStaticBoxSizer* dungeon_basic_settings_sizer = new wxStaticBoxSizer(wxVERTICAL, dungeon_panel, "Basic Settings");
-	wxFlexGridSizer* dungeon_basic_grid = new wxFlexGridSizer(2, 4, 5, 5);
-	dungeon_basic_grid->AddGrowableCol(1);
-	dungeon_basic_grid->AddGrowableCol(3);
-	
-	// Row 1: Seed and Width
-	dungeon_basic_grid->Add(new wxStaticText(dungeon_panel, wxID_ANY, "Seed:"), 0, wxALIGN_CENTER_VERTICAL);
-	dungeon_seed_text_ctrl = new wxTextCtrl(dungeon_panel, ID_DUNGEON_SEED_TEXT, wxString::Format("%lld", (long long)time(nullptr) * 1000));
-	dungeon_seed_text_ctrl->SetToolTip("Enter any integer value (supports 64-bit seeds)");
-	dungeon_basic_grid->Add(dungeon_seed_text_ctrl, 1, wxEXPAND);
-	
-	dungeon_basic_grid->Add(new wxStaticText(dungeon_panel, wxID_ANY, "Width:"), 0, wxALIGN_CENTER_VERTICAL);
-	dungeon_width_spin_ctrl = new wxSpinCtrl(dungeon_panel, ID_DUNGEON_WIDTH_SPIN, "128", wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS, 32, 512, 128);
-	dungeon_width_spin_ctrl->SetToolTip("Dungeon map width (32-512)");
-	dungeon_basic_grid->Add(dungeon_width_spin_ctrl, 1, wxEXPAND);
-	
-	// Row 2: Height and Version
-	dungeon_basic_grid->Add(new wxStaticText(dungeon_panel, wxID_ANY, "Height:"), 0, wxALIGN_CENTER_VERTICAL);
-	dungeon_height_spin_ctrl = new wxSpinCtrl(dungeon_panel, ID_DUNGEON_HEIGHT_SPIN, "128", wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS, 32, 512, 128);
-	dungeon_height_spin_ctrl->SetToolTip("Dungeon map height (32-512)");
-	dungeon_basic_grid->Add(dungeon_height_spin_ctrl, 1, wxEXPAND);
-	
-	dungeon_basic_grid->Add(new wxStaticText(dungeon_panel, wxID_ANY, "Version:"), 0, wxALIGN_CENTER_VERTICAL);
-	dungeon_version_choice = new wxChoice(dungeon_panel, ID_DUNGEON_VERSION_CHOICE, wxDefaultPosition, wxDefaultSize, versions);
-	dungeon_version_choice->SetSelection(0);
-	dungeon_basic_grid->Add(dungeon_version_choice, 1, wxEXPAND);
-	
-	dungeon_basic_settings_sizer->Add(dungeon_basic_grid, 0, wxEXPAND | wxALL, 5);
-	dungeon_left_sizer->Add(dungeon_basic_settings_sizer, 0, wxEXPAND | wxALL, 5);
-	
-	// Wall Brush Selection
-	wxStaticBoxSizer* wall_settings_sizer = new wxStaticBoxSizer(wxVERTICAL, dungeon_panel, "Wall Configuration");
-	wxFlexGridSizer* wall_grid = new wxFlexGridSizer(2, 2, 5, 5);
-	wall_grid->AddGrowableCol(1);
-	
-	wall_grid->Add(new wxStaticText(dungeon_panel, wxID_ANY, "Wall Brush:"), 0, wxALIGN_CENTER_VERTICAL);
-	wxArrayString wall_brushes;
-	// Add some common wall brushes from walls.xml
-	wall_brushes.Add("brick wall");
-	wall_brushes.Add("stone wall");
-	wall_brushes.Add("framework wall");
-	wall_brushes.Add("wooden wall");
-	wall_brushes.Add("sandstone wall");
-	wall_brushes.Add("white stone wall");
-	wall_brushes.Add("bamboo wall");
-	wall_brushes.Add("mountain wall");
-	dungeon_wall_brush_choice = new wxChoice(dungeon_panel, ID_DUNGEON_WALL_BRUSH_CHOICE, wxDefaultPosition, wxDefaultSize, wall_brushes);
-	dungeon_wall_brush_choice->SetSelection(0); // Default to brick wall
-	dungeon_wall_brush_choice->SetToolTip("Select wall brush type from walls.xml");
-	wall_grid->Add(dungeon_wall_brush_choice, 1, wxEXPAND);
-	
-	// Wall preview (placeholder for now)
-	wall_grid->Add(new wxStaticText(dungeon_panel, wxID_ANY, "Preview:"), 0, wxALIGN_CENTER_VERTICAL);
-	wxBitmap wall_preview_bitmap(32, 32);
-	wxMemoryDC wall_dc(wall_preview_bitmap);
-	wall_dc.SetBackground(*wxLIGHT_GREY_BRUSH);
-	wall_dc.Clear();
-	wall_dc.SetPen(*wxBLACK_PEN);
-	wall_dc.DrawRectangle(0, 0, 32, 32);
-	wall_dc.SelectObject(wxNullBitmap);
-	dungeon_wall_preview_bitmap = new wxStaticBitmap(dungeon_panel, wxID_ANY, wall_preview_bitmap);
-	wall_grid->Add(dungeon_wall_preview_bitmap, 0, wxALIGN_CENTER);
-	
-	wall_settings_sizer->Add(wall_grid, 0, wxEXPAND | wxALL, 5);
-	dungeon_left_sizer->Add(wall_settings_sizer, 0, wxEXPAND | wxALL, 5);
-	
-	// Layout Parameters
-	wxStaticBoxSizer* layout_settings_sizer = new wxStaticBoxSizer(wxVERTICAL, dungeon_panel, "Layout Parameters");
-	wxFlexGridSizer* layout_grid = new wxFlexGridSizer(3, 4, 5, 5);
-	layout_grid->AddGrowableCol(1);
-	layout_grid->AddGrowableCol(3);
-	
-	// Row 1: Corridor Width and Room Count
-	layout_grid->Add(new wxStaticText(dungeon_panel, wxID_ANY, "Corridor Width:"), 0, wxALIGN_CENTER_VERTICAL);
-	dungeon_corridor_width_spin = new wxSpinCtrl(dungeon_panel, ID_DUNGEON_CORRIDOR_WIDTH_SPIN, "1", wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS, 1, 4, 1);
-	dungeon_corridor_width_spin->SetToolTip("Gap between walls for corridors (1-4 sqm)");
-	layout_grid->Add(dungeon_corridor_width_spin, 1, wxEXPAND);
-	
-	layout_grid->Add(new wxStaticText(dungeon_panel, wxID_ANY, "Room Count:"), 0, wxALIGN_CENTER_VERTICAL);
-	dungeon_room_count_spin = new wxSpinCtrl(dungeon_panel, ID_DUNGEON_ROOM_COUNT_SPIN, "8", wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS, 4, 20, 8);
-	dungeon_room_count_spin->SetToolTip("Number of rooms to generate (4-20)");
-	layout_grid->Add(dungeon_room_count_spin, 1, wxEXPAND);
-	
-	// Row 2: Room Min Size and Max Size
-	layout_grid->Add(new wxStaticText(dungeon_panel, wxID_ANY, "Room Min Size:"), 0, wxALIGN_CENTER_VERTICAL);
-	dungeon_room_min_size_spin = new wxSpinCtrl(dungeon_panel, ID_DUNGEON_ROOM_MIN_SIZE_SPIN, "3", wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS, 3, 8, 3);
-	dungeon_room_min_size_spin->SetToolTip("Minimum room radius (3-8)");
-	layout_grid->Add(dungeon_room_min_size_spin, 1, wxEXPAND);
-	
-	layout_grid->Add(new wxStaticText(dungeon_panel, wxID_ANY, "Room Max Size:"), 0, wxALIGN_CENTER_VERTICAL);
-	dungeon_room_max_size_spin = new wxSpinCtrl(dungeon_panel, ID_DUNGEON_ROOM_MAX_SIZE_SPIN, "6", wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS, 4, 12, 6);
-	dungeon_room_max_size_spin->SetToolTip("Maximum room radius (4-12)");
-	layout_grid->Add(dungeon_room_max_size_spin, 1, wxEXPAND);
-	
-	// Row 3: Corridor Count and Complexity
-	layout_grid->Add(new wxStaticText(dungeon_panel, wxID_ANY, "Corridor Count:"), 0, wxALIGN_CENTER_VERTICAL);
-	dungeon_corridor_count_spin = new wxSpinCtrl(dungeon_panel, ID_DUNGEON_CORRIDOR_COUNT_SPIN, "12", wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS, 8, 30, 12);
-	dungeon_corridor_count_spin->SetToolTip("Number of corridor segments (8-30)");
-	layout_grid->Add(dungeon_corridor_count_spin, 1, wxEXPAND);
-	
-	layout_grid->Add(new wxStaticText(dungeon_panel, wxID_ANY, "Complexity:"), 0, wxALIGN_CENTER_VERTICAL);
-	dungeon_complexity_text = new wxTextCtrl(dungeon_panel, ID_DUNGEON_COMPLEXITY_TEXT, "0.3");
-	dungeon_complexity_text->SetToolTip("Maze complexity factor (0.1-0.8)");
-	layout_grid->Add(dungeon_complexity_text, 1, wxEXPAND);
-	
-	layout_settings_sizer->Add(layout_grid, 0, wxEXPAND | wxALL, 5);
-	dungeon_left_sizer->Add(layout_settings_sizer, 0, wxEXPAND | wxALL, 5);
-	
-	// Generation Options
-	wxStaticBoxSizer* options_settings_sizer = new wxStaticBoxSizer(wxVERTICAL, dungeon_panel, "Generation Options");
-	wxFlexGridSizer* options_grid = new wxFlexGridSizer(2, 2, 5, 5);
-	
-	dungeon_add_dead_ends_checkbox = new wxCheckBox(dungeon_panel, ID_DUNGEON_ADD_DEAD_ENDS, "Add Dead Ends");
-	dungeon_add_dead_ends_checkbox->SetValue(true);
-	dungeon_add_dead_ends_checkbox->SetToolTip("Add dead-end corridors for complexity");
-	options_grid->Add(dungeon_add_dead_ends_checkbox, 0, wxALIGN_CENTER_VERTICAL);
-	
-	dungeon_circular_rooms_checkbox = new wxCheckBox(dungeon_panel, ID_DUNGEON_CIRCULAR_ROOMS, "Circular Rooms");
-	dungeon_circular_rooms_checkbox->SetValue(false);
-	dungeon_circular_rooms_checkbox->SetToolTip("Generate circular vs rectangular rooms");
-	options_grid->Add(dungeon_circular_rooms_checkbox, 0, wxALIGN_CENTER_VERTICAL);
-	
-	// Intersection options (new feature for triple/quadruple corridors)
-	options_grid->Add(new wxStaticText(dungeon_panel, wxID_ANY, "Corridor Intersections:"), 0, wxALIGN_CENTER_VERTICAL | wxALL, 5);
-	
-	dungeon_triple_intersections_checkbox = new wxCheckBox(dungeon_panel, ID_DUNGEON_TRIPLE_INTERSECTIONS, "Add T-Junctions (3-way)");
-	dungeon_triple_intersections_checkbox->SetValue(true);
-	options_grid->Add(dungeon_triple_intersections_checkbox, 0, wxALL, 5);
-	
-	dungeon_quad_intersections_checkbox = new wxCheckBox(dungeon_panel, ID_DUNGEON_QUAD_INTERSECTIONS, "Add Crossroads (4-way)");
-	dungeon_quad_intersections_checkbox->SetValue(true);
-	options_grid->Add(dungeon_quad_intersections_checkbox, 0, wxALL, 5);
-	
-	wxBoxSizer* intersection_sizer = new wxBoxSizer(wxHORIZONTAL);
-	intersection_sizer->Add(new wxStaticText(dungeon_panel, wxID_ANY, "Intersection Count:"), 0, wxALIGN_CENTER_VERTICAL | wxALL, 5);
-	dungeon_intersection_count_spin = new wxSpinCtrl(dungeon_panel, ID_DUNGEON_INTERSECTION_COUNT, "4", wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS, 2, 8, 4);
-	intersection_sizer->Add(dungeon_intersection_count_spin, 0, wxALL, 5);
-	options_grid->Add(intersection_sizer, 0, wxEXPAND);
-	
-	wxBoxSizer* intersection_size_sizer = new wxBoxSizer(wxHORIZONTAL);
-	intersection_size_sizer->Add(new wxStaticText(dungeon_panel, wxID_ANY, "Intersection Size:"), 0, wxALIGN_CENTER_VERTICAL | wxALL, 5);
-	dungeon_intersection_size_spin = new wxSpinCtrl(dungeon_panel, ID_DUNGEON_INTERSECTION_SIZE, "2", wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS, 1, 3, 2);
-	intersection_size_sizer->Add(dungeon_intersection_size_spin, 0, wxALL, 5);
-	options_grid->Add(intersection_size_sizer, 0, wxEXPAND);
-	
-	wxBoxSizer* intersection_prob_sizer = new wxBoxSizer(wxHORIZONTAL);
-	intersection_prob_sizer->Add(new wxStaticText(dungeon_panel, wxID_ANY, "Intersection Probability:"), 0, wxALIGN_CENTER_VERTICAL | wxALL, 5);
-	dungeon_intersection_probability_text = new wxTextCtrl(dungeon_panel, ID_DUNGEON_INTERSECTION_PROBABILITY, "0.3", wxDefaultPosition, wxSize(60, -1));
-	intersection_prob_sizer->Add(dungeon_intersection_probability_text, 0, wxALL, 5);
-	options_grid->Add(intersection_prob_sizer, 0, wxEXPAND);
-	
-	// Corridor length controls (prevent massive tunnels)
-	options_grid->Add(new wxStaticText(dungeon_panel, wxID_ANY, "Corridor Length Control:"), 0, wxALIGN_CENTER_VERTICAL | wxALL, 5);
-	
-	wxBoxSizer* max_corridor_sizer = new wxBoxSizer(wxHORIZONTAL);
-	max_corridor_sizer->Add(new wxStaticText(dungeon_panel, wxID_ANY, "Max Corridor Length:"), 0, wxALIGN_CENTER_VERTICAL | wxALL, 5);
-	dungeon_max_corridor_length_spin = new wxSpinCtrl(dungeon_panel, ID_DUNGEON_MAX_CORRIDOR_LENGTH, "50", wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS, 10, 200, 50);
-	max_corridor_sizer->Add(dungeon_max_corridor_length_spin, 0, wxALL, 5);
-	options_grid->Add(max_corridor_sizer, 0, wxEXPAND);
-	
-	dungeon_smart_pathfinding_checkbox = new wxCheckBox(dungeon_panel, ID_DUNGEON_SMART_PATHFINDING, "Smart Pathfinding (A*)");
-	dungeon_smart_pathfinding_checkbox->SetValue(true);
-	dungeon_smart_pathfinding_checkbox->SetToolTip("Use intelligent pathfinding for shorter routes");
-	options_grid->Add(dungeon_smart_pathfinding_checkbox, 0, wxALL, 5);
-	
-	dungeon_prefer_intersections_checkbox = new wxCheckBox(dungeon_panel, ID_DUNGEON_PREFER_INTERSECTIONS, "Route via Intersections");
-	dungeon_prefer_intersections_checkbox->SetValue(true);
-	dungeon_prefer_intersections_checkbox->SetToolTip("Prefer routing through intersection hubs");
-	options_grid->Add(dungeon_prefer_intersections_checkbox, 0, wxALL, 5);
-	
-	// Roll dice and preview buttons
-	wxBoxSizer* dungeon_button_sizer = new wxBoxSizer(wxHORIZONTAL);
-	dungeon_roll_dice_button = new wxButton(dungeon_panel, ID_DUNGEON_ROLL_DICE, "🎲 Roll Dice");
-	dungeon_roll_dice_button->SetToolTip("Randomize all dungeon parameters");
-	dungeon_button_sizer->Add(dungeon_roll_dice_button, 0, wxALL, 2);
-	
-	dungeon_preview_button = new wxButton(dungeon_panel, ID_DUNGEON_PREVIEW, "Generate Preview");
-	dungeon_button_sizer->Add(dungeon_preview_button, 0, wxALL, 2);
-	
-	options_settings_sizer->Add(options_grid, 0, wxEXPAND | wxALL, 5);
-	dungeon_left_sizer->Add(options_settings_sizer, 0, wxEXPAND | wxALL, 5);
-	
-	// Add left side to dungeon panel
-	dungeon_main_sizer->Add(dungeon_left_sizer, 1, wxEXPAND | wxALL, 5);
-	
-	// Right side - Preview for dungeon tab
-	wxBoxSizer* dungeon_right_sizer = new wxBoxSizer(wxVERTICAL);
-	
-	// Preview section
-	wxStaticBoxSizer* dungeon_preview_sizer = new wxStaticBoxSizer(wxVERTICAL, dungeon_panel, "Dungeon Preview");
-	
-	// Preview controls
-	wxBoxSizer* dungeon_preview_controls_sizer = new wxBoxSizer(wxHORIZONTAL);
-	dungeon_preview_controls_sizer->Add(dungeon_preview_button, 0, wxALL, 2);
-	dungeon_preview_sizer->Add(dungeon_preview_controls_sizer, 0, wxEXPAND | wxALL, 5);
-	
-	// Preview bitmap
-	wxBitmap dungeon_initial_bitmap(400, 400);
-	wxMemoryDC dungeon_dc(dungeon_initial_bitmap);
-	dungeon_dc.SetBackground(*wxLIGHT_GREY_BRUSH);
-	dungeon_dc.Clear();
-	dungeon_dc.SetPen(*wxBLACK_PEN);
-	dungeon_dc.DrawText("Click 'Generate Preview' to see dungeon layout", 10, 180);
-	dungeon_dc.SelectObject(wxNullBitmap);
-	
-	dungeon_preview_bitmap = new wxStaticBitmap(dungeon_panel, wxID_ANY, dungeon_initial_bitmap);
-	dungeon_preview_sizer->Add(dungeon_preview_bitmap, 1, wxEXPAND | wxALL, 5);
-	
-	dungeon_right_sizer->Add(dungeon_preview_sizer, 1, wxEXPAND | wxALL, 5);
-	dungeon_main_sizer->Add(dungeon_right_sizer, 1, wxEXPAND | wxALL, 5);
-	
-	dungeon_panel->SetSizer(dungeon_main_sizer);
-	notebook->AddPage(dungeon_panel, "Dungeon Generator", false);
+	main_sizer_tab->Add(left_main_sizer, 0, wxEXPAND | wxALL, 5);
+	main_sizer_tab->Add(right_main_sizer, 1, wxEXPAND | wxALL, 5);
+	
+	main_panel->SetSizer(main_sizer_tab);
+	notebook->AddPage(main_panel, "Procedural Map Generation", true);
 	
 	main_sizer->Add(notebook, 1, wxEXPAND | wxALL, 5);
 	
@@ -1004,7 +344,7 @@ OTMapGenDialog::OTMapGenDialog(wxWindow* parent) :
 	SetSizer(main_sizer);
 	Center();
 	
-	// Initialize terrain layers and brush choices
+	// Initialize brush choices
 	PopulateBrushChoices();
 	
 	// Initialize default terrain layers
@@ -1012,28 +352,19 @@ OTMapGenDialog::OTMapGenDialog(wxWindow* parent) :
 	defaultConfig.initializeDefaultLayers();
 	working_terrain_layers = defaultConfig.terrain_layers;
 	
-	// Populate the terrain layer list
-	PopulateTerrainLayerList();
-	
-	// Initially disable layer property controls
-	UpdateLayerControls();
-	
 	// Generate initial random 64-bit seed
 	srand(time(nullptr));
 	long long initial_seed = ((long long)rand() << 32) | rand();
-	island_seed_text_ctrl->SetValue(wxString::Format("%lld", initial_seed));
 	main_seed_text_ctrl->SetValue(wxString::Format("%lld", initial_seed));
 	
-	// Initialize shared control pointers to point to island tab controls by default
-	// This prevents crashes when accessing shared controls
-	seed_text_ctrl = island_seed_text_ctrl;
-	width_spin_ctrl = island_width_spin_ctrl;
-	height_spin_ctrl = island_height_spin_ctrl;
-	version_choice = island_version_choice;
+	// Initialize shared control pointers for procedural generation
+	seed_text_ctrl = main_seed_text_ctrl;
+	width_spin_ctrl = main_width_spin_ctrl;
+	height_spin_ctrl = main_height_spin_ctrl;
+	version_choice = main_version_choice;
 	
-	// Initialize preset management
-	presets_file_path = g_gui.GetDataDirectory() + "generation_presets.xml";
-	LoadGenerationPresets();
+	// Set current generator type to procedural
+	current_generator_type = GENERATOR_CUSTOM;
 }
 
 OTMapGenDialog::~OTMapGenDialog() {
@@ -1043,20 +374,8 @@ OTMapGenDialog::~OTMapGenDialog() {
 }
 
 void OTMapGenDialog::OnGenerate(wxCommandEvent& event) {
-	// Check which tab is currently active
-	int currentTab = notebook->GetSelection();
-	
-	bool success = false;
-	if (currentTab == 0 && current_generator_type == GENERATOR_ISLAND) {
-		// Island generator tab
-		success = GenerateIslandMap();
-	} else if (currentTab == 2 && current_generator_type == GENERATOR_DUNGEON) {
-		// Dungeon generator tab
-		success = GenerateDungeonMap();
-	} else {
-		// Legacy generator or other tabs
-		success = GenerateMap();
-	}
+	// Generate procedural map
+	bool success = GenerateMap();
 	
 	if (success) {
 		EndModal(wxID_OK);
@@ -1120,158 +439,33 @@ void OTMapGenDialog::OnZoomOut(wxCommandEvent& event) {
 }
 
 void OTMapGenDialog::UpdatePreview() {
-	// Get the correct preview button based on current tab
-	wxButton* target_button = nullptr;
-	int currentTab = notebook->GetSelection();
-	if (currentTab == 0) {
-		target_button = island_preview_button;
-	} else if (currentTab == 2) {
-		target_button = dungeon_preview_button;
-	} else {
-		target_button = main_preview_button;
-	}
-	
-	if (target_button) {
-		target_button->SetLabel("Generating...");
-		target_button->Enable(false);
-	}
+	// Set the preview button state
+	main_preview_button->SetLabel("Generating...");
+	main_preview_button->Enable(false);
 	
 	try {
-		// Check which tab is currently active
-		int currentTab = notebook->GetSelection();
-		
-		if (currentTab == 0 && current_generator_type == GENERATOR_ISLAND) {
-			// Island generator preview
-			IslandConfig island_config = BuildIslandConfig();
-			
-			// Cache values for performance
-			int width = GetCurrentWidth();
-			int height = GetCurrentHeight();
-			std::string seed = GetCurrentSeed();
-			
-			// OPTIMIZATION: For large maps, generate a smaller preview for speed
-			int preview_width_gen = width;
-			int preview_height_gen = height;
-			bool use_fast_preview = false;
-			
-			// If map is larger than 1024x1024, generate a smaller preview
-			if (width > 1024 || height > 1024) {
-				use_fast_preview = true;
-				// Scale down to maximum 512x512 for preview while maintaining aspect ratio
-				double scale = std::min(512.0 / width, 512.0 / height);
-				preview_width_gen = (int)(width * scale);
-				preview_height_gen = (int)(height * scale);
-				
-				// Ensure minimum size
-				preview_width_gen = std::max(64, preview_width_gen);
-				preview_height_gen = std::max(64, preview_height_gen);
-				
-				// Update button to show it's a fast preview
-				if (target_button) {
-					target_button->SetLabel(wxString::Format("Generating fast preview (%dx%d)...", preview_width_gen, preview_height_gen));
-				}
-			}
-			
-			// Generate island preview using C++ implementation
-			OTMapGenerator generator;
-			auto islandLayer = generator.generateIslandLayer(island_config, preview_width_gen, preview_height_gen, seed);
-			
-			// Convert 2D island layer to the format expected by current_layers
-			current_layers.clear();
-			current_layers.resize(1); // Only floor 7 for islands
-			
-			// Flatten the 2D vector into 1D for current_layers format
-			current_layers[0].clear();
-			for (int y = 0; y < preview_height_gen; ++y) {
-				for (int x = 0; x < preview_width_gen; ++x) {
-					current_layers[0].push_back(islandLayer[y][x]);
-				}
-			}
-			
-			// Store the actual preview dimensions for UpdatePreviewFloor to use
-			preview_actual_width = preview_width_gen;
-			preview_actual_height = preview_height_gen;
-			preview_is_scaled = use_fast_preview;
-			
-		} else if (currentTab == 2 && current_generator_type == GENERATOR_DUNGEON) {
-			// Dungeon generator preview
-			DungeonConfig dungeon_config = BuildDungeonConfig();
-			
-			// Cache values for performance
-			int width = GetCurrentWidth();
-			int height = GetCurrentHeight();
-			std::string seed = GetCurrentSeed();
-			
-			// OPTIMIZATION: For large maps, generate a smaller preview for speed
-			int preview_width_gen = width;
-			int preview_height_gen = height;
-			bool use_fast_preview = false;
-			
-			// If map is larger than 512x512, generate a smaller preview
-			if (width > 512 || height > 512) {
-				use_fast_preview = true;
-				// Scale down to maximum 256x256 for dungeon preview (dungeons are more detailed)
-				double scale = std::min(256.0 / width, 256.0 / height);
-				preview_width_gen = (int)(width * scale);
-				preview_height_gen = (int)(height * scale);
-				
-				// Ensure minimum size
-				preview_width_gen = std::max(32, preview_width_gen);
-				preview_height_gen = std::max(32, preview_height_gen);
-				
-				// Update button to show it's a fast preview
-				if (target_button) {
-					target_button->SetLabel(wxString::Format("Generating fast preview (%dx%d)...", preview_width_gen, preview_height_gen));
-				}
-			}
-			
-			// Generate dungeon preview using C++ implementation
-			OTMapGenerator generator;
-			auto dungeonLayer = generator.generateDungeonLayer(dungeon_config, preview_width_gen, preview_height_gen, seed);
-			
-			// Convert 2D dungeon layer to the format expected by current_layers
-			current_layers.clear();
-			current_layers.resize(1); // Only floor 7 for dungeons
-			
-			// Flatten the 2D vector into 1D for current_layers format
-			current_layers[0].clear();
-			for (int y = 0; y < preview_height_gen; ++y) {
-				for (int x = 0; x < preview_width_gen; ++x) {
-					current_layers[0].push_back(dungeonLayer[y][x]);
-				}
-			}
-			
-			// Store the actual preview dimensions for UpdatePreviewFloor to use
-			preview_actual_width = preview_width_gen;
-			preview_actual_height = preview_height_gen;
-			preview_is_scaled = use_fast_preview;
-			
-		} else {
-			// Legacy generator preview
+		// Generate procedural preview
 		GenerationConfig config = BuildGenerationConfig();
+		
+		// OPTIMIZATION: For large maps, generate smaller preview
+		bool use_fast_preview = false;
+		if (config.width > 1024 || config.height > 1024) {
+			use_fast_preview = true;
+			double scale = std::min(512.0 / config.width, 512.0 / config.height);
+			config.width = std::max(64, (int)(config.width * scale));
+			config.height = std::max(64, (int)(config.height * scale));
 			
-			// OPTIMIZATION: For large maps, generate smaller preview
-			bool use_fast_preview = false;
-			if (config.width > 1024 || config.height > 1024) {
-				use_fast_preview = true;
-				double scale = std::min(512.0 / config.width, 512.0 / config.height);
-				config.width = std::max(64, (int)(config.width * scale));
-				config.height = std::max(64, (int)(config.height * scale));
-				
-				if (target_button) {
-					target_button->SetLabel(wxString::Format("Generating fast preview (%dx%d)...", config.width, config.height));
-				}
-			}
+			main_preview_button->SetLabel(wxString::Format("Generating fast preview (%dx%d)...", config.width, config.height));
+		}
 		
 		// Generate preview using C++ implementation
 		OTMapGenerator generator;
 		current_layers = generator.generateLayers(config);
-			
-			// Store the actual preview dimensions
-			preview_actual_width = config.width;
-			preview_actual_height = config.height;
-			preview_is_scaled = use_fast_preview;
-		}
+		
+		// Store the actual preview dimensions
+		preview_actual_width = config.width;
+		preview_actual_height = config.height;
+		preview_is_scaled = use_fast_preview;
 		
 		// Update the preview for the current floor
 		UpdatePreviewFloor();
@@ -1280,14 +474,13 @@ void OTMapGenDialog::UpdatePreview() {
 		wxMessageBox(wxString::Format("Failed to generate preview: %s", e.what()), "Preview Error", wxOK | wxICON_ERROR);
 	}
 	
-	if (target_button) {
-		if (preview_is_scaled) {
-			target_button->SetLabel("Generate Fast Preview");
-		} else {
-			target_button->SetLabel("Generate Preview");
-		}
-		target_button->Enable(true);
+	// Reset button state
+	if (preview_is_scaled) {
+		main_preview_button->SetLabel("Generate Fast Preview");
+	} else {
+		main_preview_button->SetLabel("Generate Preview");
 	}
+	main_preview_button->Enable(true);
 }
 
 void OTMapGenDialog::UpdatePreviewFloor() {
@@ -1295,16 +488,8 @@ void OTMapGenDialog::UpdatePreviewFloor() {
 		return; // No data to preview
 	}
 	
-	// Get the correct preview bitmap based on current tab
-	wxStaticBitmap* target_preview = nullptr;
-	int currentTab = notebook->GetSelection();
-	if (currentTab == 0) {
-		target_preview = island_preview_bitmap;  // Island tab
-	} else if (currentTab == 2) {
-		target_preview = dungeon_preview_bitmap;    // Dungeon tab
-	} else {
-		target_preview = main_preview_bitmap;    // Map Generation tab
-	}
+	// Use the main preview bitmap for procedural generation
+	wxStaticBitmap* target_preview = main_preview_bitmap;
 	
 	if (!target_preview) {
 		return; // No valid preview target
@@ -2413,47 +1598,19 @@ void OTMapGenDialog::OnItemIdTextChange(wxCommandEvent& event) {
 
 // Tab-specific value getters
 int OTMapGenDialog::GetCurrentWidth() {
-	int currentTab = notebook->GetSelection();
-	if (currentTab == 0) {
-		return island_width_spin_ctrl->GetValue();
-	} else if (currentTab == 2) { // Dungeon tab
-		return dungeon_width_spin_ctrl->GetValue();
-	} else {
-		return main_width_spin_ctrl->GetValue();
-	}
+	return main_width_spin_ctrl->GetValue();
 }
 
 int OTMapGenDialog::GetCurrentHeight() {
-	int currentTab = notebook->GetSelection();
-	if (currentTab == 0) {
-		return island_height_spin_ctrl->GetValue();
-	} else if (currentTab == 2) { // Dungeon tab
-		return dungeon_height_spin_ctrl->GetValue();
-	} else {
-		return main_height_spin_ctrl->GetValue();
-	}
+	return main_height_spin_ctrl->GetValue();
 }
 
 std::string OTMapGenDialog::GetCurrentSeed() {
-	int currentTab = notebook->GetSelection();
-	if (currentTab == 0) {
-		return island_seed_text_ctrl->GetValue().ToStdString();
-	} else if (currentTab == 2) { // Dungeon tab
-		return dungeon_seed_text_ctrl->GetValue().ToStdString();
-	} else {
-		return main_seed_text_ctrl->GetValue().ToStdString();
-	}
+	return main_seed_text_ctrl->GetValue().ToStdString();
 }
 
 std::string OTMapGenDialog::GetCurrentVersion() {
-	int currentTab = notebook->GetSelection();
-	if (currentTab == 0) {
-		return island_version_choice->GetStringSelection().ToStdString();
-	} else if (currentTab == 2) { // Dungeon tab
-		return dungeon_version_choice->GetStringSelection().ToStdString();
-	} else {
-		return main_version_choice->GetStringSelection().ToStdString();
-	}
+	return main_version_choice->GetStringSelection().ToStdString();
 }
 
 // Preset Management Functions
@@ -2938,109 +2095,4 @@ void OTMapGenDialog::OnDungeonRollDice(wxCommandEvent& event) {
 		dungeon_panel->Refresh();
 		dungeon_panel->Update();
 	}
-}
-
-bool OTMapGenDialog::GenerateDungeonMap() {
-	try {
-		// Get dungeon configuration
-		DungeonConfig config = BuildDungeonConfig();
-		int width = GetCurrentWidth();
-		int height = GetCurrentHeight();
-		std::string seed = GetCurrentSeed();
-		
-		wxProgressDialog progress("Generating Dungeon Map", "Please wait while the dungeon is being generated...", 100, this, wxPD_AUTO_HIDE | wxPD_APP_MODAL | wxPD_CAN_ABORT);
-		progress.Pulse();
-		
-		// Generate dungeon layer using C++ implementation
-		OTMapGenerator generator;
-		auto dungeonLayer = generator.generateDungeonLayer(config, width, height, seed);
-		
-		if (dungeonLayer.empty()) {
-			wxMessageBox("Failed to generate dungeon data.", "Generation Error", wxOK | wxICON_ERROR);
-			return false;
-		}
-		
-		// Create a temporary map to hold our generated content
-		Map tempMap;
-		tempMap.setWidth(width);
-		tempMap.setHeight(height);
-		tempMap.setName("Generated Dungeon");
-		tempMap.setMapDescription("Procedurally generated dungeon");
-		
-		// Place generated tiles into the temporary map (only floor 7 for dungeons)
-		progress.SetLabel("Placing dungeon tiles...");
-		progress.Pulse();
-		
-		for (int y = 0; y < height; ++y) {
-			for (int x = 0; x < width; ++x) {
-				uint16_t tileId = dungeonLayer[y][x];
-				if (tileId != 0) {
-					Position pos(x, y, 7); // Dungeons are always on floor 7
-					
-					// Create tile in temp map
-					TileLocation* location = tempMap.createTileL(pos);
-					Tile* tile = tempMap.allocator(location);
-					
-					// Create ground item
-					Item* groundItem = Item::Create(tileId);
-					if (groundItem) {
-						tile->ground = groundItem;
-						tempMap.setTile(pos, tile);
-					} else {
-						delete tile; // Clean up if item creation failed
-					}
-				}
-			}
-		}
-		
-		// Create temporary OTBM file
-		wxString tempDir = wxStandardPaths::Get().GetTempDir();
-		wxString tempFileName = wxString::Format("generated_dungeon_%ld.otbm", wxGetLocalTime());
-		wxString tempFilePath = tempDir + wxFileName::GetPathSeparator() + tempFileName;
-		
-		// Save the temporary map as OTBM
-		progress.SetLabel("Saving temporary map file...");
-		
-		bool saveSuccess = false;
-		try {
-			IOMapOTBM mapLoader(tempMap.getVersion());
-			saveSuccess = mapLoader.saveMap(tempMap, wxFileName(tempFilePath));
-		} catch (...) {
-			saveSuccess = false;
-		}
-		
-		if (!saveSuccess) {
-			wxMessageBox("Failed to save temporary map file.", "Save Error", wxOK | wxICON_ERROR);
-			return false;
-		}
-		
-		progress.SetLabel("Loading generated dungeon...");
-		progress.Pulse();
-		
-		// Load the temporary file into the editor
-		bool loadSuccess = false;
-		try {
-			loadSuccess = g_gui.LoadMap(wxFileName(tempFilePath));
-		} catch (...) {
-			loadSuccess = false;
-		}
-		
-		// Clean up the temporary file
-		if (wxFileExists(tempFilePath)) {
-			wxRemoveFile(tempFilePath);
-		}
-		
-		if (loadSuccess) {
-			wxMessageBox("Dungeon generated and loaded successfully!", "Success", wxOK | wxICON_INFORMATION);
-			return true;
-		} else {
-			wxMessageBox("Failed to load the generated dungeon.", "Load Error", wxOK | wxICON_ERROR);
-			return false;
-		}
-		
-	} catch (const std::exception& e) {
-		wxMessageBox(wxString::Format("Dungeon generation failed with error: %s", e.what()), "Generation Error", wxOK | wxICON_ERROR);
-	}
-	
-	return false;
 }

@@ -21,6 +21,8 @@
 #include "position.h"
 #include "replace_items_window.h"
 #include "island_generator_dialog.h"
+#include "procedural_generator_dialog.h"
+#include "dungeon_generator_dialog.h"
 #include "ground_validation_dialog.h"
 
 class MapCanvas;
@@ -84,6 +86,10 @@ public:
 	void CloseIslandGeneratorDialog();
 	void OnIslandGeneratorDialogClose(wxCloseEvent& event);
 
+	void ShowProceduralGeneratorDialog();
+	void CloseProceduralGeneratorDialog();
+	void OnProceduralGeneratorDialogClose(wxCloseEvent& event);
+
 	void ShowDungeonGeneratorDialog();
 	void CloseDungeonGeneratorDialog();
 	void OnDungeonGeneratorDialogClose(wxCloseEvent& event);
@@ -108,6 +114,8 @@ protected:
 private:
 	ReplaceItemsDialog* replaceItemsDialog;
 	IslandGeneratorDialog* islandGeneratorDialog;
+	ProceduralGeneratorDialog* proceduralGeneratorDialog;
+	DungeonGeneratorDialog* dungeonGeneratorDialog;
 	GroundValidationDialog* groundValidationDialog;
 	Position previous_position;
 
