@@ -27,9 +27,6 @@
 #include <algorithm>
 #include <functional>
 #include <iostream>
-#include <random>
-#include <queue>
-#include <map>
 
 // SimplexNoise implementation
 const double SimplexNoise::F2 = 0.5 * (sqrt(3.0) - 1.0);
@@ -224,7 +221,7 @@ bool OTMapGenerator::generateMap(BaseMap* map, const GenerationConfig& config) {
         for (int x = 0; x < config.width; ++x) {
             uint16_t tileId = terrainLayer[y][x];
             if (tileId != 0) {
-                tilesToGenerate.push_back(Position(x, y, config.base_floor));
+                tilesToGenerate.push_back(Position(x, y, config.water_level));
             }
         }
     }
@@ -283,8 +280,9 @@ bool OTMapGenerator::generateMap(BaseMap* map, const GenerationConfig& config) {
             for (int x = 0; x < config.width; ++x) {
                 uint16_t caveId = caveLayer[y][x];
                 if (caveId != 0) {
-                    // Place cave tiles below the surface using base_floor as reference
-                    for (int z = config.base_floor + 1; z <= config.base_floor + config.cave_depth && z <= 15; ++z) {
+                    // Place cave tiles below the surface (floors 8+)
+                    // Since map editor uses positive Z for underground, use water_level + offset
+                    for (int z = config.water_level + 1; z <= config.water_level + config.cave_depth && z <= 15; ++z) {
                         caveTilesToGenerate.push_back(Position(x, y, z));
                     }
                 }
@@ -548,8 +546,7 @@ double OTMapGenerator::getDistance(int x, int y, int centerX, int centerY, bool 
         double dy = y - centerY;
         return sqrt(dx * dx + dy * dy);
     } else {
-        // Manhattan distance
-        return abs(x - centerX) + abs(y - centerY);
+        return std::max(abs(x - centerX), abs(y - centerY));
     }
 }
 
@@ -644,10 +641,9 @@ std::vector<std::vector<uint16_t>> OTMapGenerator::generateLayers(const Generati
     auto heightMap = generateHeightMap(config);
     auto moistureMap = generateMoistureMap(config);
     
-    // Create layers for configurable number of floors instead of hardcoded 8
-    int floors = std::max(1, std::min(15, config.floors_to_generate)); // Clamp to valid range
-    std::vector<std::vector<std::vector<uint16_t>>> layers(floors);
-    for (int z = 0; z < floors; ++z) {
+    // Create 8 layers (floors) like the original OTMapGen
+    std::vector<std::vector<std::vector<uint16_t>>> layers(8);
+    for (int z = 0; z < 8; ++z) {
         layers[z] = std::vector<std::vector<uint16_t>>(config.height, std::vector<uint16_t>(config.width, 0));
     }
     
@@ -671,23 +667,27 @@ std::vector<std::vector<uint16_t>> OTMapGenerator::generateLayers(const Generati
     }
     
     // Add caves if enabled (now using configurable cave generation)
-    if (config.add_caves && floors > 1) {
+    if (config.add_caves) {
         auto caveLayer = generateCaveLayer(config);
         
-        // Place caves on underground floors with decreasing probability
-        // Skip surface floor (index 0 = Tibia floor 7), start from floor below surface
+        // Place caves on underground floors (below the main surface)
+        // In Tibia coordinates: floors 8+ are underground
+        // But since we only have 8 layers (0-7), we'll place caves on upper floors sparsely
         for (int y = 0; y < config.height; ++y) {
             for (int x = 0; x < config.width; ++x) {
                 uint16_t caveId = caveLayer[y][x];
                 if (caveId != 0) {
+                    // Place caves on layers 1-3 (floors 6-4) with decreasing probability
                     std::uniform_real_distribution<double> dist(0.0, 1.0);
                     
-                    // Place caves on available floors below surface
-                    for (int floor_idx = 1; floor_idx < floors && floor_idx <= 3; ++floor_idx) {
-                        double cave_probability = 0.8 * std::pow(0.6, floor_idx - 1); // Decreasing probability
-                        if (dist(rng) < cave_probability) {
-                            layers[floor_idx][y][x] = caveId;
-                        }
+                    if (dist(rng) < 0.8) { // 80% chance on floor 6
+                        layers[1][y][x] = caveId;
+                    }
+                    if (dist(rng) < 0.5) { // 50% chance on floor 5  
+                        layers[2][y][x] = caveId;
+                    }
+                    if (dist(rng) < 0.2) { // 20% chance on floor 4
+                        layers[3][y][x] = caveId;
                     }
                 }
             }
@@ -700,7 +700,7 @@ std::vector<std::vector<uint16_t>> OTMapGenerator::generateLayers(const Generati
     // layers[1] → Floor 6 (+1 above)
     // layers[7] → Floor 0 (+7 above)
     std::vector<std::vector<uint16_t>> result;
-    for (int z = 0; z < floors; ++z) {
+    for (int z = 0; z < 8; ++z) {
         std::vector<uint16_t> floorData;
         floorData.reserve(config.width * config.height);
         
@@ -718,14 +718,13 @@ std::vector<std::vector<uint16_t>> OTMapGenerator::generateLayers(const Generati
 void OTMapGenerator::fillColumn(std::vector<std::vector<std::vector<uint16_t>>>& layers, 
                                int x, int y, int elevation, uint16_t surfaceTileId, 
                                const GenerationConfig& config) {
-    // Always place the surface tile on the ground level (layers[0] → Base Floor)
+    // Always place the surface tile on the ground level (layers[0] → Floor 7)
     layers[0][y][x] = surfaceTileId;
     
     // For upper floors, we need different logic than just elevation
     // Upper floors should create proper mountain formations with grass/ground between rock layers
-    int available_floors = static_cast<int>(layers.size());
     
-    if (elevation > 4 && available_floors > 1) { // Start considering upper floors at medium elevation
+    if (elevation > 4) { // Start considering upper floors at medium elevation
         // Check if this is mountain terrain by item ID or brush name
         bool isMountainTerrain = false;
         for (const auto& layer : config.terrain_layers) {
@@ -748,15 +747,14 @@ void OTMapGenerator::fillColumn(std::vector<std::vector<std::vector<uint16_t>>>&
             double mountainChance = (elevation - 4) / 4.0; // 0-1 based on elevation above threshold
             mountainChance *= (upperNoise + 1.0) * 0.5; // Modulate with noise
             
-            // Generate content for available upper floors
-            int max_floors_to_use = std::min(available_floors - 1, 3); // Don't use more than 3 upper floors
-            
-            for (int floor_idx = 1; floor_idx <= max_floors_to_use; ++floor_idx) {
-                double floor_probability = mountainChance * std::pow(0.7, floor_idx - 1); // Decreasing probability
+            // Layer 1 (Floor 6): More frequent mountain/rock
+            if (dist(rng) < mountainChance * 0.7) {
+                layers[1][y][x] = surfaceTileId;
                 
-                if (dist(rng) < floor_probability) {
-                    if (verticalNoise > 0.2 - (floor_idx * 0.1)) {
-                        layers[floor_idx][y][x] = surfaceTileId; // Continue mountain
+                // Layer 2 (Floor 5): Sometimes grass/ground between rock layers
+                if (elevation > 6 && dist(rng) < 0.4) {
+                    if (verticalNoise > 0.2) {
+                        layers[2][y][x] = surfaceTileId; // Continue mountain
                     } else {
                         // Create ground/grass layer between rock formations
                         const TerrainLayer* grassLayer = nullptr;
@@ -767,8 +765,13 @@ void OTMapGenerator::fillColumn(std::vector<std::vector<std::vector<uint16_t>>>&
                             }
                         }
                         if (grassLayer) {
-                            layers[floor_idx][y][x] = grassLayer->item_id;
+                            layers[2][y][x] = grassLayer->item_id;
                         }
+                    }
+                    
+                    // Layer 3 (Floor 4): Final rock cap if very high elevation
+                    if (elevation > 7 && verticalNoise > 0.5 && dist(rng) < 0.3) {
+                        layers[3][y][x] = surfaceTileId;
                     }
                 }
             }
@@ -862,1066 +865,4 @@ namespace OTMapGenUtils {
         setGroundTile(tile, itemId);
         return true;
     }
-}
-
-// Island generation implementation
-bool OTMapGenerator::generateIslandMap(BaseMap* map, const IslandConfig& config, int width, int height, const std::string& seed) {
-    if (!map) {
-        return false;
-    }
-    
-    // Cast BaseMap to Map to access the editor's action system
-    Map* editorMap = static_cast<Map*>(map);
-    
-    // Initialize random seed
-    seedRandom(seed);
-    
-    // Generate island layer for floor 7 only
-    auto islandLayer = generateIslandLayer(config, width, height, seed);
-    
-    // Apply terrain to map on floor 7 only
-    std::vector<Position> tilesToGenerate;
-    
-    // Collect all positions that need tiles (floor 7 only)
-    for (int y = 0; y < height; ++y) {
-        for (int x = 0; x < width; ++x) {
-            uint16_t tileId = islandLayer[y][x];  // Now accessing 2D vector correctly
-            if (tileId != 0) {
-                tilesToGenerate.push_back(Position(x, y, config.target_floor));
-            }
-        }
-    }
-    
-    // Process tiles in batches to avoid memory issues
-    const int BATCH_SIZE = 1000;
-    
-    for (size_t start = 0; start < tilesToGenerate.size(); start += BATCH_SIZE) {
-        size_t end = std::min(start + BATCH_SIZE, tilesToGenerate.size());
-        
-        // Create a batch of tiles
-        for (size_t i = start; i < end; ++i) {
-            Position pos = tilesToGenerate[i];
-            uint16_t tileId = islandLayer[pos.y][pos.x];
-            
-            // Create tile location and allocate tile properly
-            TileLocation* location = editorMap->createTileL(pos);
-            Tile* existing_tile = location->get();
-            Tile* new_tile = nullptr;
-            
-            if (existing_tile) {
-                // Copy existing tile and modify it
-                new_tile = existing_tile->deepCopy(*editorMap);
-            } else {
-                // Create new tile
-                new_tile = editorMap->allocator(location);
-            }
-            
-            // Set the ground using proper API
-            if (new_tile) {
-                // Remove existing ground if any
-                if (new_tile->ground) {
-                    delete new_tile->ground;
-                    new_tile->ground = nullptr;
-                }
-                
-                // Create new ground item
-                Item* groundItem = Item::Create(tileId);
-                if (groundItem) {
-                    new_tile->ground = groundItem;
-                }
-                
-                // Set the tile back to the map
-                editorMap->setTile(pos, new_tile);
-            }
-        }
-    }
-    
-    return true;
-}
-
-std::vector<std::vector<uint16_t>> OTMapGenerator::generateIslandLayer(const IslandConfig& config, int width, int height, const std::string& seed) {
-    // Initialize random seed
-    seedRandom(seed);
-    
-    // Generate height map for island
-    auto heightMap = generateIslandHeightMap(config, width, height, seed);
-    
-    // Convert height map to tile IDs - return as 2D vector
-    std::vector<std::vector<uint16_t>> terrainLayer(height, std::vector<uint16_t>(width, 0));
-    
-    for (int y = 0; y < height; ++y) {
-        for (int x = 0; x < width; ++x) {
-            double height_value = heightMap[y][x];
-            
-            // Simple island logic: above threshold = ground, below = water
-            if (height_value > config.island_threshold) {
-                terrainLayer[y][x] = config.ground_id;  // Grass
-            } else {
-                terrainLayer[y][x] = config.water_id;   // Water
-            }
-        }
-    }
-    
-    // Apply post-processing cleanup to improve border generation
-    if (config.enable_cleanup) {
-        cleanupIslandTerrain(terrainLayer, config, width, height);
-    }
-    
-    return terrainLayer;
-}
-
-std::vector<std::vector<double>> OTMapGenerator::generateIslandHeightMap(const IslandConfig& config, int width, int height, const std::string& seed) {
-    std::vector<std::vector<double>> heightMap(height, std::vector<double>(width, 0.0));
-    
-    double centerX = width / 2.0;
-    double centerY = height / 2.0;
-    
-    for (int y = 0; y < height; ++y) {
-        for (int x = 0; x < width; ++x) {
-            // Generate multi-octave noise for island shape
-            double noiseValue = generateIslandNoise(x, y, config);
-            
-            // Calculate distance from center for island shape
-            double distance = getIslandDistance(x, y, (int)centerX, (int)centerY, config.island_size);
-            
-            // Apply island falloff
-            double falloff = applyIslandFalloff(distance, config.island_falloff);
-            
-            // Combine noise with island falloff
-            double height = noiseValue * falloff;
-            
-            // Apply water level adjustment
-            height = (height + config.water_level) / (1.0 + config.water_level);
-            
-            // Clamp to [0, 1]
-            height = std::max(0.0, std::min(1.0, height));
-            
-            heightMap[y][x] = height;
-        }
-    }
-    
-    return heightMap;
-}
-
-double OTMapGenerator::getIslandDistance(int x, int y, int centerX, int centerY, double island_size) {
-    double dx = (x - centerX) / static_cast<double>(centerX);
-    double dy = (y - centerY) / static_cast<double>(centerY);
-    double distance = sqrt(dx * dx + dy * dy) / island_size;
-    return distance;
-}
-
-double OTMapGenerator::applyIslandFalloff(double distance, double falloff) {
-    if (distance >= 1.0) {
-        return 0.0;
-    }
-    return pow(1.0 - distance, falloff);
-}
-
-double OTMapGenerator::generateIslandNoise(double x, double y, const IslandConfig& config) {
-    double value = 0.0;
-    double amplitude = 1.0;
-    double frequency = config.noise_scale;
-    double maxValue = 0.0;
-    
-    // Generate multiple octaves of noise
-    for (int i = 0; i < static_cast<int>(config.noise_octaves); ++i) {
-        value += noise_generator->noise(x * frequency, y * frequency) * amplitude;
-        maxValue += amplitude;
-        amplitude *= config.noise_persistence;
-        frequency *= config.noise_lacunarity;
-    }
-    
-    // Normalize to [-1, 1] then shift to [0, 1]
-    return (value / maxValue + 1.0) * 0.5;
-}
-
-void OTMapGenerator::cleanupIslandTerrain(std::vector<std::vector<uint16_t>>& terrainLayer, const IslandConfig& config, int width, int height) {
-    // Step 1: Remove isolated single pixels of land
-    removeIsolatedPixels(terrainLayer, width, height, config, config.ground_id);
-    
-    // Step 2: Remove small land patches below minimum size
-    removeSmallPatches(terrainLayer, width, height, config, config.ground_id, config.min_land_patch_size);
-    
-    // Step 3: Fill small water holes within land areas
-    fillSmallHoles(terrainLayer, width, height, config.water_id, config.ground_id, config.max_water_hole_size);
-    
-    // Step 4: Apply smoothing passes to reduce noise
-    for (int pass = 0; pass < config.smoothing_passes; ++pass) {
-        smoothTerrain(terrainLayer, width, height, config);
-    }
-    
-    // Step 5: Final cleanup - remove any remaining isolated pixels
-    removeIsolatedPixels(terrainLayer, width, height, config, config.ground_id);
-}
-
-void OTMapGenerator::removeIsolatedPixels(std::vector<std::vector<uint16_t>>& terrainLayer, int width, int height, const IslandConfig& config, uint16_t target_id) {
-    // Remove pixels that have no neighbors of the same type
-    std::vector<std::vector<uint16_t>> temp = terrainLayer;
-    
-    for (int y = 0; y < height; ++y) {
-        for (int x = 0; x < width; ++x) {
-            if (terrainLayer[y][x] == target_id) {
-                // Count neighbors of the same type
-                int neighbors = 0;
-                for (int dy = -1; dy <= 1; ++dy) {
-                    for (int dx = -1; dx <= 1; ++dx) {
-                        if (dx == 0 && dy == 0) continue; // Skip center
-                        int nx = x + dx;
-                        int ny = y + dy;
-                        if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
-                            if (terrainLayer[ny][nx] == target_id) {
-                                neighbors++;
-                            }
-                        }
-                    }
-                }
-                
-                // If completely isolated, convert to water
-                if (neighbors == 0) {
-                    temp[y][x] = target_id == config.ground_id ? config.water_id : config.ground_id;
-                }
-            }
-        }
-    }
-    
-    terrainLayer = temp;
-}
-
-void OTMapGenerator::removeSmallPatches(std::vector<std::vector<uint16_t>>& terrainLayer, int width, int height, const IslandConfig& config, uint16_t target_id, int min_size) {
-    std::vector<std::vector<bool>> visited(height, std::vector<bool>(width, false));
-    
-    for (int y = 0; y < height; ++y) {
-        for (int x = 0; x < width; ++x) {
-            if (!visited[y][x] && terrainLayer[y][x] == target_id) {
-                // Found an unvisited patch, measure its size
-                uint16_t temp_id = 9999; // Temporary ID for flood fill
-                int patch_size = floodFillCount(terrainLayer, x, y, width, height, target_id, temp_id);
-                
-                if (patch_size < min_size) {
-                    // Patch is too small, convert it to water
-                    for (int py = 0; py < height; ++py) {
-                        for (int px = 0; px < width; ++px) {
-                            if (terrainLayer[py][px] == temp_id) {
-                                terrainLayer[py][px] = target_id == config.ground_id ? config.water_id : config.ground_id;
-                                visited[py][px] = true;
-                            }
-                        }
-                    }
-                } else {
-                    // Patch is large enough, restore original ID
-                    for (int py = 0; py < height; ++py) {
-                        for (int px = 0; px < width; ++px) {
-                            if (terrainLayer[py][px] == temp_id) {
-                                terrainLayer[py][px] = target_id;
-                                visited[py][px] = true;
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-void OTMapGenerator::fillSmallHoles(std::vector<std::vector<uint16_t>>& terrainLayer, int width, int height, uint16_t target_id, uint16_t fill_id, int max_hole_size) {
-    std::vector<std::vector<bool>> visited(height, std::vector<bool>(width, false));
-    
-    for (int y = 0; y < height; ++y) {
-        for (int x = 0; x < width; ++x) {
-            if (!visited[y][x] && terrainLayer[y][x] == target_id) {
-                // Found an unvisited hole, measure its size
-                uint16_t temp_id = 9998; // Temporary ID for flood fill
-                int hole_size = floodFillCount(terrainLayer, x, y, width, height, target_id, temp_id);
-                
-                if (hole_size <= max_hole_size) {
-                    // Hole is small enough to fill
-                    for (int py = 0; py < height; ++py) {
-                        for (int px = 0; px < width; ++px) {
-                            if (terrainLayer[py][px] == temp_id) {
-                                terrainLayer[py][px] = fill_id;
-                                visited[py][px] = true;
-                            }
-                        }
-                    }
-                } else {
-                    // Hole is too large, restore original ID
-                    for (int py = 0; py < height; ++py) {
-                        for (int px = 0; px < width; ++px) {
-                            if (terrainLayer[py][px] == temp_id) {
-                                terrainLayer[py][px] = target_id;
-                                visited[py][px] = true;
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-void OTMapGenerator::smoothTerrain(std::vector<std::vector<uint16_t>>& terrainLayer, int width, int height, const IslandConfig& config) {
-    std::vector<std::vector<uint16_t>> temp = terrainLayer;
-    
-    for (int y = 1; y < height - 1; ++y) {
-        for (int x = 1; x < width - 1; ++x) {
-            // Count neighbors
-            int land_neighbors = 0;
-            int total_neighbors = 0;
-            
-            for (int dy = -1; dy <= 1; ++dy) {
-                for (int dx = -1; dx <= 1; ++dx) {
-                    int nx = x + dx;
-                    int ny = y + dy;
-                    if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
-                        total_neighbors++;
-                        if (terrainLayer[ny][nx] == config.ground_id) {
-                            land_neighbors++;
-                        }
-                    }
-                }
-            }
-            
-            // Apply smoothing rule: if majority of neighbors are land, make this land
-            // This helps create more coherent landmasses
-            if (land_neighbors > total_neighbors / 2) {
-                temp[y][x] = config.ground_id;
-            } else {
-                temp[y][x] = config.water_id;
-            }
-        }
-    }
-    
-    terrainLayer = temp;
-}
-
-int OTMapGenerator::floodFillCount(std::vector<std::vector<uint16_t>>& terrainLayer, int x, int y, int width, int height, uint16_t target_id, uint16_t replacement_id) {
-    if (x < 0 || x >= width || y < 0 || y >= height) return 0;
-    if (terrainLayer[y][x] != target_id) return 0;
-    
-    // Use iterative flood fill to avoid stack overflow
-    std::vector<std::pair<int, int>> stack;
-    stack.push_back({x, y});
-    int count = 0;
-    
-    while (!stack.empty()) {
-        auto [cx, cy] = stack.back();
-        stack.pop_back();
-        
-        if (cx < 0 || cx >= width || cy < 0 || cy >= height) continue;
-        if (terrainLayer[cy][cx] != target_id) continue;
-        
-        terrainLayer[cy][cx] = replacement_id;
-        count++;
-        
-        // Add neighbors to stack
-        stack.push_back({cx + 1, cy});
-        stack.push_back({cx - 1, cy});
-        stack.push_back({cx, cy + 1});
-        stack.push_back({cx, cy - 1});
-    }
-    
-    return count;
-}
-
-std::vector<std::vector<uint16_t>> OTMapGenerator::generateIslandLayerBatch(const IslandConfig& config, int width, int height, const std::string& seed, int offsetX, int offsetY, int totalWidth, int totalHeight) {
-	// Seed the random generator with the provided seed
-	seedRandom(seed);
-	
-	// Create result layer
-	std::vector<std::vector<uint16_t>> islandLayer(height, std::vector<uint16_t>(width, config.water_id));
-	
-	// Calculate center point for the entire island (not this batch)
-	int totalCenterX = totalWidth / 2;
-	int totalCenterY = totalHeight / 2;
-	
-	// Generate height map for this batch with global coordinates
-	for (int y = 0; y < height; ++y) {
-		for (int x = 0; x < width; ++x) {
-			// Calculate global coordinates for noise sampling
-			int globalX = offsetX + x;
-			int globalY = offsetY + y;
-			
-			// Generate noise using global coordinates for consistency
-			double noiseValue = generateIslandNoise(globalX, globalY, config);
-			
-			// Calculate distance from center using global coordinates
-			double distance = getIslandDistance(globalX, globalY, totalCenterX, totalCenterY, config.island_size);
-			
-			// Apply island shape using distance and noise
-			double falloffValue = applyIslandFalloff(distance, config.island_falloff);
-			double heightValue = (noiseValue * 0.5 + 0.5) * falloffValue + config.water_level - 0.5;
-			
-			// Determine tile type based on height
-			if (heightValue > config.island_threshold) {
-				islandLayer[y][x] = config.ground_id;
-			} else {
-				islandLayer[y][x] = config.water_id;
-			}
-		}
-	}
-	
-	// Apply cleanup if enabled (only on batch level for performance)
-	if (config.enable_cleanup) {
-		cleanupIslandTerrain(islandLayer, config, width, height);
-	}
-	
-	return islandLayer;
-}
-
-// Dungeon Generation Functions
-bool OTMapGenerator::generateDungeonMap(BaseMap* map, const DungeonConfig& config, int width, int height, const std::string& seed) {
-	if (!map) {
-		return false;
-	}
-	
-	// Generate dungeon layer
-	auto dungeonLayer = generateDungeonLayer(config, width, height, seed);
-	
-	if (dungeonLayer.empty()) {
-		return false;
-	}
-	
-	// Apply the dungeon layer to the map (floor 7 only)
-	for (int y = 0; y < height; ++y) {
-		for (int x = 0; x < width; ++x) {
-			uint16_t tileId = dungeonLayer[y][x];
-			if (tileId != 0) {
-				Position pos(x, y, 7); // Dungeons are always on floor 7
-				
-				// Get or create tile
-				Tile* tile = OTMapGenUtils::getOrCreateTile(map, x, y, 7);
-				if (tile) {
-					// Set ground tile
-					OTMapGenUtils::setGroundTile(tile, tileId);
-				}
-			}
-		}
-	}
-	
-	return true;
-}
-
-std::vector<std::vector<uint16_t>> OTMapGenerator::generateDungeonLayer(const DungeonConfig& config, int width, int height, const std::string& seed) {
-	// Seed the random generator
-	seedRandom(seed);
-	
-	// Initialize dungeon grid - start with all walls (fill_id)
-	std::vector<std::vector<uint16_t>> dungeonLayer(height, std::vector<uint16_t>(width, config.fill_id));
-	
-	// Create a working grid for algorithm (0 = wall, 1 = corridor/room)
-	std::vector<std::vector<int>> grid(height, std::vector<int>(width, 0));
-	
-	// Generate rooms first
-	std::vector<Room> rooms = generateRooms(config, width, height);
-	
-	// Place rooms in the grid
-	for (const auto& room : rooms) {
-		placeRoom(grid, room, config);
-	}
-	
-	// Generate intersection hubs if enabled
-	std::vector<Intersection> intersections;
-	if (config.add_triple_intersections || config.add_quad_intersections) {
-		intersections = generateIntersections(config, rooms, width, height);
-		
-		// Place intersections in the grid
-		for (const auto& intersection : intersections) {
-			placeIntersection(grid, intersection, config);
-		}
-		
-		// Connect rooms via intersections
-		connectRoomsViaIntersections(grid, rooms, intersections, config, width, height);
-	}
-	
-	// Generate traditional corridors to connect rooms (this will complement the intersections)
-	generateCorridors(grid, rooms, config, width, height);
-	
-	// Add dead ends if requested
-	if (config.add_dead_ends) {
-		addDeadEnds(grid, config, width, height);
-	}
-	
-	// Convert working grid to tile IDs
-	for (int y = 0; y < height; ++y) {
-		for (int x = 0; x < width; ++x) {
-			if (grid[y][x] == 1) {
-				// Corridor or room floor
-				dungeonLayer[y][x] = config.ground_id;
-			} else if (isWallPosition(grid, x, y, width, height)) {
-				// Wall position (adjacent to corridor/room)
-				dungeonLayer[y][x] = config.wall_id;
-			} else {
-				// Solid fill
-				dungeonLayer[y][x] = config.fill_id;
-			}
-		}
-	}
-	
-	return dungeonLayer;
-}
-
-std::vector<OTMapGenerator::Room> OTMapGenerator::generateRooms(const DungeonConfig& config, int width, int height) {
-	std::vector<Room> rooms;
-	
-	// Try to place rooms with random positions and sizes
-	for (int i = 0; i < config.room_count * 3; ++i) { // Try 3x more attempts than needed
-		if (rooms.size() >= static_cast<size_t>(config.room_count)) {
-			break;
-		}
-		
-		Room room;
-		
-		// Random size within bounds
-		std::uniform_int_distribution<> size_dist(config.room_min_size, config.room_max_size);
-		room.radius = size_dist(rng);
-		
-		// Random position with padding
-		int padding = room.radius + 2;
-		if (width <= 2 * padding || height <= 2 * padding) {
-			continue; // Map too small for this room
-		}
-		
-		std::uniform_int_distribution<> x_dist(padding, width - padding - 1);
-		std::uniform_int_distribution<> y_dist(padding, height - padding - 1);
-		room.centerX = x_dist(rng);
-		room.centerY = y_dist(rng);
-		room.isCircular = config.circular_rooms;
-		
-		// Check if room overlaps with existing rooms
-		bool overlaps = false;
-		for (const auto& existingRoom : rooms) {
-			int dx = room.centerX - existingRoom.centerX;
-			int dy = room.centerY - existingRoom.centerY;
-			double distance = std::sqrt(dx * dx + dy * dy);
-			double minDistance = room.radius + existingRoom.radius + 3; // 3 tile minimum gap
-			
-			if (distance < minDistance) {
-				overlaps = true;
-				break;
-			}
-		}
-		
-		if (!overlaps) {
-			rooms.push_back(room);
-		}
-	}
-	
-	return rooms;
-}
-
-void OTMapGenerator::placeRoom(std::vector<std::vector<int>>& grid, const Room& room, const DungeonConfig& config) {
-	int width = grid[0].size();
-	int height = grid.size();
-	
-	for (int y = 0; y < height; ++y) {
-		for (int x = 0; x < width; ++x) {
-			int dx = x - room.centerX;
-			int dy = y - room.centerY;
-			
-			bool inRoom = false;
-			if (room.isCircular) {
-				// Circular room
-				double distance = std::sqrt(dx * dx + dy * dy);
-				inRoom = distance <= room.radius;
-			} else {
-				// Rectangular room
-				inRoom = (std::abs(dx) <= room.radius && std::abs(dy) <= room.radius);
-			}
-			
-			if (inRoom) {
-				grid[y][x] = 1; // Mark as room floor
-			}
-		}
-	}
-}
-
-void OTMapGenerator::generateCorridors(std::vector<std::vector<int>>& grid, const std::vector<Room>& rooms, const DungeonConfig& config, int width, int height) {
-	if (rooms.size() < 2) {
-		return; // Need at least 2 rooms to connect
-	}
-	
-	// Connect each room to the next one (creating a minimum spanning tree)
-	for (size_t i = 0; i < rooms.size() - 1; ++i) {
-		const Room& roomA = rooms[i];
-		const Room& roomB = rooms[i + 1];
-		
-		// Use smart corridor creation to prevent massive tunnels
-		createSmartCorridor(grid, roomA.centerX, roomA.centerY, roomB.centerX, roomB.centerY, config, width, height);
-	}
-	
-	// Add some additional random connections for complexity
-	std::uniform_real_distribution<> complexity_dist(0.0, 1.0);
-	for (size_t i = 0; i < rooms.size(); ++i) {
-		for (size_t j = i + 2; j < rooms.size(); ++j) { // Skip adjacent rooms (already connected)
-			if (complexity_dist(rng) < config.complexity) {
-				const Room& roomA = rooms[i];
-				const Room& roomB = rooms[j];
-				createSmartCorridor(grid, roomA.centerX, roomA.centerY, roomB.centerX, roomB.centerY, config, width, height);
-			}
-		}
-	}
-}
-
-void OTMapGenerator::createSmartCorridor(std::vector<std::vector<int>>& grid, int x1, int y1, int x2, int y2, const DungeonConfig& config, int width, int height) {
-    // Calculate direct distance
-    int dx = abs(x2 - x1);
-    int dy = abs(y2 - y1);
-    int directDistance = dx + dy; // Manhattan distance
-    
-    // If distance is within limit and smart pathfinding is disabled, use simple corridor
-    if (directDistance <= config.max_corridor_length && !config.use_smart_pathfinding) {
-        createCorridor(grid, x1, y1, x2, y2, config, width, height);
-        return;
-    }
-    
-    // Use smart pathfinding for long distances or when enabled
-    if (config.use_smart_pathfinding) {
-        auto path = findShortestPath(grid, x1, y1, x2, y2, width, height, config.max_corridor_length);
-        if (!path.empty()) {
-            createCorridorSegments(grid, path, config, width, height);
-            return;
-        }
-    }
-    
-    // Fallback: break long corridors into segments with waypoints
-    if (directDistance > config.max_corridor_length) {
-        // Create intermediate waypoints
-        int segments = (directDistance / config.max_corridor_length) + 1;
-        segments = std::min(segments, config.corridor_segments);
-        
-        int prevX = x1, prevY = y1;
-        for (int i = 1; i < segments; ++i) {
-            // Calculate waypoint position
-            double factor = static_cast<double>(i) / segments;
-            int waypointX = x1 + static_cast<int>((x2 - x1) * factor);
-            int waypointY = y1 + static_cast<int>((y2 - y1) * factor);
-            
-            // Add some randomness to avoid straight lines
-            std::uniform_int_distribution<> offset_dist(-3, 3);
-            waypointX += offset_dist(rng);
-            waypointY += offset_dist(rng);
-            
-            // Clamp to valid bounds
-            waypointX = std::max(2, std::min(width - 3, waypointX));
-            waypointY = std::max(2, std::min(height - 3, waypointY));
-            
-            // Create corridor segment
-            createCorridor(grid, prevX, prevY, waypointX, waypointY, config, width, height);
-            prevX = waypointX;
-            prevY = waypointY;
-        }
-        
-        // Final segment to destination
-        createCorridor(grid, prevX, prevY, x2, y2, config, width, height);
-    } else {
-        // Direct corridor for reasonable distances
-        createCorridor(grid, x1, y1, x2, y2, config, width, height);
-    }
-}
-
-std::vector<std::pair<int, int>> OTMapGenerator::findShortestPath(const std::vector<std::vector<int>>& grid, int x1, int y1, int x2, int y2, int width, int height, int maxLength) {
-    // Simple A* pathfinding implementation
-    struct Node {
-        int x, y;
-        int gCost, hCost;
-        int fCost() const { return gCost + hCost; }
-        std::pair<int, int> parent;
-        
-        Node(int x, int y, int g, int h, std::pair<int, int> p) : x(x), y(y), gCost(g), hCost(h), parent(p) {}
-    };
-    
-    auto heuristic = [](int x1, int y1, int x2, int y2) {
-        return abs(x1 - x2) + abs(y1 - y2); // Manhattan distance
-    };
-    
-    std::vector<Node> openSet;
-    std::vector<std::vector<bool>> closedSet(height, std::vector<bool>(width, false));
-    std::map<std::pair<int, int>, int> gScore;
-    
-    openSet.emplace_back(x1, y1, 0, heuristic(x1, y1, x2, y2), std::make_pair(-1, -1));
-    gScore[{x1, y1}] = 0;
-    
-    const int dx[] = {-1, 1, 0, 0};
-    const int dy[] = {0, 0, -1, 1};
-    
-    while (!openSet.empty()) {
-        // Find node with lowest fCost
-        auto current = std::min_element(openSet.begin(), openSet.end(), 
-            [](const Node& a, const Node& b) { return a.fCost() < b.fCost(); });
-        
-        Node currentNode = *current;
-        openSet.erase(current);
-        
-        if (currentNode.x == x2 && currentNode.y == y2) {
-            // Reconstruct path
-            std::vector<std::pair<int, int>> path;
-            std::pair<int, int> pos = {currentNode.x, currentNode.y};
-            
-            while (pos.first != -1 && pos.second != -1) {
-                path.push_back(pos);
-                // Find parent node
-                bool found = false;
-                for (const auto& node : openSet) {
-                    if (node.x == pos.first && node.y == pos.second) {
-                        pos = node.parent;
-                        found = true;
-                        break;
-                    }
-                }
-                if (!found) break;
-            }
-            
-            std::reverse(path.begin(), path.end());
-            return path.size() <= static_cast<size_t>(maxLength) ? path : std::vector<std::pair<int, int>>();
-        }
-        
-        closedSet[currentNode.y][currentNode.x] = true;
-        
-        // Check neighbors
-        for (int i = 0; i < 4; ++i) {
-            int nx = currentNode.x + dx[i];
-            int ny = currentNode.y + dy[i];
-            
-            if (nx < 0 || nx >= width || ny < 0 || ny >= height || closedSet[ny][nx]) {
-                continue;
-            }
-            
-            int tentativeG = currentNode.gCost + 1;
-            
-            if (gScore.find({nx, ny}) == gScore.end() || tentativeG < gScore[{nx, ny}]) {
-                gScore[{nx, ny}] = tentativeG;
-                int h = heuristic(nx, ny, x2, y2);
-                openSet.emplace_back(nx, ny, tentativeG, h, std::make_pair(currentNode.x, currentNode.y));
-            }
-        }
-        
-        // Prevent infinite loops on very long paths
-        if (currentNode.gCost > maxLength * 2) {
-            break;
-        }
-    }
-    
-    return {}; // No path found within distance limit
-}
-
-void OTMapGenerator::createCorridorSegments(std::vector<std::vector<int>>& grid, const std::vector<std::pair<int, int>>& path, const DungeonConfig& config, int width, int height) {
-    // Create corridor along the path
-    for (size_t i = 0; i < path.size(); ++i) {
-        int x = path[i].first;
-        int y = path[i].second;
-        
-        // Create corridor with specified width
-        for (int w = 0; w < config.corridor_width; ++w) {
-            for (int h = 0; h < config.corridor_width; ++h) {
-                int px = x + w - config.corridor_width / 2;
-                int py = y + h - config.corridor_width / 2;
-                
-                if (px >= 0 && px < width && py >= 0 && py < height) {
-                    grid[py][px] = 1; // Mark as corridor
-                }
-            }
-        }
-    }
-}
-
-std::pair<int, int> OTMapGenerator::findNearestIntersection(const std::vector<Intersection>& intersections, int x, int y) {
-    if (intersections.empty()) {
-        return {-1, -1}; // No intersections available
-    }
-    
-    int nearestIdx = 0;
-    int minDistance = INT_MAX;
-    
-    for (size_t i = 0; i < intersections.size(); ++i) {
-        int dx = intersections[i].centerX - x;
-        int dy = intersections[i].centerY - y;
-        int distance = dx * dx + dy * dy; // Squared distance for comparison
-        
-        if (distance < minDistance) {
-            minDistance = distance;
-            nearestIdx = i;
-        }
-    }
-    
-    return {intersections[nearestIdx].centerX, intersections[nearestIdx].centerY};
-}
-
-void OTMapGenerator::createCorridor(std::vector<std::vector<int>>& grid, int x1, int y1, int x2, int y2, const DungeonConfig& config, int width, int height) {
-	int currentX = x1;
-	int currentY = y1;
-	
-	// Horizontal segment only - no vertical movement
-	while (currentX != x2) {
-		// Create corridor with specified width
-		for (int w = 0; w < config.corridor_width; ++w) {
-			for (int h = 0; h < config.corridor_width; ++h) {
-				int px = currentX + w - config.corridor_width / 2;
-				int py = currentY + h - config.corridor_width / 2;
-				
-				if (px >= 0 && px < width && py >= 0 && py < height) {
-					grid[py][px] = 1; // Mark as corridor
-				}
-			}
-		}
-		
-		currentX += (x2 > x1) ? 1 : -1;
-	}
-}
-
-void OTMapGenerator::addDeadEnds(std::vector<std::vector<int>>& grid, const DungeonConfig& config, int width, int height) {
-	// Add some random dead-end corridors for complexity
-	int deadEndCount = config.corridor_count / 3; // About 1/3 of corridor count
-	
-	for (int i = 0; i < deadEndCount; ++i) {
-		// Find a random corridor tile to start from
-		std::vector<std::pair<int, int>> corridorTiles;
-		for (int y = 1; y < height - 1; ++y) {
-			for (int x = 1; x < width - 1; ++x) {
-				if (grid[y][x] == 1) {
-					corridorTiles.push_back({x, y});
-				}
-			}
-		}
-		
-		if (corridorTiles.empty()) {
-			continue;
-		}
-		
-		// Pick random starting point
-		std::uniform_int_distribution<> tile_dist(0, corridorTiles.size() - 1);
-		auto [startX, startY] = corridorTiles[tile_dist(rng)];
-		
-		// Create dead end in random direction
-		std::uniform_int_distribution<> dir_dist(0, 3);
-		int direction = dir_dist(rng);
-		
-		int dx = 0, dy = 0;
-		switch (direction) {
-			case 0: dx = 1; break;  // Right
-			case 1: dx = -1; break; // Left
-			case 2: dy = 1; break;  // Down
-			case 3: dy = -1; break; // Up
-		}
-		
-		// Create dead end corridor
-		std::uniform_int_distribution<> length_dist(3, 8);
-		int length = length_dist(rng);
-		
-		int currentX = startX;
-		int currentY = startY;
-		
-		for (int step = 0; step < length; ++step) {
-			currentX += dx;
-			currentY += dy;
-			
-			if (currentX <= 0 || currentX >= width - 1 || currentY <= 0 || currentY >= height - 1) {
-				break; // Hit boundary
-			}
-			
-			if (grid[currentY][currentX] == 1) {
-				break; // Hit existing corridor
-			}
-			
-			grid[currentY][currentX] = 1; // Mark as corridor
-		}
-	}
-}
-
-bool OTMapGenerator::isWallPosition(const std::vector<std::vector<int>>& grid, int x, int y, int width, int height) {
-	// A position is a wall if it's not a corridor/room but is adjacent to one
-	if (grid[y][x] == 1) {
-		return false; // This is a corridor/room, not a wall
-	}
-	
-	// Check if adjacent to any corridor/room
-	for (int dy = -1; dy <= 1; ++dy) {
-		for (int dx = -1; dx <= 1; ++dx) {
-			if (dx == 0 && dy == 0) continue;
-			
-			int nx = x + dx;
-			int ny = y + dy;
-			
-			if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
-				if (grid[ny][nx] == 1) {
-					return true; // Adjacent to corridor/room
-				}
-			}
-		}
-	}
-	
-	return false; // Not adjacent to any corridor/room
-}
-
-std::vector<OTMapGenerator::Intersection> OTMapGenerator::generateIntersections(const DungeonConfig& config, const std::vector<Room>& rooms, int width, int height) {
-    std::vector<Intersection> intersections;
-    
-    if (!config.add_triple_intersections && !config.add_quad_intersections) {
-        return intersections; // No intersections requested
-    }
-    
-    std::uniform_real_distribution<double> prob_dist(0.0, 1.0);
-    std::uniform_int_distribution<int> x_dist(config.intersection_size + 2, width - config.intersection_size - 3);
-    std::uniform_int_distribution<int> y_dist(config.intersection_size + 2, height - config.intersection_size - 3);
-    std::uniform_int_distribution<int> connection_dist(3, 4);
-    
-    int attempts = 0;
-    const int max_attempts = config.intersection_count * 10; // Prevent infinite loops
-    
-    while (intersections.size() < static_cast<size_t>(config.intersection_count) && attempts < max_attempts) {
-        attempts++;
-        
-        // Only proceed if probability check passes
-        if (prob_dist(rng) > config.intersection_probability) {
-            continue;
-        }
-        
-        Intersection intersection;
-        intersection.centerX = x_dist(rng);
-        intersection.centerY = y_dist(rng);
-        intersection.size = config.intersection_size;
-        
-        // Determine number of connections based on config
-        if (config.add_triple_intersections && config.add_quad_intersections) {
-            intersection.connectionCount = connection_dist(rng);
-        } else if (config.add_quad_intersections) {
-            intersection.connectionCount = 4;
-        } else {
-            intersection.connectionCount = 3;
-        }
-        
-        // Check for minimum distance from rooms and other intersections
-        bool valid = true;
-        int min_distance = config.intersection_size + 5; // Minimum spacing
-        
-        // Check distance from rooms
-        for (const auto& room : rooms) {
-            int dx = intersection.centerX - room.centerX;
-            int dy = intersection.centerY - room.centerY;
-            double distance = sqrt(dx * dx + dy * dy);
-            if (distance < min_distance + room.radius) {
-                valid = false;
-                break;
-            }
-        }
-        
-        // Check distance from other intersections
-        if (valid) {
-            for (const auto& other : intersections) {
-                int dx = intersection.centerX - other.centerX;
-                int dy = intersection.centerY - other.centerY;
-                double distance = sqrt(dx * dx + dy * dy);
-                if (distance < min_distance * 2) {
-                    valid = false;
-                    break;
-                }
-            }
-        }
-        
-        if (valid) {
-            intersections.push_back(intersection);
-        }
-    }
-    
-    return intersections;
-}
-
-void OTMapGenerator::placeIntersection(std::vector<std::vector<int>>& grid, const Intersection& intersection, const DungeonConfig& config) {
-    // Create a small open area at the intersection center
-    int size = intersection.size;
-    
-    for (int dy = -size; dy <= size; ++dy) {
-        for (int dx = -size; dx <= size; ++dx) {
-            int x = intersection.centerX + dx;
-            int y = intersection.centerY + dy;
-            
-            if (x >= 0 && x < static_cast<int>(grid[0].size()) && 
-                y >= 0 && y < static_cast<int>(grid.size())) {
-                
-                // Create circular intersection area
-                if (dx * dx + dy * dy <= size * size) {
-                    grid[y][x] = 1; // Mark as corridor/open space
-                }
-            }
-        }
-    }
-}
-
-void OTMapGenerator::connectRoomsViaIntersections(std::vector<std::vector<int>>& grid, const std::vector<Room>& rooms, const std::vector<Intersection>& intersections, const DungeonConfig& config, int width, int height) {
-    // First, connect some rooms to intersections
-    for (const auto& intersection : intersections) {
-        std::vector<size_t> nearbyRooms;
-        
-        // Find nearby rooms
-        for (size_t i = 0; i < rooms.size(); ++i) {
-            int dx = intersection.centerX - rooms[i].centerX;
-            int dy = intersection.centerY - rooms[i].centerY;
-            double distance = sqrt(dx * dx + dy * dy);
-            
-            if (distance < width * 0.4) { // Within reasonable connection distance
-                nearbyRooms.push_back(i);
-            }
-        }
-        
-        // Shuffle and connect up to connectionCount rooms
-        std::shuffle(nearbyRooms.begin(), nearbyRooms.end(), rng);
-        
-        int connectionsToMake = std::min(intersection.connectionCount, static_cast<int>(nearbyRooms.size()));
-        for (int i = 0; i < connectionsToMake; ++i) {
-            const Room& room = rooms[nearbyRooms[i]];
-            createSmartCorridor(grid, room.centerX, room.centerY, intersection.centerX, intersection.centerY, config, width, height);
-        }
-        
-        // If we still need more connections, try connecting to other intersections
-        if (connectionsToMake < intersection.connectionCount) {
-            for (const auto& otherIntersection : intersections) {
-                if (&otherIntersection == &intersection) continue;
-                
-                int dx = intersection.centerX - otherIntersection.centerX;
-                int dy = intersection.centerY - otherIntersection.centerY;
-                double distance = sqrt(dx * dx + dy * dy);
-                
-                if (distance < width * 0.6 && connectionsToMake < intersection.connectionCount) {
-                    createSmartCorridor(grid, intersection.centerX, intersection.centerY, 
-                                     otherIntersection.centerX, otherIntersection.centerY, config, width, height);
-                    connectionsToMake++;
-                }
-            }
-        }
-    }
-}
-
-bool OTMapGenerator::findIntersectionPath(const std::vector<std::vector<int>>& grid, int x1, int y1, int x2, int y2, int width, int height) {
-    // Simple pathfinding to check if two points can be connected
-    // This is a basic implementation - could be enhanced with A* if needed
-    
-    std::vector<std::vector<bool>> visited(height, std::vector<bool>(width, false));
-    std::queue<std::pair<int, int>> queue;
-    
-    queue.push({x1, y1});
-    visited[y1][x1] = true;
-    
-    const int dx[] = {-1, 1, 0, 0};
-    const int dy[] = {0, 0, -1, 1};
-    
-    while (!queue.empty()) {
-        auto [x, y] = queue.front();
-        queue.pop();
-        
-        if (x == x2 && y == y2) {
-            return true; // Path found
-        }
-        
-        for (int i = 0; i < 4; ++i) {
-            int nx = x + dx[i];
-            int ny = y + dy[i];
-            
-            if (nx >= 0 && nx < width && ny >= 0 && ny < height && 
-                !visited[ny][nx] && grid[ny][nx] == 1) {
-                visited[ny][nx] = true;
-                queue.push({nx, ny});
-            }
-        }
-    }
-    
-    return false; // No path found
-}
+} 

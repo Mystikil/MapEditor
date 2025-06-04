@@ -78,8 +78,8 @@ Editor::Editor(CopyBuffer& copybuffer) :
 	version.client = g_gui.GetCurrentVersionID();
 	map.convert(version);
 
-	map.height = 35535;
-	map.width = 35535;
+	map.height = 2048;
+	map.width = 2048;
 
 	static int unnamed_counter = 0;
 

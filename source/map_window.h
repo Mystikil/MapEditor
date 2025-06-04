@@ -84,10 +84,6 @@ public:
 	void CloseIslandGeneratorDialog();
 	void OnIslandGeneratorDialogClose(wxCloseEvent& event);
 
-	void ShowDungeonGeneratorDialog();
-	void CloseDungeonGeneratorDialog();
-	void OnDungeonGeneratorDialogClose(wxCloseEvent& event);
-
 	void ShowGroundValidationDialog();
 	void CloseGroundValidationDialog();
 	void OnGroundValidationDialogClose(wxCloseEvent& event);

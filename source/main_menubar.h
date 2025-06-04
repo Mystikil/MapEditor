@@ -30,8 +30,6 @@ namespace MenuBar {
 		SAVE_AS,
 		GENERATE_MAP,
 		GENERATE_PROCEDURAL_MAP,
-		GENERATE_ISLAND_MAP,
-		GENERATE_DUNGEON_MAP,
 		CLOSE,
 		IMPORT_MAP,
 		IMPORT_MONSTERS,
@@ -214,8 +212,6 @@ public:
 	void OnOpen(wxCommandEvent& event);
 	void OnGenerateMap(wxCommandEvent& event);
 	void OnGenerateProceduralMap(wxCommandEvent& event);
-	void OnGenerateIslandMap(wxCommandEvent& event);
-	void OnGenerateDungeonMap(wxCommandEvent& event);
 	void OnOpenRecent(wxCommandEvent& event);
 	void OnSave(wxCommandEvent& event);
 	void OnSaveAs(wxCommandEvent& event);
@@ -327,6 +323,7 @@ public:
 
 	// Add to class MainMenuBar private section:
 	void OnRefreshItems(wxCommandEvent& event);
+	void OnGenerateIsland(wxCommandEvent& event);
 	void OnCreateBorder(wxCommandEvent& event);
 	void OnMapSummarize(wxCommandEvent& event);
 
