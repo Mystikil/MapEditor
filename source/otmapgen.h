@@ -140,6 +140,8 @@ struct TerrainLayer {
     bool use_borders = true;      // Whether to apply borders from brush
     bool enabled = true;          // Whether this layer is active
     int z_order = 1000;          // Rendering order (higher = on top)
+    int min_floor = 7;  // Minimum floor where this layer can appear (7 = ground level)
+    int max_floor = 7;  // Maximum floor where this layer can appear
 };
 
 struct GenerationConfig {
@@ -316,6 +318,8 @@ public:
     void fillColumn(std::vector<std::vector<std::vector<uint16_t>>>& layers, 
                    int x, int y, int elevation, uint16_t surfaceTileId, 
                    const GenerationConfig& config);
+	void generateCaves(std::vector<std::vector<std::vector<uint16_t>>>& layers, const GenerationConfig& config);
+
     uint16_t getTerrainTileId(double height, double moisture, const GenerationConfig& config);
     const TerrainLayer* selectTerrainLayer(double height, double moisture, const GenerationConfig& config);
     

@@ -33,10 +33,13 @@
 #include <numeric>
 #include <vector>  // if you're using std::vector
 #include <algorithm> // if using other STL algorithms
+#include <random>
 
 // SimplexNoise implementation
 const double SimplexNoise::F2 = 0.5 * (sqrt(3.0) - 1.0);
 const double SimplexNoise::G2 = (3.0 - sqrt(3.0)) / 6.0;
+
+
 
 const int SimplexNoise::SIMPLEX[64][4] = {
     {0,1,2,3},{0,1,3,2},{0,0,0,0},{0,2,3,1},{0,0,0,0},{0,0,0,0},{0,0,0,0},{1,2,3,0},
@@ -721,56 +724,223 @@ std::vector<std::vector<uint16_t>> OTMapGenerator::generateLayers(const Generati
 void OTMapGenerator::fillColumn(std::vector<std::vector<std::vector<uint16_t>>>& layers, 
                                int x, int y, int elevation, uint16_t surfaceTileId, 
                                const GenerationConfig& config) {
-    // Always place the surface tile on the ground level (layers[0] → Base Floor)
-    layers[0][y][x] = surfaceTileId;
+    int baseFloorIndex = 0;
+    layers[baseFloorIndex][y][x] = surfaceTileId;
     
-    // For upper floors, we need different logic than just elevation
-    // Upper floors should create proper mountain formations with grass/ground between rock layers
-    int available_floors = static_cast<int>(layers.size());
-    
-    if (elevation > 4 && available_floors > 1) { // Start considering upper floors at medium elevation
-        // Check if this is mountain terrain by item ID or brush name
-        bool isMountainTerrain = false;
-        for (const auto& layer : config.terrain_layers) {
-            if (layer.item_id == surfaceTileId && layer.enabled) {
-                isMountainTerrain = (layer.name == "Mountain" || layer.brush_name == "mountain" || 
-                                   layer.brush_name == "snow" || layer.brush_name.find("stone") != std::string::npos);
-                break;
-            }
-        }
+    if (elevation > 4) {
+        int available_floors = static_cast<int>(layers.size());
+        bool isMountainTerrain = (surfaceTileId == 919);
         
         if (isMountainTerrain) {
-            // Generate mountain formations with proper layering
-            std::uniform_real_distribution<double> dist(0.0, 1.0);
+            int max_mountain_floors = std::min(available_floors - 1, 3);
             
-            // Generate additional noise for upper floor variation
-            double upperNoise = noise_generator->noise(x * 0.05, y * 0.05);
-            double verticalNoise = noise_generator->noise(x * 0.02, y * 0.02);
+            // Calculate mountain shape
+            double mountainFactor = (elevation - 4) / 4.0;
+            mountainFactor = std::pow(mountainFactor, 1.5);
             
-            // Calculate probability based on elevation and noise
-            double mountainChance = (elevation - 4) / 4.0; // 0-1 based on elevation above threshold
-            mountainChance *= (upperNoise + 1.0) * 0.5; // Modulate with noise
+            // Track edge detection
+            std::vector<bool> isEdgeFloor(max_mountain_floors + 1, false);
             
-            // Generate content for available upper floors
-            int max_floors_to_use = std::min(available_floors - 1, 3); // Don't use more than 3 upper floors
-            
-            for (int floor_idx = 1; floor_idx <= max_floors_to_use; ++floor_idx) {
-                double floor_probability = mountainChance * std::pow(0.7, floor_idx - 1); // Decreasing probability
+            // Fill mountain floors from bottom up
+            for (int floor_idx = 1; floor_idx <= max_mountain_floors; ++floor_idx) {
+                double floorProbability = mountainFactor * (1.0 - (floor_idx - 1) * 0.25);
                 
-                if (dist(rng) < floor_probability) {
-                    if (verticalNoise > 0.2 - (floor_idx * 0.1)) {
-                        layers[floor_idx][y][x] = surfaceTileId; // Continue mountain
-                    } else {
-                        // Create ground/grass layer between rock formations
-                        const TerrainLayer* grassLayer = nullptr;
-                        for (const auto& layer : config.terrain_layers) {
-                            if ((layer.name == "Grass" || layer.brush_name == "grass") && layer.enabled) {
-                                grassLayer = &layer;
+                // Check support and neighbors
+                bool hasSupport = false;
+                int supportCount = 0;
+                std::vector<std::pair<int,int>> rockNeighbors;
+                
+                if (floor_idx > 1) {
+                    for (int dy = -1; dy <= 1; dy++) {
+                        for (int dx = -1; dx <= 1; dx++) {
+                            int checkY = y + dy;
+                            int checkX = x + dx;
+                            if (checkY >= 0 && checkY < config.height && 
+                                checkX >= 0 && checkX < config.width) {
+                                if (layers[floor_idx-1][checkY][checkX] == 919) {
+                                    supportCount++;
+                                    rockNeighbors.push_back({checkX, checkY});
+                                    if (dx == 0 && dy == 0) hasSupport = true;
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    hasSupport = true;
+                    supportCount = 9;
+                }
+                
+                // Determine if this should be an edge tile
+                bool isEdge = (supportCount < 7);
+                isEdgeFloor[floor_idx] = isEdge;
+                
+                std::uniform_real_distribution<double> dist(0.0, 1.0);
+                if (hasSupport && (floor_idx == 1 || dist(rng) < floorProbability)) {
+                    // For edges, create grass platforms
+                    if (isEdge) {
+                        // Calculate grass platform size (1-5 tiles)
+                        int platformSize = 1 + (int)(dist(rng) * 4);
+                        bool canPlaceGrass = true;
+                        
+                        // Check if we have enough rock support for grass
+                        for (const auto& neighbor : rockNeighbors) {
+                            int dx = neighbor.first - x;
+                            int dy = neighbor.second - y;
+                            if (abs(dx) + abs(dy) <= platformSize) {
+                                canPlaceGrass = true;
                                 break;
                             }
                         }
-                        if (grassLayer) {
-                            layers[floor_idx][y][x] = grassLayer->item_id;
+                        
+                        layers[floor_idx][y][x] = canPlaceGrass ? 4526 : 919;
+                    } else {
+                        layers[floor_idx][y][x] = 919;
+                    }
+                }
+            }
+        }
+    }
+}
+
+void OTMapGenerator::generateCaves(std::vector<std::vector<std::vector<uint16_t>>>& layers, const GenerationConfig& config) {
+    struct CaveNode {
+        int x, y, floor;
+        bool isRoom;
+        int width, height;
+        CaveNode* parent;
+        std::vector<CaveNode*> children;
+        
+        CaveNode(int _x, int _y, int _f, bool _isRoom = false) 
+            : x(_x), y(_y), floor(_f), isRoom(_isRoom), width(0), height(0), parent(nullptr) {}
+    };
+    
+    // Find valid cave entrance points
+    std::vector<CaveNode*> entrances;
+    for (int floor = 1; floor < static_cast<int>(layers.size()); floor++) {
+        for (int y = 2; y < config.height - 2; y++) {
+            for (int x = 2; x < config.width - 2; x++) {
+                if (layers[floor][y][x] == 919) {
+                    // Check for good entrance location (edge of mountain)
+                    int rockCount = 0;
+                    bool hasOpen = false;
+                    for (int dy = -1; dy <= 1; dy++) {
+                        for (int dx = -1; dx <= 1; dx++) {
+                            if (layers[floor][y+dy][x+dx] == 919) rockCount++;
+                            else hasOpen = true;
+                        }
+                    }
+                    
+                    std::uniform_real_distribution<double> dist(0.0, 1.0);
+                    if (rockCount >= 6 && hasOpen && dist(rng) < 0.15) {
+                        entrances.push_back(new CaveNode(x, y, floor));
+                    }
+                }
+            }
+        }
+    }
+    
+    // Generate cave system from each entrance
+    for (auto entrance : entrances) {
+        std::queue<CaveNode*> nodeQueue;
+        nodeQueue.push(entrance);
+        
+        while (!nodeQueue.empty()) {
+            CaveNode* current = nodeQueue.front();
+            nodeQueue.pop();
+            
+            std::uniform_real_distribution<double> dist(0.0, 1.0);
+            
+            // Decide if we should create a room here
+            if (dist(rng) < 0.3 && !current->isRoom) {
+                current->isRoom = true;
+                current->width = 3 + (int)(dist(rng) * 4);
+                current->height = 4 + (int)(dist(rng) * 4);
+                
+                // Create the room
+                for (int dy = -current->height/2; dy <= current->height/2; dy++) {
+                    for (int dx = -current->width/2; dx <= current->width/2; dx++) {
+                        int roomX = current->x + dx;
+                        int roomY = current->y + dy;
+                        
+                        if (roomX > 1 && roomX < config.width-2 && 
+                            roomY > 1 && roomY < config.height-2 && 
+                            layers[current->floor][roomY][roomX] == 919) {
+                            // Oval shape check
+                            double normalizedX = dx / (double)(current->width/2);
+                            double normalizedY = dy / (double)(current->height/2);
+                            if ((normalizedX*normalizedX + normalizedY*normalizedY) <= 1.2) {
+                                layers[current->floor][roomY][roomX] = 4405;
+                            }
+                        }
+                    }
+                }
+                
+                // Create 2-3 tunnel exits from room
+                int numExits = 2 + (dist(rng) < 0.5 ? 1 : 0);
+                for (int i = 0; i < numExits; i++) {
+                    // Pick exit direction
+                    double angle = dist(rng) * 2 * M_PI;
+                    int exitX = current->x + (int)(cos(angle) * current->width);
+                    int exitY = current->y + (int)(sin(angle) * current->height);
+                    int exitFloor = current->floor + (dist(rng) < 0.3 ? ((dist(rng) < 0.5) ? 1 : -1) : 0);
+                    
+                    if (exitFloor >= 1 && exitFloor < static_cast<int>(layers.size()) &&
+                        exitX > 1 && exitX < config.width-2 && 
+                        exitY > 1 && exitY < config.height-2) {
+                        auto newNode = new CaveNode(exitX, exitY, exitFloor);
+                        current->children.push_back(newNode);
+                        newNode->parent = current;
+                        nodeQueue.push(newNode);
+                    }
+                }
+            } else {
+                // Create tunnel
+                CaveNode* target = nullptr;
+                if (!current->children.empty()) {
+                    target = current->children[0];
+                } else if (current->parent) {
+                    target = current->parent;
+                }
+                
+                if (target) {
+                    // Generate tunnel path
+                    int x = current->x, y = current->y, floor = current->floor;
+                    while ((x != target->x || y != target->y || floor != target->floor) && 
+                           x > 1 && x < config.width-2 && y > 1 && y < config.height-2) {
+                        // Decide primary movement direction
+                        if (dist(rng) < 0.8) { // 80% chance for cardinal movement
+                            if (abs(target->x - x) > abs(target->y - y)) {
+                                x += (target->x > x) ? 1 : -1;
+                            } else {
+                                y += (target->y > y) ? 1 : -1;
+                            }
+                        } else { // 20% chance for diagonal or floor change
+                            if (floor != target->floor && dist(rng) < 0.5) {
+                                floor += (target->floor > floor) ? 1 : -1;
+                            } else {
+                                x += (dist(rng) < 0.5) ? 1 : -1;
+                                y += (dist(rng) < 0.5) ? 1 : -1;
+                            }
+                        }
+                        
+                        // Create tunnel tile if in rock
+                        if (layers[floor][y][x] == 919) {
+                            layers[floor][y][x] = 4405;
+                            
+                            // Sometimes widen the tunnel
+                            if (dist(rng) < 0.3) {
+                                for (int dy = -1; dy <= 1; dy++) {
+                                    for (int dx = -1; dx <= 1; dx++) {
+                                        if (dx == 0 && dy == 0) continue;
+                                        int nx = x + dx, ny = y + dy;
+                                        if (nx > 1 && nx < config.width-2 && 
+                                            ny > 1 && ny < config.height-2 && 
+                                            layers[floor][ny][nx] == 919) {
+                                            layers[floor][ny][nx] = 4405;
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -778,7 +948,10 @@ void OTMapGenerator::fillColumn(std::vector<std::vector<std::vector<uint16_t>>>&
         }
     }
     
-    // Note: Underground content (caves) is handled separately in generateLayers
+    // Cleanup
+    for (auto entrance : entrances) {
+        delete entrance;
+    }
 }
 
 // Utility functions
