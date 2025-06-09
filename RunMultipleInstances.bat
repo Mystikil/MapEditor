@@ -28,9 +28,5 @@ start "" "%RME_EXE%" -force-multi-instance
 echo Successfully launched a new instance of Remere's Map Editor.
 echo You can run this batch file again to launch more instances.
 echo.
-echo NOTE: When using Live Mapping between instances, each server instance
-echo will use a different port number. When connecting, use "localhost" 
-echo as the address and check the server console for the port number.
-echo.
 echo Press any key to exit...
 pause > nul 
