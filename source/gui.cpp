@@ -2577,42 +2577,60 @@ long GUI::PopupDialog(wxString title, wxString text, long style, wxString config
 }
 
 void GUI::ListDialog(wxWindow* parent, wxString title, const wxArrayString& param_items) {
-	if (param_items.empty()) {
-		return;
-	}
+    if (param_items.empty()) {
+        return;
+    }
 
-	wxArrayString list_items(param_items);
+    // Check if we should suppress map warnings
+    if ((title.CmpNoCase("Warnings") == 0 || title.CmpNoCase("Warning") == 0) &&
+        g_settings.getBoolean(Config::SUPPRESS_MAP_WARNINGS)) {
+        return;
+    }
 
-	// Create the window
-	wxDialog* dlg = newd wxDialog(parent, wxID_ANY, title, wxDefaultPosition, wxDefaultSize, wxRESIZE_BORDER | wxCAPTION | wxCLOSE_BOX);
+    wxArrayString list_items(param_items);
 
-	wxSizer* sizer = newd wxBoxSizer(wxVERTICAL);
-	wxListBox* item_list = newd wxListBox(dlg, wxID_ANY, wxDefaultPosition, wxDefaultSize, 0, nullptr, wxLB_SINGLE);
-	item_list->SetMinSize(wxSize(500, 300));
+    // Create the window
+    wxDialog* dlg = newd wxDialog(parent, wxID_ANY, title, wxDefaultPosition, wxDefaultSize, wxRESIZE_BORDER | wxCAPTION | wxCLOSE_BOX);
 
-	for (size_t i = 0; i != list_items.GetCount();) {
-		wxString str = list_items[i];
-		size_t pos = str.find("\n");
-		if (pos != wxString::npos) {
-			// Split string!
-			item_list->Append(str.substr(0, pos));
-			list_items[i] = str.substr(pos + 1);
-			continue;
-		}
-		item_list->Append(list_items[i]);
-		++i;
-	}
-	sizer->Add(item_list, 1, wxEXPAND);
+    wxSizer* sizer = newd wxBoxSizer(wxVERTICAL);
+    wxListBox* item_list = newd wxListBox(dlg, wxID_ANY, wxDefaultPosition, wxDefaultSize, 0, nullptr, wxLB_SINGLE);
+    item_list->SetMinSize(wxSize(500, 300));
 
-	wxSizer* stdsizer = newd wxBoxSizer(wxHORIZONTAL);
-	stdsizer->Add(newd wxButton(dlg, wxID_OK, "OK"), wxSizerFlags(1).Center());
-	sizer->Add(stdsizer, wxSizerFlags(0).Center());
+    for (size_t i = 0; i != list_items.GetCount();) {
+        wxString str = list_items[i];
+        size_t pos = str.find("\n");
+        if (pos != wxString::npos) {
+            // Split string!
+            item_list->Append(str.substr(0, pos));
+            list_items[i] = str.substr(pos + 1);
+            continue;
+        }
+        item_list->Append(list_items[i]);
+        ++i;
+    }
+    sizer->Add(item_list, 1, wxEXPAND);
 
-	dlg->SetSizerAndFit(sizer);
+    wxCheckBox* never_show_again = nullptr;
+    if (title.CmpNoCase("Warnings") == 0 || title.CmpNoCase("Warning") == 0) {
+        never_show_again = newd wxCheckBox(dlg, wxID_ANY, "Never show again");
+        sizer->Add(never_show_again, 0, wxALL, 8);
+    }
 
-	// Show the window
-	dlg->ShowModal();
-	delete dlg;
+    wxSizer* stdsizer = newd wxBoxSizer(wxHORIZONTAL);
+    stdsizer->Add(newd wxButton(dlg, wxID_OK, "OK"), wxSizerFlags(1).Center());
+    sizer->Add(stdsizer, wxSizerFlags(0).Center());
+
+    dlg->SetSizerAndFit(sizer);
+
+    // Show the window
+    dlg->ShowModal();
+
+    // Save the setting if checked
+    if (never_show_again && never_show_again->IsChecked()) {
+        g_settings.setInteger(Config::SUPPRESS_MAP_WARNINGS, 1);
+    }
+
+    delete dlg;
 }
 
 void GUI::ShowTextBox(wxWindow* parent, wxString title, wxString content) {

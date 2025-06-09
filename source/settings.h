@@ -230,6 +230,16 @@ namespace Config {
 		// Website link control setting
 		LAST_WEBSITES_OPEN_TIME,
 
+		TOOLTIP_IGNORE_IDS,         // string: e.g. "658-660,6891,136"
+		TOOLTIP_SHOW,               // bool: master switch
+		TOOLTIP_SHOW_HASSCRIPT,     // bool: show hasScript
+		TOOLTIP_SHOW_TEXT,          // bool: show text
+		TOOLTIP_SHOW_ITEMID,         // bool: show item ID in tooltips
+		TOOLTIP_SHOW_AID,             // bool: show action ID in tooltips
+		TOOLTIP_SHOW_UID,             // bool: show unique ID in tooltips
+		TOOLTIP_SHOW_DOORID,          // bool: show door ID in tooltips
+		TOOLTIP_SHOW_DESTINATION,     // bool: show teleport destination in tooltips
+
 		LAST,
 	};
 

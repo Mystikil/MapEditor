@@ -64,6 +64,7 @@ PreferencesWindow::PreferencesWindow(wxWindow* parent, bool clientVersionSelecte
 	book->AddPage(CreateClientPage(), "Client Version", clientVersionSelected);
 	book->AddPage(CreateLODPage(), "LOD");
 	book->AddPage(CreateAutomagicPage(), "Automagic");
+	book->AddPage(CreateTooltipInfoPage(), "Tooltip Info");
 
 	sizer->Add(book, 1, wxEXPAND | wxALL, 10);
 
@@ -120,6 +121,12 @@ wxNotebookPage* PreferencesWindow::CreateGeneralPage() {
 	show_map_warnings_chkbox->SetValue(!g_settings.getBoolean(Config::SUPPRESS_MAP_WARNINGS));
 	show_map_warnings_chkbox->SetToolTip("Show warnings dialog when loading maps (can be disabled with 'Don't show again' checkbox in the warnings dialog).");
 	sizer->Add(show_map_warnings_chkbox, 0, wxLEFT | wxTOP, 5);
+
+	// Add suppress map warnings checkbox (redundant, for explicit control)
+	suppress_map_warnings_chkbox = newd wxCheckBox(general_page, wxID_ANY, "Never show map loader warnings");
+	suppress_map_warnings_chkbox->SetValue(g_settings.getBoolean(Config::SUPPRESS_MAP_WARNINGS));
+	suppress_map_warnings_chkbox->SetToolTip("If checked, map loader warnings will never be shown, even if there are errors or warnings during map load.");
+	sizer->Add(suppress_map_warnings_chkbox, 0, wxLEFT | wxTOP, 5);
 
 	sizer->AddSpacer(10);
 
@@ -908,6 +915,68 @@ wxNotebookPage* PreferencesWindow::CreateAutomagicPage() {
 	return automagic_page;
 }
 
+wxNotebookPage* PreferencesWindow::CreateTooltipInfoPage() {
+	wxNotebookPage* tooltip_page = newd wxPanel(book, wxID_ANY);
+	wxSizer* sizer = newd wxBoxSizer(wxVERTICAL);
+
+	// Master enable checkbox
+	tooltip_enable_chkbox = newd wxCheckBox(tooltip_page, wxID_ANY, "Enable tooltips");
+	tooltip_enable_chkbox->SetValue(g_settings.getBoolean(Config::TOOLTIP_SHOW));
+	tooltip_enable_chkbox->SetToolTip("Enable or disable all tooltips in the map editor.");
+	sizer->Add(tooltip_enable_chkbox, 0, wxALL, 5);
+
+	// Show hasScript checkbox
+	tooltip_show_hasscript_chkbox = newd wxCheckBox(tooltip_page, wxID_ANY, "Show 'hasScript' in tooltips");
+	tooltip_show_hasscript_chkbox->SetValue(g_settings.getBoolean(Config::TOOLTIP_SHOW_HASSCRIPT));
+	tooltip_show_hasscript_chkbox->SetToolTip("Show the 'hasScript' property in tooltips (if present).");
+	sizer->Add(tooltip_show_hasscript_chkbox, 0, wxALL, 5);
+
+	// Show text checkbox
+	tooltip_show_text_chkbox = newd wxCheckBox(tooltip_page, wxID_ANY, "Show text in tooltips");
+	tooltip_show_text_chkbox->SetValue(g_settings.getBoolean(Config::TOOLTIP_SHOW_TEXT));
+	tooltip_show_text_chkbox->SetToolTip("Show item text in tooltips (if present).");
+	sizer->Add(tooltip_show_text_chkbox, 0, wxALL, 5);
+
+	// Show item ID checkbox
+	tooltip_show_itemid_chkbox = newd wxCheckBox(tooltip_page, wxID_ANY, "Show item ID in tooltips");
+	tooltip_show_itemid_chkbox->SetValue(g_settings.getBoolean(Config::TOOLTIP_SHOW_ITEMID));
+	tooltip_show_itemid_chkbox->SetToolTip("Show the item ID in tooltips (id: ####).");
+	sizer->Add(tooltip_show_itemid_chkbox, 0, wxALL, 5);
+
+	// Ignore IDs input
+	sizer->Add(newd wxStaticText(tooltip_page, wxID_ANY, "Ignore Item IDs/Ranges:"), 0, wxLEFT | wxTOP, 5);
+	tooltip_ignore_ids_textctrl = newd wxTextCtrl(tooltip_page, wxID_ANY, wxstr(g_settings.getString(Config::TOOLTIP_IGNORE_IDS)), wxDefaultPosition, wxSize(300, -1), 0);
+	tooltip_ignore_ids_textctrl->SetToolTip("Enter item IDs or ranges to ignore in tooltips, separated by commas. Example: 658-660,6891,136,3159,333-444");
+	sizer->Add(tooltip_ignore_ids_textctrl, 0, wxALL | wxEXPAND, 5);
+
+	// Show action ID checkbox
+	tooltip_show_aid_chkbox = newd wxCheckBox(tooltip_page, wxID_ANY, "Show action ID (aid) in tooltips");
+	tooltip_show_aid_chkbox->SetValue(g_settings.getBoolean(Config::TOOLTIP_SHOW_AID));
+	tooltip_show_aid_chkbox->SetToolTip("Show the action ID (aid: ####) in tooltips.");
+	sizer->Add(tooltip_show_aid_chkbox, 0, wxALL, 5);
+
+	// Show unique ID checkbox
+	tooltip_show_uid_chkbox = newd wxCheckBox(tooltip_page, wxID_ANY, "Show unique ID (uid) in tooltips");
+	tooltip_show_uid_chkbox->SetValue(g_settings.getBoolean(Config::TOOLTIP_SHOW_UID));
+	tooltip_show_uid_chkbox->SetToolTip("Show the unique ID (uid: ####) in tooltips.");
+	sizer->Add(tooltip_show_uid_chkbox, 0, wxALL, 5);
+
+	// Show door ID checkbox
+	tooltip_show_doorid_chkbox = newd wxCheckBox(tooltip_page, wxID_ANY, "Show door ID in tooltips");
+	tooltip_show_doorid_chkbox->SetValue(g_settings.getBoolean(Config::TOOLTIP_SHOW_DOORID));
+	tooltip_show_doorid_chkbox->SetToolTip("Show the door ID (door id: #) in tooltips.");
+	sizer->Add(tooltip_show_doorid_chkbox, 0, wxALL, 5);
+
+	// Show destination checkbox
+	tooltip_show_destination_chkbox = newd wxCheckBox(tooltip_page, wxID_ANY, "Show destination in tooltips");
+	tooltip_show_destination_chkbox->SetValue(g_settings.getBoolean(Config::TOOLTIP_SHOW_DESTINATION));
+	tooltip_show_destination_chkbox->SetToolTip("Show the teleport destination (destination: x, y, z) in tooltips.");
+	sizer->Add(tooltip_show_destination_chkbox, 0, wxALL, 5);
+
+	tooltip_page->SetSizerAndFit(sizer);
+	return tooltip_page;
+}
+
 // Event handlers!
 
 void PreferencesWindow::OnClickOK(wxCommandEvent& WXUNUSED(event)) {
@@ -1168,6 +1237,17 @@ void PreferencesWindow::Apply() {
 	g_settings.setInteger(Config::BORDERIZE_DRAG_THRESHOLD, borderize_drag_threshold_spin->GetValue());
 	g_settings.setInteger(Config::CUSTOM_BORDER_ENABLED, custom_border_checkbox->GetValue());
 	g_settings.setInteger(Config::CUSTOM_BORDER_ID, custom_border_id_spin->GetValue());
+
+	// Tooltip Info
+	g_settings.setInteger(Config::TOOLTIP_SHOW, tooltip_enable_chkbox->GetValue());
+	g_settings.setInteger(Config::TOOLTIP_SHOW_HASSCRIPT, tooltip_show_hasscript_chkbox->GetValue());
+	g_settings.setInteger(Config::TOOLTIP_SHOW_TEXT, tooltip_show_text_chkbox->GetValue());
+	g_settings.setInteger(Config::TOOLTIP_SHOW_ITEMID, tooltip_show_itemid_chkbox->GetValue());
+	g_settings.setString(Config::TOOLTIP_IGNORE_IDS, nstr(tooltip_ignore_ids_textctrl->GetValue()));
+	g_settings.setInteger(Config::TOOLTIP_SHOW_AID, tooltip_show_aid_chkbox->GetValue());
+	g_settings.setInteger(Config::TOOLTIP_SHOW_UID, tooltip_show_uid_chkbox->GetValue());
+	g_settings.setInteger(Config::TOOLTIP_SHOW_DOORID, tooltip_show_doorid_chkbox->GetValue());
+	g_settings.setInteger(Config::TOOLTIP_SHOW_DESTINATION, tooltip_show_destination_chkbox->GetValue());
 }
 
 void PreferencesWindow::UpdateDarkModeUI() {

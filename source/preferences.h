@@ -134,6 +134,8 @@ protected:
 	wxSlider* scroll_speed_slider;
 	wxSlider* zoom_speed_slider;
 
+
+
 	// Client info
 	wxChoice* default_version_choice;
 	std::vector<wxDirPickerCtrl*> version_dir_pickers;
@@ -151,6 +153,7 @@ protected:
 	wxNotebookPage* CreateClientPage();
 	wxNotebookPage* CreateLODPage();
 	wxNotebookPage* CreateAutomagicPage();
+	wxNotebookPage* CreateTooltipInfoPage();
 
 	// Helper method to update the UI state of dark mode controls
 	void UpdateDarkModeUI();
@@ -176,6 +179,20 @@ protected:
 	// Palette grid settings
 	wxSpinCtrl* chunk_size_spin;
 	wxSpinCtrl* visible_rows_margin_spin;
+
+	// Tooltip Info
+	wxTextCtrl* tooltip_ignore_ids_textctrl;
+	wxCheckBox* tooltip_enable_chkbox;
+	wxCheckBox* tooltip_show_hasscript_chkbox;
+	wxCheckBox* tooltip_show_text_chkbox;
+	wxCheckBox* tooltip_show_itemid_chkbox;
+	wxCheckBox* tooltip_show_aid_chkbox;
+	wxCheckBox* tooltip_show_uid_chkbox;
+	wxCheckBox* tooltip_show_doorid_chkbox;
+	wxCheckBox* tooltip_show_destination_chkbox;
+
+	// Map warning suppression
+	wxCheckBox* suppress_map_warnings_chkbox;
 
 	DECLARE_EVENT_TABLE()
 };

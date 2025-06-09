@@ -1236,7 +1236,29 @@ void BrushListBox::OnDrawItem(wxDC& dc, const wxRect& rect, size_t n) const {
 	} else {
 		dc.SetTextForeground(wxColor(0x00, 0x00, 0x00));
 	}
-	dc.DrawText(wxstr(tileset->brushlist[n]->getName()), rect.GetX() + 40, rect.GetY() + 6);
+
+	// Compose label: ItemID [ClientID] ItemName
+	wxString label;
+	Brush* brush = tileset->brushlist[n];
+	uint16_t itemId = 0;
+	uint16_t clientId = 0;
+	std::string itemName;
+	if (brush->isRaw()) {
+		RAWBrush* raw = static_cast<RAWBrush*>(brush);
+		itemId = raw->getItemID();
+		ItemType* it = raw->getItemType();
+		if (it) {
+			clientId = it->clientID;
+			itemName = it->name;
+		}
+	} else {
+		itemId = static_cast<uint16_t>(brush->getID());
+		const ItemType& it = g_items.getItemType(itemId);
+		clientId = it.clientID;
+		itemName = it.name;
+	}
+	label.Printf("%d [%d] %s", itemId, clientId, wxString(itemName));
+	dc.DrawText(label, rect.GetX() + 40, rect.GetY() + 6);
 }
 
 wxCoord BrushListBox::OnMeasureItem(size_t n) const {

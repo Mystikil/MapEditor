@@ -43,6 +43,7 @@
 #include "table_brush.h"
 #include "waypoint_brush.h"
 #include "light_drawer.h"
+#include "string_utils.h" // For parseIdRangesString, isIdInRanges
 
 using Color = std::tuple<int, int, int>;
 
@@ -1548,6 +1549,11 @@ void MapDrawer::DrawRawBrush(int screenx, int screeny, ItemType* itemType, uint8
 }
 
 void MapDrawer::WriteTooltip(Tile* tile, Item* item, std::ostringstream& stream, bool isHouseTile) {
+	// Tooltip master enable
+	if (!g_settings.getBoolean(Config::TOOLTIP_SHOW)) {
+		return;
+	}
+
 	if (item == nullptr || zoom > g_settings.getInteger(Config::TOOLTIP_MAX_ZOOM)) {
 		return;
 	}
@@ -1557,6 +1563,15 @@ void MapDrawer::WriteTooltip(Tile* tile, Item* item, std::ostringstream& stream,
 	const uint16_t id = item->getID();
 	if (id < 100) {
 		return;
+	}
+
+	// Tooltip ignore ID filtering
+	std::string ignore_ids_str = g_settings.getString(Config::TOOLTIP_IGNORE_IDS);
+	if (!ignore_ids_str.empty()) {
+		auto ignore_ranges = parseIdRangesString(ignore_ids_str);
+		if (isIdInRanges(id, ignore_ranges)) {
+			return;
+		}
 	}
 
 	const auto& zoneIds = tile->getZoneIds();
@@ -1587,7 +1602,25 @@ void MapDrawer::WriteTooltip(Tile* tile, Item* item, std::ostringstream& stream,
 		}
 	}
 	
-	if (unique == 0 && action == 0 && doorId == 0 && text.empty() && !tp && zoneIds.empty() && !hasScript) {
+	// Tooltip type filtering
+	bool show_hasScript = g_settings.getBoolean(Config::TOOLTIP_SHOW_HASSCRIPT);
+	bool show_text = g_settings.getBoolean(Config::TOOLTIP_SHOW_TEXT);
+
+	bool show_aid = g_settings.getBoolean(Config::TOOLTIP_SHOW_AID);
+	bool show_uid = g_settings.getBoolean(Config::TOOLTIP_SHOW_UID);
+	bool show_doorid = g_settings.getBoolean(Config::TOOLTIP_SHOW_DOORID);
+	bool show_destination = g_settings.getBoolean(Config::TOOLTIP_SHOW_DESTINATION);
+
+	// If the only info is hasScript and it's disabled, suppress tooltip
+	if (unique == 0 && action == 0 && doorId == 0 && text.empty() && !tp && zoneIds.empty() && hasScript && !show_hasScript) {
+		return;
+	}
+	// If the only info is text and it's disabled, suppress tooltip
+	if (unique == 0 && action == 0 && doorId == 0 && !text.empty() && !show_text && !tp && zoneIds.empty() && !hasScript) {
+		return;
+	}
+	// If the only info is text+hasScript and both are disabled, suppress tooltip
+	if (unique == 0 && action == 0 && doorId == 0 && !text.empty() && !show_text && !tp && zoneIds.empty() && hasScript && !show_hasScript) {
 		return;
 	}
 
@@ -1605,26 +1638,28 @@ void MapDrawer::WriteTooltip(Tile* tile, Item* item, std::ostringstream& stream,
 			}
 		}
 	} else {
-		stream << "id: " << id << "\n";
+		if (g_settings.getBoolean(Config::TOOLTIP_SHOW_ITEMID)) {
+			stream << "id: " << id << "\n";
+		}
 	}
 
-	if (action > 0) {
+	if (action > 0 && show_aid) {
 		stream << "aid: " << action << "\n";
 	}
-	if (unique > 0) {
+	if (unique > 0 && show_uid) {
 		stream << "uid: " << unique << "\n";
 	}
-	if (doorId > 0) {
+	if (doorId > 0 && show_doorid) {
 		stream << "door id: " << static_cast<int>(doorId) << "\n";
 	}
-	if (!text.empty()) {
+	if (!text.empty() && show_text) {
 		stream << "text: " << text << "\n";
 	}
-	if (tp) {
+	if (tp && show_destination) {
 		Position& dest = tp->getDestination();
 		stream << "destination: " << dest.x << ", " << dest.y << ", " << dest.z << "\n";
 	}
-	if (hasScript) {
+	if (hasScript && show_hasScript) {
 		stream << "hasScript: true\n";
 	}
 }
