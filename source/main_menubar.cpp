@@ -71,6 +71,7 @@
 #include "border_editor_window.h"
 #include "map_summary_window.h"
 #include "otmapgen_dialog.h"
+#include "notes_window.h"
 
 #include <wx/chartype.h>
 
@@ -185,6 +186,7 @@ MainMenuBar::MainMenuBar(MainFrame* frame) :
 	MAKE_ACTION(MAP_CLEAN_HOUSE_ITEMS, wxITEM_NORMAL, OnMapCleanHouseItems);
 	MAKE_ACTION(MAP_PROPERTIES, wxITEM_NORMAL, OnMapProperties);
 	MAKE_ACTION(MAP_STATISTICS, wxITEM_NORMAL, OnMapStatistics);
+	MAKE_ACTION(MAP_NOTES, wxITEM_NORMAL, OnMapNotes);
 
 	MAKE_ACTION(VIEW_TOOLBARS_BRUSHES, wxITEM_CHECK, OnToolbars);
 	MAKE_ACTION(VIEW_TOOLBARS_POSITION, wxITEM_CHECK, OnToolbars);
@@ -458,6 +460,7 @@ void MainMenuBar::Update() {
 	EnableItem(MAP_CLEANUP, is_local);
 	EnableItem(MAP_PROPERTIES, is_local);
 	EnableItem(MAP_STATISTICS, is_local);
+	EnableItem(MAP_NOTES, is_local);
 
 	EnableItem(NEW_VIEW, has_map);
 	EnableItem(NEW_DETACHED_VIEW, has_map);
@@ -3716,5 +3719,38 @@ void MainMenuBar::OnMapSummarize(wxCommandEvent& WXUNUSED(event)) {
 
 	// Show the map summary window
 	g_gui.ShowMapSummaryWindow();
+}
+
+void MainMenuBar::OnMapNotes(wxCommandEvent& WXUNUSED(event)) {
+    if (!g_gui.IsEditorOpen()) {
+        return;
+    }
+
+    Editor* editor = g_gui.GetCurrentEditor();
+    if (!editor) {
+        return;
+    }
+
+    // Check if the map has a filename (has been saved)
+    if (!editor->map.hasFile()) {
+        int ret = g_gui.PopupDialog("Map Notes", 
+            "You need to save your map before creating notes.\nDo you want to save now?", 
+            wxYES | wxNO);
+            
+        if (ret == wxID_YES) {
+            g_gui.SaveMap();
+            // Check again if save was successful
+            if (!editor->map.hasFile()) {
+                return;
+            }
+        } else {
+            return;
+        }
+    }
+
+    // Create and show the notes window
+    NotesWindow* notesWindow = new NotesWindow(frame, editor);
+    notesWindow->ShowModal();
+    notesWindow->Destroy();
 }
 

@@ -118,6 +118,7 @@
 		<separator/>
 		<item name="Cleanup..." action="MAP_CLEANUP" help="Removes all items that do not exist in the OTB file (red tiles the server can't load)."/>
 		<item name="Summarize" hotkey="Ctrl+Shift+S" action="MAP_SUMMARIZE" help="Show a summary of all items on the map with their counts."/>
+		
 		<item name="Properties..." hotkey="Ctrl+P" action="MAP_PROPERTIES" help="Show and change the map properties."/>
 		<item name="Statistics" hotkey="F8" action="MAP_STATISTICS" help="Show map statistics."/>
 	</menu>
@@ -260,6 +261,6 @@
 		<!-- clickable buttons that toggle some settings such as select right click RAw toggle button and toggle button to disable map display right click context menu then.-->
 			<item name="Generate Procedural Map..." action="GENERATE_PROCEDURAL_MAP" help="Generate a procedural map using OTMapGen"/>
 		<separator/>
-
+<item name="Notes..." hotkey="Ctrl+N" action="MAP_NOTES" help="Create or edit notes for this map."/>
 	</menu>
 </menubar>

@@ -180,9 +180,7 @@ namespace MenuBar {
 		MAP_VALIDATE_GROUND,
 		MAP_CREATE_BORDER,
 		MAP_SUMMARIZE,
-			
-
-
+		MAP_NOTES,
 	};
 }
 
@@ -287,6 +285,7 @@ public:
 	void OnMapStatistics(wxCommandEvent& event);
 	void OnMapRemoveDuplicates(wxCommandEvent& event);
 	void OnMapValidateGround(wxCommandEvent& event);
+	void OnMapNotes(wxCommandEvent& event);
 
 	// View Menu
 	void OnToolbars(wxCommandEvent& event);

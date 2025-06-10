@@ -229,6 +229,7 @@
     <ClCompile Include="..\..\source\hotkey_manager.cpp" />
     <ClCompile Include="..\..\source\light_drawer.cpp" />
     <ClCompile Include="..\..\source\map_summary_window.cpp" />
+    <ClCompile Include="..\..\source\notes_window.cpp" />
     <ClCompile Include="..\..\source\otmapgen.cpp" />
     <ClCompile Include="..\..\source\otmapgen_dialog.cpp" />
     <ClCompile Include="..\..\source\replace_items_window.cpp" />
@@ -254,6 +255,7 @@
     <ClInclude Include="..\..\source\live_action_packets.h" />
     <ClInclude Include="..\..\source\main_toolbar.h" />
     <ClInclude Include="..\..\source\map_summary_window.h" />
+    <ClInclude Include="..\..\source\notes_window.h" />
     <ClInclude Include="..\..\source\otmapgen.h" />
     <ClInclude Include="..\..\source\otmapgen_dialog.h" />
     <ClInclude Include="..\..\source\otml.h" />
