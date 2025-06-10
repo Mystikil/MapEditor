@@ -986,49 +986,44 @@ void MapDrawer::DrawBrush() {
 					glEnd();
 				}
 			} else if (g_gui.GetBrushShape() == BRUSHSHAPE_CIRCLE) {
-				// Calculate drawing offsets
-				int start_x, end_x;
-				int start_y, end_y;
-				int width = std::max(
-					std::abs(std::max(mouse_map_y, canvas->last_click_map_y) - std::min(mouse_map_y, canvas->last_click_map_y)),
-					std::abs(std::max(mouse_map_x, canvas->last_click_map_x) - std::min(mouse_map_x, canvas->last_click_map_x))
-				);
-
-				if (mouse_map_x < canvas->last_click_map_x) {
-					start_x = canvas->last_click_map_x - width;
-					end_x = canvas->last_click_map_x;
-				} else {
-					start_x = canvas->last_click_map_x;
-					end_x = canvas->last_click_map_x + width;
-				}
-
-				if (mouse_map_y < canvas->last_click_map_y) {
-					start_y = canvas->last_click_map_y - width;
-					end_y = canvas->last_click_map_y;
-				} else {
-					start_y = canvas->last_click_map_y;
-					end_y = canvas->last_click_map_y + width;
-				}
-
-				int center_x = start_x + (end_x - start_x) / 2;
-				int center_y = start_y + (end_y - start_y) / 2;
-				float radii = width / 2.0f + 0.005f;
+				// Calculate drawing dimensions
+				int width = std::abs(mouse_map_x - canvas->last_click_map_x) + 1;
+				int height = std::abs(mouse_map_y - canvas->last_click_map_y) + 1;
+				int radius = std::max(width, height) / 2;
+				
+				// Calculate center position
+				int center_x = canvas->last_click_map_x;
+				int center_y = canvas->last_click_map_y;
+				
+				// Calculate bounds with 1-tile margin
+				int start_x = center_x - radius - 1;
+				int end_x = center_x + radius + 1;
+				int start_y = center_y - radius - 1;
+				int end_y = center_y + radius + 1;
+				
+				// For even-sized brushes, adjust the center
+				double center_offset_x = (width % 2 == 0) ? 0.5 : 0.0;
+				double center_offset_y = (height % 2 == 0) ? 0.5 : 0.0;
 
 				RAWBrush* raw_brush = nullptr;
 				if (brush->isRaw()) {
 					raw_brush = brush->asRaw();
 				}
 
-				for (int y = start_y - 1; y <= end_y + 1; y++) {
+				for (int y = start_y; y <= end_y; y++) {
 					int cy = y * TileSize - view_scroll_y - getFloorAdjustment(floor);
-					float dy = center_y - y;
-					for (int x = start_x - 1; x <= end_x + 1; x++) {
+					for (int x = start_x; x <= end_x; x++) {
 						int cx = x * TileSize - view_scroll_x - getFloorAdjustment(floor);
 
-						float dx = center_x - x;
-						// printf("%f;%f\n", dx, dy);
-						float distance = sqrt(dx * dx + dy * dy);
-						if (distance < radii) {
+						// Calculate distance from center with offset for even-sized brushes
+						float dx = (center_x + center_offset_x) - x;
+						float dy = (center_y + center_offset_y) - y;
+						float normalized_x = dx / (width / 2.0);
+						float normalized_y = dy / (height / 2.0);
+						float distance = sqrt(normalized_x * normalized_x + normalized_y * normalized_y);
+						
+						// If the normalized distance is less than 1.0, the point is inside the ellipse
+						if (distance < 1.0 + 0.005) {
 							if (brush->isRaw()) {
 								DrawRawBrush(cx, cy, raw_brush->getItemType(), 160, 160, 160, 160);
 							} else {
@@ -1051,10 +1046,21 @@ void MapDrawer::DrawBrush() {
 		}
 	} else {
 		if (brush->isWall()) {
-			int start_map_x = mouse_map_x - g_gui.GetBrushSize();
-			int start_map_y = mouse_map_y - g_gui.GetBrushSize();
-			int end_map_x = mouse_map_x + g_gui.GetBrushSize() + 1;
-			int end_map_y = mouse_map_y + g_gui.GetBrushSize() + 1;
+			int brush_width = g_gui.GetBrushWidth();
+			int brush_height = g_gui.GetBrushHeight();
+			
+			// Calculate the start position (top-left corner of the brush)
+			int start_x = -brush_width / 2;
+			int start_y = -brush_height / 2;
+			
+			// For even width, we need to shift by 1 to avoid center bias
+			if (brush_width % 2 == 0) start_x += 1;
+			if (brush_height % 2 == 0) start_y += 1;
+			
+			int start_map_x = mouse_map_x + start_x;
+			int start_map_y = mouse_map_y + start_y;
+			int end_map_x = start_map_x + brush_width;
+			int end_map_y = start_map_y + brush_height;
 
 			int start_sx = start_map_x * TileSize - view_scroll_x - getFloorAdjustment(floor);
 			int start_sy = start_map_y * TileSize - view_scroll_y - getFloorAdjustment(floor);
@@ -1122,13 +1128,34 @@ void MapDrawer::DrawBrush() {
 				glEnable(GL_TEXTURE_2D);
 				raw_brush = brush->asRaw();
 			}
+			
+			// Use custom dimensions if available
+			int brush_width = g_gui.GetBrushWidth();
+			int brush_height = g_gui.GetBrushHeight();
+			
+			// For even-sized brushes, we need to adjust the offset
+			int width_offset = (brush_width % 2 == 0) ? 0 : 1;
+			int height_offset = (brush_height % 2 == 0) ? 0 : 1;
+			
+			// Calculate the start position (top-left corner of the brush)
+			int start_x = -brush_width / 2;
+			int start_y = -brush_height / 2;
+			
+			// For even width, we need to shift by 1 to avoid center bias
+			if (brush_width % 2 == 0) start_x += 1;
+			if (brush_height % 2 == 0) start_y += 1;
+			
+			// Calculate the end position (bottom-right corner of the brush)
+			int end_x = start_x + brush_width - 1;
+			int end_y = start_y + brush_height - 1;
 
-			for (int y = -g_gui.GetBrushSize() - 1; y <= g_gui.GetBrushSize() + 1; y++) {
+			// Draw with a 1-tile margin around the brush for the border/preview
+			for (int y = start_y - 1; y <= end_y + 1; y++) {
 				int cy = (mouse_map_y + y) * TileSize - view_scroll_y - getFloorAdjustment(floor);
-				for (int x = -g_gui.GetBrushSize() - 1; x <= g_gui.GetBrushSize() + 1; x++) {
+				for (int x = start_x - 1; x <= end_x + 1; x++) {
 					int cx = (mouse_map_x + x) * TileSize - view_scroll_x - getFloorAdjustment(floor);
 					if (g_gui.GetBrushShape() == BRUSHSHAPE_SQUARE) {
-						if (x >= -g_gui.GetBrushSize() && x <= g_gui.GetBrushSize() && y >= -g_gui.GetBrushSize() && y <= g_gui.GetBrushSize()) {
+						if (x >= start_x && x <= end_x && y >= start_y && y <= end_y) {
 							if (brush->isRaw()) {
 								DrawRawBrush(cx, cy, raw_brush->getItemType(), 160, 160, 160, 160);
 							} else {
@@ -1153,8 +1180,18 @@ void MapDrawer::DrawBrush() {
 							}
 						}
 					} else if (g_gui.GetBrushShape() == BRUSHSHAPE_CIRCLE) {
-						double distance = sqrt(double(x * x) + double(y * y));
-						if (distance < g_gui.GetBrushSize() + 0.005) {
+						// For elliptical brushes, calculate relative coordinates from center of ellipse
+						// For even dimensions, the center is between tiles
+						double center_x = (brush_width % 2 == 0) ? 0.5 : 0.0;
+						double center_y = (brush_height % 2 == 0) ? 0.5 : 0.0;
+						
+						// Calculate normalized distance from ellipse center
+						double rel_x = (x - center_x) / (brush_width / 2.0);
+						double rel_y = (y - center_y) / (brush_height / 2.0);
+						double distance = sqrt(rel_x * rel_x + rel_y * rel_y);
+						
+						// If the normalized distance is less than 1.0, the point is inside the ellipse
+						if (distance < 1.0 + 0.005) {
 							if (brush->isRaw()) {
 								DrawRawBrush(cx, cy, raw_brush->getItemType(), 160, 160, 160, 160);
 							} else {

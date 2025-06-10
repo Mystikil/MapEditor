@@ -501,6 +501,11 @@ protected:
 	bool use_custom_thickness;
 	float custom_thickness_mod;
 
+	// Custom brush dimensions
+	bool use_custom_brush_size;
+	int custom_brush_width;
+	int custom_brush_height;
+
 	//=========================================================================
 	// Progress bar tracking
 	//=========================================================================
@@ -545,6 +550,11 @@ public:
 	// Add after line 400 (public members section)
 	uint16_t GetCurrentActionID() const;
 	bool IsCurrentActionIDEnabled() const;
+
+	void SetCustomBrushSize(bool enable, int width = -1, int height = -1);
+	bool UseCustomBrushSize() const { return use_custom_brush_size; }
+	int GetBrushWidth() const { return use_custom_brush_size ? custom_brush_width : brush_size; }
+	int GetBrushHeight() const { return use_custom_brush_size ? custom_brush_height : brush_size; }
 };
 
 extern GUI g_gui;

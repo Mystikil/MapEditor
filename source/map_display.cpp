@@ -64,7 +64,7 @@
 
 BEGIN_EVENT_TABLE(MapCanvas, wxGLCanvas)
 EVT_KEY_DOWN(MapCanvas::OnKeyDown)
-EVT_KEY_DOWN(MapCanvas::OnKeyUp)
+EVT_KEY_UP(MapCanvas::OnKeyUp)
 
 // Mouse events
 EVT_MOTION(MapCanvas::OnMouseMove)
@@ -1875,6 +1875,61 @@ void MapCanvas::OnKeyDown(wxKeyEvent& event) {
 }
 
 void MapCanvas::OnKeyUp(wxKeyEvent& event) {
+	// ESC key - cancel custom brush size
+	if (event.GetKeyCode() == WXK_ESCAPE && g_gui.UseCustomBrushSize()) {
+		g_gui.SetCustomBrushSize(false);
+		g_gui.SetStatusText("Restored standard brush size");
+		Refresh();
+		return;
+	}
+	
+	// If Shift key is released while dragging with brush, set custom brush size
+	if (event.GetKeyCode() == WXK_SHIFT && dragging_draw && g_gui.GetCurrentBrush() && g_gui.GetCurrentBrush()->canDrag()) {
+		int current_map_x, current_map_y;
+		MouseToMap(&current_map_x, &current_map_y);
+		
+		// Calculate the width and height of the current drag area
+		if (g_gui.GetBrushShape() == BRUSHSHAPE_SQUARE) {
+			int width = std::abs(current_map_x - last_click_map_x) + 1;  // +1 to include the tile itself
+			int height = std::abs(current_map_y - last_click_map_y) + 1; // +1 to include the tile itself
+			
+			if (width > 0 && height > 0) {
+				// Enable custom brush dimensions with specific width and height
+				// No need to adjust for center pixel - accept any dimensions
+				g_gui.SetCustomBrushSize(true, width, height);
+				
+				// End drag drawing mode but keep drawing mode active
+				dragging_draw = false;
+				
+				// Update status bar
+				wxString ss;
+				ss << "Custom brush size set to " << width << "x" << height;
+				g_gui.SetStatusText(ss);
+			}
+		} else if (g_gui.GetBrushShape() == BRUSHSHAPE_CIRCLE) {
+			int diameter = 2 * std::max(
+				std::abs(current_map_y - last_click_map_y),
+				std::abs(current_map_x - last_click_map_x)
+			) + 1; // +1 for center tile
+			
+			int radius = diameter / 2;
+			
+			if (radius > 0) {
+				// For circles, width and height are the same (diameter)
+				g_gui.SetCustomBrushSize(true, radius, radius);
+				
+				// End drag drawing mode but keep drawing mode active
+				dragging_draw = false;
+				
+				// Update status bar
+				wxString ss;
+				ss << "Custom brush size set to " << radius << " (radius)";
+				g_gui.SetStatusText(ss);
+			}
+		}
+		Refresh();
+	}
+	
 	keyCode = WXK_NONE;
 }
 
@@ -2773,27 +2828,73 @@ void MapCanvas::getTilesToDraw(int mouse_map_x, int mouse_map_y, int floor, Posi
 		floodFill(&editor.map, position, BLOCK_SIZE / 2, BLOCK_SIZE / 2, oldBrush, tilestodraw);
 
 	} else {
-		for (int y = -g_gui.GetBrushSize() - 1; y <= g_gui.GetBrushSize() + 1; y++) {
-			for (int x = -g_gui.GetBrushSize() - 1; x <= g_gui.GetBrushSize() + 1; x++) {
+		// Use custom dimensions if available
+		int brush_width = g_gui.GetBrushWidth();
+		int brush_height = g_gui.GetBrushHeight();
+		
+		// For even-sized brushes, we need to adjust the offset
+		int width_offset = (brush_width % 2 == 0) ? 0 : 1;
+		int height_offset = (brush_height % 2 == 0) ? 0 : 1;
+		
+		// Calculate the start position (top-left corner of the brush)
+		int start_x = -brush_width / 2;
+		int start_y = -brush_height / 2;
+		
+		// For even width, we need to shift by 1 to avoid center bias
+		if (brush_width % 2 == 0) start_x += 1;
+		if (brush_height % 2 == 0) start_y += 1;
+		
+		// Calculate the end position (bottom-right corner of the brush)
+		int end_x = start_x + brush_width - 1;
+		int end_y = start_y + brush_height - 1;
+		
+		// Extend by 1 for border calculation
+		int border_start_x = start_x - 1;
+		int border_start_y = start_y - 1;
+		int border_end_x = end_x + 1;
+		int border_end_y = end_y + 1;
+			
+		// Draw with a 1-tile margin around the brush for the border/preview
+		for (int y = border_start_y; y <= border_end_y; y++) {
+			for (int x = border_start_x; x <= border_end_x; x++) {
 				if (g_gui.GetBrushShape() == BRUSHSHAPE_SQUARE) {
-					if (x >= -g_gui.GetBrushSize() && x <= g_gui.GetBrushSize() && y >= -g_gui.GetBrushSize() && y <= g_gui.GetBrushSize()) {
+					// For square brushes, all tiles within the rectangle are drawn
+					if (x >= start_x && x <= end_x && y >= start_y && y <= end_y) {
 						if (tilestodraw) {
 							tilestodraw->push_back(Position(mouse_map_x + x, mouse_map_y + y, floor));
 						}
 					}
-					if (std::abs(x) - g_gui.GetBrushSize() < 2 && std::abs(y) - g_gui.GetBrushSize() < 2) {
+					
+					// Border is 1 tile around the brush edges
+					bool is_border = 
+						(x >= border_start_x && x <= border_end_x && y >= border_start_y && y <= border_end_y) && // Within extended area
+						!(x > start_x && x < end_x && y > start_y && y < end_y); // But not fully inside
+						
+					if (is_border) {
 						if (tilestoborder) {
 							tilestoborder->push_back(Position(mouse_map_x + x, mouse_map_y + y, floor));
 						}
 					}
 				} else if (g_gui.GetBrushShape() == BRUSHSHAPE_CIRCLE) {
-					double distance = sqrt(double(x * x) + double(y * y));
-					if (distance < g_gui.GetBrushSize() + 0.005) {
+					// For elliptical brushes, calculate relative coordinates from center of ellipse
+					// For even dimensions, the center is between tiles
+					double center_x = (brush_width % 2 == 0) ? 0.5 : 0.0;
+					double center_y = (brush_height % 2 == 0) ? 0.5 : 0.0;
+					
+					// Calculate normalized distance from ellipse center
+					double rel_x = (x - center_x) / (brush_width / 2.0);
+					double rel_y = (y - center_y) / (brush_height / 2.0);
+					double distance = sqrt(rel_x * rel_x + rel_y * rel_y);
+					
+					// Add tiles inside the ellipse to draw
+					if (distance < 1.0 + 0.005) {
 						if (tilestodraw) {
 							tilestodraw->push_back(Position(mouse_map_x + x, mouse_map_y + y, floor));
 						}
 					}
-					if (std::abs(distance - g_gui.GetBrushSize()) < 1.5) {
+					
+					// Add border tiles - those that are near the ellipse edge
+					if (std::abs(distance - 1.0) < 0.3) {
 						if (tilestoborder) {
 							tilestoborder->push_back(Position(mouse_map_x + x, mouse_map_y + y, floor));
 						}

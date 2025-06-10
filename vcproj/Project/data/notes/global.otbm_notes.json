@@ -18,10 +18,5 @@
         "title" : "1",
         "content" : "chuj",
         "completed" : false
-    },
-    {
-        "title" : "",
-        "content" : "cwel",
-        "completed" : true
     }
 ]

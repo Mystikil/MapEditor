@@ -234,6 +234,9 @@ GUI::GUI() :
 	draw_locked_doors(false),
 	use_custom_thickness(false),
 	custom_thickness_mod(0.0),
+	use_custom_brush_size(false),
+	custom_brush_width(0),
+	custom_brush_height(0),
 	progressBar(nullptr),
 	progressFrom(0),
 	progressTo(0),
@@ -3083,5 +3086,39 @@ bool GUI::IsCurrentActionIDEnabled() const {
         return palette->IsActionIDEnabled();
     }
     return false;
+}
+
+void GUI::SetCustomBrushSize(bool enable, int width, int height) {
+	use_custom_brush_size = enable;
+	
+	if (width != -1) {
+		custom_brush_width = width;
+	}
+	
+	if (height != -1) {
+		custom_brush_height = height;
+	}
+	
+	// Make sure we have valid values
+	if (custom_brush_width <= 0) {
+		custom_brush_width = brush_size;
+	}
+	
+	if (custom_brush_height <= 0) {
+		custom_brush_height = brush_size;
+	}
+	
+	// Unselect all brush size buttons in the UI
+	if (enable) {
+		for (auto& palette : palettes) {
+			palette->OnUpdateBrushSize(brush_shape, -1);
+		}
+	} else {
+		for (auto& palette : palettes) {
+			palette->OnUpdateBrushSize(brush_shape, brush_size);
+		}
+	}
+	
+	RefreshView();
 }
 	
