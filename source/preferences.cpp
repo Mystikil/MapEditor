@@ -973,6 +973,18 @@ wxNotebookPage* PreferencesWindow::CreateTooltipInfoPage() {
 	tooltip_show_destination_chkbox->SetToolTip("Show the teleport destination (destination: x, y, z) in tooltips.");
 	sizer->Add(tooltip_show_destination_chkbox, 0, wxALL, 5);
 
+	// Show house ID checkbox
+	tooltip_show_houseid_chkbox = newd wxCheckBox(tooltip_page, wxID_ANY, "Show house ID in tooltips");
+	tooltip_show_houseid_chkbox->SetValue(g_settings.getBoolean(Config::TOOLTIP_SHOW_HOUSEID));
+	tooltip_show_houseid_chkbox->SetToolTip("Show the house ID on house tiles.");
+	sizer->Add(tooltip_show_houseid_chkbox, 0, wxALL, 5);
+	
+	// Custom house colors
+	house_custom_colors_chkbox = newd wxCheckBox(tooltip_page, wxID_ANY, "Use custom house colors");
+	house_custom_colors_chkbox->SetValue(g_settings.getBoolean(Config::HOUSE_CUSTOM_COLORS));
+	house_custom_colors_chkbox->SetToolTip("Color house tiles differently based on their house ID. Works with all items on house tiles.");
+	sizer->Add(house_custom_colors_chkbox, 0, wxALL, 5);
+
 	tooltip_page->SetSizerAndFit(sizer);
 	return tooltip_page;
 }
@@ -1248,6 +1260,8 @@ void PreferencesWindow::Apply() {
 	g_settings.setInteger(Config::TOOLTIP_SHOW_UID, tooltip_show_uid_chkbox->GetValue());
 	g_settings.setInteger(Config::TOOLTIP_SHOW_DOORID, tooltip_show_doorid_chkbox->GetValue());
 	g_settings.setInteger(Config::TOOLTIP_SHOW_DESTINATION, tooltip_show_destination_chkbox->GetValue());
+	g_settings.setInteger(Config::TOOLTIP_SHOW_HOUSEID, tooltip_show_houseid_chkbox->GetValue());
+	g_settings.setInteger(Config::HOUSE_CUSTOM_COLORS, house_custom_colors_chkbox->GetValue());
 }
 
 void PreferencesWindow::UpdateDarkModeUI() {

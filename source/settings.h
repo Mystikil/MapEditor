@@ -239,6 +239,8 @@ namespace Config {
 		TOOLTIP_SHOW_UID,             // bool: show unique ID in tooltips
 		TOOLTIP_SHOW_DOORID,          // bool: show door ID in tooltips
 		TOOLTIP_SHOW_DESTINATION,     // bool: show teleport destination in tooltips
+		TOOLTIP_SHOW_HOUSEID,         // bool: show house ID in tooltips
+		HOUSE_CUSTOM_COLORS,          // bool: use house ID colors to color house tiles
 
 		LAST,
 	};

@@ -2376,6 +2376,11 @@ bool GUI::SelectBrush(const Brush* whatbrush, PaletteType primary) {
 			return false;
 		}
 	}
+	
+	// Reset custom brush size when switching brushes
+	if (use_custom_brush_size) {
+		use_custom_brush_size = false;
+	}
 
 	if (!palettes.front()->OnSelectBrush(whatbrush, primary)) {
 		return false;

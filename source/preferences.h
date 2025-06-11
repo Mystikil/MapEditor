@@ -190,6 +190,8 @@ protected:
 	wxCheckBox* tooltip_show_uid_chkbox;
 	wxCheckBox* tooltip_show_doorid_chkbox;
 	wxCheckBox* tooltip_show_destination_chkbox;
+	wxCheckBox* tooltip_show_houseid_chkbox;
+	wxCheckBox* house_custom_colors_chkbox;
 
 	// Map warning suppression
 	wxCheckBox* suppress_map_warnings_chkbox;

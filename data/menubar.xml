@@ -164,6 +164,8 @@
 		<item name="Ghost loose items" hotkey="G" action="GHOST_ITEMS" help="Ghost items (except ground)."/>
 		<item name="Ghost higher floors" hotkey="Ctrl+L" action="GHOST_HIGHER_FLOORS" help="Ghost floors."/>
 		<item name="Show shade" hotkey="Q" action="SHOW_SHADE" help="Shade lower floors."/>
+		<separator/>
+		<item name="Use house colors" hotkey="" action="HOUSE_CUSTOM_COLORS" help="Color house tiles based on house ID. Colors all items on house tiles."/>
 	</menu>
 	<menu name="Show">
 		<item name="Show Animation" hotkey="L" action="SHOW_PREVIEW" help="Show item animations."/>

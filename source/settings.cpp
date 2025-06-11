@@ -415,6 +415,20 @@ void Settings::IO(IOMode mode) {
 	Int(GRID_CHUNK_SIZE, 3000);
 	Int(GRID_VISIBLE_ROWS_MARGIN, 30);
 
+	// Tooltip settings
+	section("ToolTip");
+	Int(TOOLTIP_SHOW, 0);
+	Int(TOOLTIP_SHOW_HASSCRIPT, 0);
+	Int(TOOLTIP_SHOW_TEXT, 0);
+	Int(TOOLTIP_SHOW_ITEMID, 0);
+	Int(TOOLTIP_SHOW_AID, 0);
+	Int(TOOLTIP_SHOW_UID, 0);
+	Int(TOOLTIP_SHOW_DOORID, 0);
+	Int(TOOLTIP_SHOW_DESTINATION, 0);
+	Int(TOOLTIP_SHOW_HOUSEID, 0);
+	Int(HOUSE_CUSTOM_COLORS, 1);
+	String(TOOLTIP_IGNORE_IDS, "");
+
 #undef section
 #undef Int
 #undef IntToSave

@@ -80,6 +80,29 @@ void GenerateColors() {
 	}
 }
 
+// Gets a distinctive color for a house based on its ID
+// Returns RGB values in the order: r, g, b
+void getHouseColor(uint32_t houseId, uint8_t& r, uint8_t& g, uint8_t& b) {
+	// Define a sequence of colors to cycle through
+	// Red, Orange, Yellow, Green, Blue, Indigo, Violet
+	static const std::vector<Color> houseColors = {
+		{255, 0, 0},    // Red
+		{255, 127, 0},  // Orange
+		{255, 255, 0},  // Yellow
+		{0, 255, 0},    // Green
+		{0, 0, 255},    // Blue
+		{75, 0, 130},   // Indigo
+		{148, 0, 211}   // Violet
+	};
+	
+	// Cycle through the colors based on house ID
+	const Color& color = houseColors[houseId % houseColors.size()];
+	
+	r = std::get<0>(color);
+	g = std::get<1>(color);
+	b = std::get<2>(color);
+}
+
 DrawingOptions::DrawingOptions() {
 	SetDefault();
 	GenerateColors();
@@ -1049,6 +1072,10 @@ void MapDrawer::DrawBrush() {
 			int brush_width = g_gui.GetBrushWidth();
 			int brush_height = g_gui.GetBrushHeight();
 			
+			// Make sure we have valid non-zero dimensions
+			if (brush_width <= 0) brush_width = 1;
+			if (brush_height <= 0) brush_height = 1;
+			
 			// Calculate the start position (top-left corner of the brush)
 			int start_x = -brush_width / 2;
 			int start_y = -brush_height / 2;
@@ -1132,6 +1159,10 @@ void MapDrawer::DrawBrush() {
 			// Use custom dimensions if available
 			int brush_width = g_gui.GetBrushWidth();
 			int brush_height = g_gui.GetBrushHeight();
+			
+			// Make sure we have valid non-zero dimensions
+			if (brush_width <= 0) brush_width = 1;
+			if (brush_height <= 0) brush_height = 1;
 			
 			// For even-sized brushes, we need to adjust the offset
 			int width_offset = (brush_width % 2 == 0) ? 0 : 1;
@@ -1647,6 +1678,7 @@ void MapDrawer::WriteTooltip(Tile* tile, Item* item, std::ostringstream& stream,
 	bool show_uid = g_settings.getBoolean(Config::TOOLTIP_SHOW_UID);
 	bool show_doorid = g_settings.getBoolean(Config::TOOLTIP_SHOW_DOORID);
 	bool show_destination = g_settings.getBoolean(Config::TOOLTIP_SHOW_DESTINATION);
+	bool show_houseid = g_settings.getBoolean(Config::TOOLTIP_SHOW_HOUSEID);
 
 	// If the only info is hasScript and it's disabled, suppress tooltip
 	if (unique == 0 && action == 0 && doorId == 0 && text.empty() && !tp && zoneIds.empty() && hasScript && !show_hasScript) {
@@ -1695,6 +1727,9 @@ void MapDrawer::WriteTooltip(Tile* tile, Item* item, std::ostringstream& stream,
 	if (tp && show_destination) {
 		Position& dest = tp->getDestination();
 		stream << "destination: " << dest.x << ", " << dest.y << ", " << dest.z << "\n";
+	}
+	if (isHouseTile && show_houseid) {
+		stream << "house id: " << tile->getHouseID() << "\n";
 	}
 	if (hasScript && show_hasScript) {
 		stream << "hasScript: true\n";
@@ -1802,8 +1837,21 @@ void MapDrawer::DrawTile(TileLocation* location) {
 			if ((int)tile->getHouseID() == current_house_id) {
 				r /= 2;
 			} else {
+				// Use the new house coloring system
+				if (g_settings.getBoolean(Config::HOUSE_CUSTOM_COLORS)) {
+					// Get a distinctive color based on house ID
+					uint8_t house_r, house_g, house_b;
+					getHouseColor(tile->getHouseID(), house_r, house_g, house_b);
+					
+					// Blend the house color with the background
+					r = (r + house_r) / 3;
+					g = (g + house_g) / 3;
+					b = (b + house_b) / 3;
+				} else {
+					// Use the old blue-ish coloring
 				r /= 2;
 				g /= 2;
+				}
 			}
 		} else if (showspecial && tile->isPZ()) {
 			r /= 2;
@@ -1866,6 +1914,13 @@ void MapDrawer::DrawTile(TileLocation* location) {
 	if (options.show_tooltips && map_z == floor && tile->ground) {
 		WriteTooltip(tile, tile->ground, tooltip, tile->isHouseTile());
 	}
+	// Also show house tooltip even if there's no ground
+	else if (options.show_tooltips && map_z == floor && tile->isHouseTile() && g_settings.getBoolean(Config::TOOLTIP_SHOW_HOUSEID)) {
+		if (tooltip.tellp() > 0) {
+			tooltip << "\n";
+		}
+		tooltip << "house id: " << tile->getHouseID() << "\n";
+	}
 	// end filters for ground tile
 
 	if (!only_colors) {
@@ -1893,8 +1948,21 @@ void MapDrawer::DrawTile(TileLocation* location) {
 						if ((int)tile->getHouseID() == current_house_id) {
 							r /= 2;
 						} else {
+							// Use the new house coloring system
+							if (g_settings.getBoolean(Config::HOUSE_CUSTOM_COLORS)) {
+								// Get a distinctive color based on house ID
+								uint8_t house_r, house_g, house_b;
+								getHouseColor(tile->getHouseID(), house_r, house_g, house_b);
+								
+								// Blend the house color with the background
+								r = (r + house_r) / 3;
+								g = (g + house_g) / 3;
+								b = (b + house_b) / 3;
+							} else {
+								// Use the old blue-ish coloring
 							r /= 2;
 							g /= 2;
+							}
 						}
 					}
 					BlitItem(draw_x, draw_y, tile, *it, false, r, g, b);

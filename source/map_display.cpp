@@ -2832,6 +2832,10 @@ void MapCanvas::getTilesToDraw(int mouse_map_x, int mouse_map_y, int floor, Posi
 		int brush_width = g_gui.GetBrushWidth();
 		int brush_height = g_gui.GetBrushHeight();
 		
+		// Make sure we have valid non-zero dimensions
+		if (brush_width <= 0) brush_width = 1;
+		if (brush_height <= 0) brush_height = 1;
+		
 		// For even-sized brushes, we need to adjust the offset
 		int width_offset = (brush_width % 2 == 0) ? 0 : 1;
 		int height_offset = (brush_height % 2 == 0) ? 0 : 1;
