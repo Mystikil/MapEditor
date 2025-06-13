@@ -2145,6 +2145,7 @@
 	</item>
 	<item id="2148" article="a" name="gold coin">
 		<attribute key="weight" value="10" />
+			<attribute key="worth" value="1" />
 	</item>
 	<item id="2149" article="a" name="small emerald">
 		<attribute key="weight" value="10" />
@@ -2159,6 +2160,7 @@
 	</item>
 	<item id="2152" article="a" name="platinum coin">
 		<attribute key="weight" value="10" />
+			<attribute key="worth" value="100" />
 	</item>
 	<item id="2153" article="a" name="violet gem">
 		<attribute key="weight" value="30" />
@@ -2183,6 +2185,7 @@
 	</item>
 	<item id="2160" article="a" name="crystal coin">
 		<attribute key="weight" value="10" />
+			<attribute key="worth" value="10000" />
 	</item>
 	<item id="2161" article="a" name="strange talisman">
 		<attribute key="weight" value="290" />
@@ -2240,6 +2243,7 @@
 		<attribute key="transformEquipTo" value="2204" />
 		<attribute key="stopduration" value="1" />
 		<attribute key="showduration" value="1" />
+		
 	</item>
 	<item id="2168" article="a" name="life ring">
 		<attribute key="weight" value="80" />
@@ -2304,6 +2308,10 @@
 	<item id="2179" article="a" name="gold ring">
 		<attribute key="weight" value="100" />
 		<attribute key="slotType" value="ring" />
+		<attribute key="extraElementDamageEnergy" value="10" />
+		<attribute key="extraElementDamageIce" value="5" />
+		<attribute key="charges" value="200" />
+		<attribute key="showcharges" value="1" />
 	</item>
 	<item id="2180" name="the orb of nature" />
 	<item id="2181" article="a" name="terra rod">
@@ -3050,7 +3058,7 @@
 		<attribute key="weight" value="1500" />
 		<attribute key="description" value="It contains several exotic recipes." />
 	</item>
-	<item id="2348" article="a" name="glyph">
+	<item id="2348" article="a" name="ancient rune">
 		<attribute key="description" value="This rune vibrates with ancient powers." />
 	</item>
 	<item id="2349" article="a" name="blue note">
@@ -3207,7 +3215,7 @@
 		<attribute key="attack" value="7" />
 		<attribute key="weaponType" value="club" />
 	</item>
-	<item id="2383" article="the" name="Sword of Fury">
+	<item id="2383" article="the" name="spike sword">
 		<attribute key="description" value="Only the humble may touch the Sword of Fury." />
 		<attribute key="weight" value="5000" />
 		<attribute key="defense" value="21" />
@@ -4606,7 +4614,7 @@
 	<item id="2673" article="a" name="pear">
 		<attribute key="weight" value="140" />
 	</item>
-	<item id="2674" article="an" name="apple">
+	<item id="2674" article="an" name="red apple">
 		<attribute key="weight" value="160" />
 	</item>
 	<item id="2675" article="an" name="orange">
@@ -5005,7 +5013,7 @@
 	</item>
 	<item id="2835" article="a" name="dead deer">
 		<attribute key="weight" value="68000" />
-		<attribute key="containerSize" value="5" />
+		<attribute key="containerSize" value="10" />
 		<attribute key="decayTo" value="2836" />
 		<attribute key="duration" value="1200" />
 		<attribute key="corpseType" value="blood" />
@@ -9682,7 +9690,7 @@
 		<attribute key="fluidSource" value="blood" />
 	</item>
 	<item id="5970" article="a" name="dead deer">
-		<attribute key="containerSize" value="5" />
+		<attribute key="containerSize" value="10" />
 		<attribute key="decayTo" value="2835" />
 		<attribute key="duration" value="10" />
 		<attribute key="corpseType" value="blood" />
@@ -11509,7 +11517,7 @@
 		<attribute key="description" value="It seems to be rather fragile." />
 		<attribute key="weight" value="500" />
 	</item>
-	<item id="6558" name="concentrated demonic blood">
+	<item id="6558" name="flask of demonic blood">
 		<attribute key="description" value="Shake it to create a potion." />
 		<attribute key="weight" value="200" />
 	</item>
@@ -14684,6 +14692,9 @@
 		<attribute key="absorbPercentFire" value="8" />
 		<attribute key="absorbPercentIce" value="-8" />
 		<attribute key="slotType" value="body" />
+		<attribute key="extraElementDamageEnergy" value="10" />
+		<attribute key="extraElementDamageIce" value="5" />
+
 	</item>
 	<item id="7900" article="a" name="magma monocle">
 		<attribute key="weight" value="1000" />
@@ -32768,6 +32779,143 @@
 	</item>
 	<item id="26619" article="a" name="pet rabbit">
 		<attribute key="weight" value="1000" />
+	</item>
+	<item id="26629" article="an" name="scorching ring">
+		<attribute key="weight" value="80" />
+		<attribute key="slotType" value="ring" />
+		<attribute key="transformEquipTo" value="26630" />
+			<attribute key="charges" value="100" />
+		<attribute key="showcharges" value="1" />
+	</item>
+	<item id="26630" article="an" name="active scorching ring">
+		<attribute key="weight" value="80" />
+		<attribute key="slotType" value="ring" />
+		<attribute key="transformDeEquipTo" value="26629" />
+		<attribute key="showattributes" value="1" />
+		<attribute key="extraelementdamagefire" value="25" />
+			<attribute key="charges" value="100" />
+		<attribute key="showcharges" value="1" />
+	</item>
+	<item id="26631" article="an" name="frostbite ring">
+		<attribute key="weight" value="80" />
+		<attribute key="slotType" value="ring" />
+		<attribute key="transformEquipTo" value="26632" />
+			<attribute key="charges" value="100" />
+		<attribute key="showcharges" value="1" />
+	</item>
+	<item id="26632" article="an" name="active frostbite ring">
+		<attribute key="weight" value="80" />
+		<attribute key="slotType" value="ring" />
+		<attribute key="transformDeEquipTo" value="26631" />
+		<attribute key="showattributes" value="1" />
+		<attribute key="extraelementdamageice" value="25" />
+			<attribute key="charges" value="100" />
+		<attribute key="showcharges" value="1" />
+	</item>
+	<item id="26633" article="an" name="abyss ring">
+		<attribute key="weight" value="80" />
+		<attribute key="slotType" value="ring" />
+		<attribute key="transformEquipTo" value="26634" />
+			<attribute key="charges" value="100" />
+		<attribute key="showcharges" value="1" />
+	</item>
+	<item id="26634" article="an" name="active abyss ring">
+		<attribute key="weight" value="80" />
+		<attribute key="slotType" value="ring" />
+		<attribute key="transformDeEquipTo" value="26633" />
+		<attribute key="showattributes" value="1" />
+		<attribute key="extraelementdamagedeath" value="25" />
+			<attribute key="charges" value="100" />
+		<attribute key="showcharges" value="1" />
+	</item>
+	<item id="26635" article="an" name="plague ring">
+		<attribute key="weight" value="80" />
+		<attribute key="slotType" value="ring" />
+		<attribute key="transformEquipTo" value="26636" />
+			<attribute key="charges" value="100" />
+		<attribute key="showcharges" value="1" />
+	</item>
+	<item id="26636" article="an" name="active plague ring">
+		<attribute key="weight" value="80" />
+		<attribute key="slotType" value="ring" />
+		<attribute key="transformDeEquipTo" value="26635" />
+		<attribute key="showattributes" value="1" />
+		<attribute key="extraelementdamageearth" value="25" />
+			<attribute key="charges" value="100" />
+		<attribute key="showcharges" value="1" />
+	</item>
+	<item id="26637" article="an" name="divine ring">
+		<attribute key="weight" value="80" />
+		<attribute key="slotType" value="ring" />
+		<attribute key="transformEquipTo" value="26638" />
+			<attribute key="charges" value="100" />
+		<attribute key="showcharges" value="1" />
+	</item>
+	<item id="26638" article="an" name="active divine ring">
+		<attribute key="weight" value="80" />
+		<attribute key="slotType" value="ring" />
+		<attribute key="transformDeEquipTo" value="26637" />
+		<attribute key="showattributes" value="1" />
+		<attribute key="extraelementdamageholy" value="25" />
+			<attribute key="charges" value="100" />
+		<attribute key="showcharges" value="1" />
+	</item>
+	<item id="26639" article="an" name="druid ring">
+		<attribute key="weight" value="80" />
+		<attribute key="slotType" value="ring" />
+		<attribute key="transformEquipTo" value="26640" />
+			<attribute key="charges" value="100" />
+		<attribute key="showcharges" value="1" />
+	</item>
+	<item id="26640" article="an" name="active druid ring">
+		<attribute key="weight" value="80" />
+		<attribute key="slotType" value="ring" />
+		<attribute key="transformDeEquipTo" value="26639" />
+		<attribute key="showattributes" value="1" />
+		<attribute key="extraelementdamagehealing" value="25" />
+			<attribute key="charges" value="100" />
+		<attribute key="showcharges" value="1" />
+	</item>
+	<item id="26641" article="an" name="electrifying ring">
+		<attribute key="weight" value="80" />
+		<attribute key="slotType" value="ring" />
+		<attribute key="transformEquipTo" value="26642" />
+			<attribute key="charges" value="100" />
+		<attribute key="showcharges" value="1" />
+	</item>
+	<item id="26642" article="an" name="active electrifying ring">
+		<attribute key="weight" value="80" />
+		<attribute key="slotType" value="ring" />
+		<attribute key="transformDeEquipTo" value="26641" />
+		<attribute key="showattributes" value="1" />
+		<attribute key="extraelementdamageenergy" value="25" />
+			<attribute key="charges" value="100" />
+		<attribute key="showcharges" value="1" />
+	</item>
+	<item id="26643" article="an" name="physical ring">
+		<attribute key="weight" value="80" />
+		<attribute key="slotType" value="ring" />
+		<attribute key="transformEquipTo" value="26644" />
+			<attribute key="charges" value="100" />
+		<attribute key="showcharges" value="1" />
+	</item>
+	<item id="26644" article="an" name="active physical ring">
+		<attribute key="weight" value="80" />
+		<attribute key="slotType" value="ring" />
+		<attribute key="transformDeEquipTo" value="26643" />
+		<attribute key="showattributes" value="1" />
+		<attribute key="extraelementdamagephysical" value="25" />
+			<attribute key="charges" value="100" />
+		<attribute key="showcharges" value="1" />
+	</item>
+	<item id="26645" article="an" name="warlock ring">
+		<attribute key="weight" value="80" />
+		<attribute key="slotType" value="ring" />
+		<attribute key="transformEquipTo" value="26644" />
+		<attribute key="extraelementdamageenergy" value="60" />
+		<attribute key="extraelementdamageenergy" value="30" />
+		<attribute key="charges" value="100" />
+		<attribute key="showcharges" value="1" />
 	</item>
 	
 </items>
