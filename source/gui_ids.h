@@ -194,7 +194,10 @@ enum EditorActionID {
 	TOOLBAR_SIZES_4,
 	TOOLBAR_SIZES_5,
 	TOOLBAR_SIZES_6,
-	TOOLBAR_SIZES_7
+	TOOLBAR_SIZES_7,
+	
+	// Custom action IDs
+	REFRESH_VISIBLE_AREA
 };
 
 enum ToolBarID {

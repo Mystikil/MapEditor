@@ -182,6 +182,7 @@ namespace MenuBar {
 		MAP_CREATE_BORDER,
 		MAP_SUMMARIZE,
 		MAP_NOTES,
+		MENU_REFRESH_VISIBLE_AREA,
 	};
 }
 
@@ -332,6 +333,7 @@ public:
 	void OnRefreshItems(wxCommandEvent& event);
 	void OnCreateBorder(wxCommandEvent& event);
 	void OnMapSummarize(wxCommandEvent& event);
+	void OnRefreshVisibleArea(wxCommandEvent& event);
 
 protected:
 	// Load and returns a menu item, also sets accelerator

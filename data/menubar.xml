@@ -190,6 +190,7 @@
 		<item name="Go to Previous Position" hotkey="P" action="GOTO_PREVIOUS_POSITION" help="Go to the previous screen center position."/>
 		<item name="Jump to Brush..." hotkey="J" action="JUMP_TO_BRUSH" help="Jump to a brush."/>
 		<item name="Jump to Item..." hotkey="Ctrl+J" action="JUMP_TO_ITEM_BRUSH" help="Jump to an item brush (RAW palette)."/>
+		<item name="Refresh Visible Area" hotkey="F6" action="MENU_REFRESH_VISIBLE_AREA" help="Refresh the visible area to show latest changes from server."/>
 		<separator/>
 		<menu name="Floor">
 			<item name="Floor 0" action="FLOOR_0" help=""/>

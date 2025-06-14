@@ -43,6 +43,7 @@
 #include "map_drawer.h"
 #include "application.h"
 #include "live_server.h"
+#include "live_client.h"
 #include "browse_tile_window.h"
 
 #include "minimap_window.h"
@@ -1745,6 +1746,14 @@ void MapCanvas::OnKeyDown(wxKeyEvent& event) {
 				g_gui.CycleTab(false);
 			} else {
 				g_gui.CycleTab(true);
+			}
+			break;
+		}
+		case WXK_F5: { // Refresh visible area (for multiplayer)
+			LiveClient* client = dynamic_cast<LiveClient*>(editor.GetLiveClient());
+			if (client) {
+				client->requestVisibleRefresh();
+				g_gui.SetStatusText("Refreshing visible area...");
 			}
 			break;
 		}

@@ -102,8 +102,16 @@ void NetworkedBatchAction::addAndCommitAction(Action* action) {
 			return;
 		}
 
-		// Broadcast changes!
+		// Broadcast changes to all clients!
 		try {
+			// Log that we're broadcasting changes
+			std::ofstream logFile((wxStandardPaths::Get().GetUserDataDir() + wxFileName::GetPathSeparator() + "action_broadcast.log").ToStdString(), std::ios::app);
+			if (logFile.is_open()) {
+				wxDateTime now = wxDateTime::Now();
+				logFile << now.FormatISOCombined() << ": Broadcasting changes from owner " << dirty_list.owner << "\n";
+				logFile.close();
+			}
+			
 			queue.broadcast(dirty_list);
 		}
 		catch (const std::exception& e) {
@@ -149,7 +157,16 @@ void NetworkedBatchAction::commit() {
 				}
 			}
 		}
-		// Broadcast changes!
+		
+		// Log that we're broadcasting changes from commit
+		std::ofstream logFile((wxStandardPaths::Get().GetUserDataDir() + wxFileName::GetPathSeparator() + "action_broadcast.log").ToStdString(), std::ios::app);
+		if (logFile.is_open()) {
+			wxDateTime now = wxDateTime::Now();
+			logFile << now.FormatISOCombined() << ": Broadcasting changes from commit, owner: " << dirty_list.owner << "\n";
+			logFile.close();
+		}
+		
+		// Broadcast changes to all clients!
 		queue.broadcast(dirty_list);
 	} catch (const std::exception& e) {
 		// Log error but don't crash
@@ -173,7 +190,16 @@ void NetworkedBatchAction::undo() {
 				action->undo(type != ACTION_SELECT ? &dirty_list : nullptr);
 			}
 		}
-		// Broadcast changes!
+		
+		// Log that we're broadcasting changes from undo
+		std::ofstream logFile((wxStandardPaths::Get().GetUserDataDir() + wxFileName::GetPathSeparator() + "action_broadcast.log").ToStdString(), std::ios::app);
+		if (logFile.is_open()) {
+			wxDateTime now = wxDateTime::Now();
+			logFile << now.FormatISOCombined() << ": Broadcasting changes from undo, owner: " << dirty_list.owner << "\n";
+			logFile.close();
+		}
+		
+		// Broadcast changes to all clients!
 		queue.broadcast(dirty_list);
 	} catch (const std::exception& e) {
 		// Log error but don't crash
@@ -223,7 +249,15 @@ void NetworkedBatchAction::commitChanges(Action* action) {
 		// Commit the action
 		action->commit(type != ACTION_SELECT ? &dirty_list : nullptr);
 		
-		// Broadcast changes!
+		// Log that we're broadcasting changes from commitChanges
+		std::ofstream logFile((wxStandardPaths::Get().GetUserDataDir() + wxFileName::GetPathSeparator() + "action_broadcast.log").ToStdString(), std::ios::app);
+		if (logFile.is_open()) {
+			wxDateTime now = wxDateTime::Now();
+			logFile << now.FormatISOCombined() << ": Broadcasting changes from commitChanges, owner: " << dirty_list.owner << "\n";
+			logFile.close();
+		}
+		
+		// Broadcast changes to all clients!
 		queue.broadcast(dirty_list);
 		
 		// Clean up the action - we don't store it

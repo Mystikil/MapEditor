@@ -166,6 +166,7 @@ MainMenuBar::MainMenuBar(MainFrame* frame) :
 	MAKE_ACTION(GOTO_POSITION, wxITEM_NORMAL, OnGotoPosition);
 	MAKE_ACTION(JUMP_TO_BRUSH, wxITEM_NORMAL, OnJumpToBrush);
 	MAKE_ACTION(JUMP_TO_ITEM_BRUSH, wxITEM_NORMAL, OnJumpToItemBrush);
+	MAKE_ACTION(MENU_REFRESH_VISIBLE_AREA, wxITEM_NORMAL, OnRefreshVisibleArea);
 
 	MAKE_ACTION(CUT, wxITEM_NORMAL, OnCut);
 	MAKE_ACTION(COPY, wxITEM_NORMAL, OnCopy);
@@ -3377,7 +3378,22 @@ void MainMenuBar::OnMapRemoveDuplicates(wxCommandEvent& WXUNUSED(event)) {
 }
 
 void MainMenuBar::OnShowHotkeys(wxCommandEvent& WXUNUSED(event)) {
-    g_hotkey_manager.ShowHotkeyDialog(frame);
+	g_hotkey_manager.ShowHotkeyDialog(frame);
+}
+
+void MainMenuBar::OnRefreshVisibleArea(wxCommandEvent& WXUNUSED(event)) {
+	Editor* editor = g_gui.GetCurrentEditor();
+	if (!editor) {
+		return;
+	}
+	
+	LiveClient* client = dynamic_cast<LiveClient*>(editor->GetLiveClient());
+	if (client) {
+		client->requestVisibleRefresh();
+		g_gui.SetStatusText("Refreshing visible area...");
+	} else {
+		g_gui.SetStatusText("Refresh only available in multiplayer mode.");
+	}
 }
 
 void MainMenuBar::onServerHost(wxCommandEvent& event) {
