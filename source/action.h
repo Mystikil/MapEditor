@@ -160,7 +160,7 @@ protected:
 	friend class ActionQueue;
 };
 
-typedef std::vector<Action*> ActionVector;
+using ActionVector = std::vector<Action*>;
 
 class BatchAction {
 public:

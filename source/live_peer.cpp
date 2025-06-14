@@ -575,55 +575,75 @@ void LivePeer::parseReceiveChanges(NetworkMessage& message) {
 		logMessage(wxString::Format("[Server]: Received changes from client %s (data size: %zu bytes)", 
 			name, data.size()));
 			
-		// Process the changes on the main thread
-		wxTheApp->CallAfter([this, data]() {
-			if (!server || !server->getEditor()) {
-				logMessage("[Server]: Error - cannot process changes, editor not available");
+		// Process the changes directly instead of using CallAfter to avoid threading issues
+		if (!server || !server->getEditor()) {
+			logMessage("[Server]: Error - cannot process changes, editor not available");
+			return;
+		}
+		
+		Editor& editor = *server->getEditor();
+		
+		try {
+			// Instead of creating a NetworkedAction, create a regular Action
+			// This avoids issues with NetworkedAction memory management
+			Action* action = editor.actionQueue->createAction(ACTION_REMOTE);
+			if (!action) {
+				logMessage("[Server]: Failed to create action for changes");
 				return;
 			}
 			
-			Editor& editor = *server->getEditor();
-			
-			try {
-				// Create the action to hold the changes
-				NetworkedAction* action = static_cast<NetworkedAction*>(editor.actionQueue->createAction(ACTION_REMOTE));
-				action->owner = clientId;
-				
-				// Parse the change data and create the tiles
-				mapReader.assign(reinterpret_cast<const uint8_t*>(data.c_str() - 1), data.size());
-				BinaryNode* rootNode = mapReader.getRootNode();
-				BinaryNode* tileNode = rootNode->getChild();
-				
-				bool anyChanges = false;
-				
-				if (tileNode) {
-					do {
-						Tile* tile = readTile(tileNode, editor, nullptr);
-						if (tile) {
-							action->addChange(newd Change(tile));
-							anyChanges = true;
-						}
-					} while (tileNode->advance());
-				}
-				mapReader.close();
-				
-				// Only add the action if we have changes
-				if (anyChanges) {
-					editor.actionQueue->addAction(action);
-					g_gui.RefreshView();
-					g_gui.UpdateMinimap();
-					
-					logMessage(wxString::Format("[Server]: Successfully processed changes from client %s", name));
-				} else {
-					// Instead of deleting, just add the action as-is
-					// An empty action won't do anything but will be safely managed by the queue
-					editor.actionQueue->addAction(action);
-					logMessage(wxString::Format("[Server]: No valid changes found in packet from client %s", name));
-				}
-			} catch (std::exception& e) {
-				logMessage(wxString::Format("[Server]: Error processing changes: %s", e.what()));
+			// Set owner ID
+			if (NetworkedAction* netAction = dynamic_cast<NetworkedAction*>(action)) {
+				netAction->owner = clientId;
 			}
-		});
+			
+			// Parse the change data and create the tiles
+			mapReader.assign(reinterpret_cast<const uint8_t*>(data.c_str() - 1), data.size());
+			BinaryNode* rootNode = mapReader.getRootNode();
+			if (!rootNode) {
+				logMessage("[Server]: Invalid root node in changes");
+				delete action;
+				return;
+			}
+			
+			BinaryNode* tileNode = rootNode->getChild();
+			bool anyChanges = false;
+			
+			if (tileNode) {
+				do {
+					Tile* tile = readTile(tileNode, editor, nullptr);
+					if (tile) {
+						action->addChange(newd Change(tile));
+						anyChanges = true;
+					}
+				} while (tileNode->advance());
+			}
+			mapReader.close();
+			
+			// Only process if we have changes
+			if (anyChanges) {
+				// Use the new commitChanges method to apply changes without adding to undo history
+				NetworkedActionQueue* netQueue = dynamic_cast<NetworkedActionQueue*>(editor.actionQueue);
+				if (netQueue) {
+					netQueue->commitChanges(action);
+				} else {
+					// Fallback if queue is not a NetworkedActionQueue
+					editor.actionQueue->addAction(action, 0);
+				}
+				
+				// Update the UI
+				g_gui.RefreshView();
+				g_gui.UpdateMinimap();
+				
+				logMessage(wxString::Format("[Server]: Successfully processed changes from client %s", name));
+			} else {
+				// No changes, just delete the action
+				delete action;
+				logMessage(wxString::Format("[Server]: No valid changes found in packet from client %s", name));
+			}
+		} catch (std::exception& e) {
+			logMessage(wxString::Format("[Server]: Error processing changes: %s", e.what()));
+		}
 	} catch (std::exception& e) {
 		logMessage(wxString::Format("[Server]: Error parsing changes packet: %s", e.what()));
 	}
