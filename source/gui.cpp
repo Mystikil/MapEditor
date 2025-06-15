@@ -1563,8 +1563,39 @@ void GUI::AddRecentBrush(Brush* brush) {
 		return;
 	}
 	
+	// Don't add creature, house, or waypoint brushes to recent list
+	if (brush->isCreature() || brush->isHouse() || brush->isWaypoint()) {
+		return;
+	}
+	
+	// Determine palette type for this brush
+	PaletteType palette_type = TILESET_UNKNOWN;
+	
+	// Check what type of brush this is
+	if (brush->isRaw()) {
+		palette_type = TILESET_RAW;
+	} else {
+		// For other brushes, try to determine from current palette selection
+		PaletteWindow* palette = GetPalette();
+		if (palette) {
+			palette_type = palette->GetSelectedPage();
+		}
+		
+		// If we still don't know, try to categorize by brush properties
+		if (palette_type == TILESET_UNKNOWN) {
+			if (brush->isGround()) {
+				palette_type = TILESET_TERRAIN;
+			} else if (brush->isDoodad()) {
+				palette_type = TILESET_DOODAD;
+			} else {
+				palette_type = TILESET_ITEM;
+			}
+		}
+	}
+	
 	if (recent_brushes_window) {
-		recent_brushes_window->AddRecentBrush(brush);
+		// Only add as manual selection (true) to prevent automatic palette switching additions
+		recent_brushes_window->AddRecentBrush(brush, palette_type, true);
 	}
 }
 
@@ -2450,8 +2481,8 @@ void GUI::SelectBrushInternal(Brush* brush) {
 		return;
 	}
 
-	// Add to recent brushes if it's a valid brush
-	AddRecentBrush(brush);
+	// Note: AddRecentBrush is now called manually from palette clicks and other user actions
+	// This prevents automatic additions when palettes switch and select their first brush
 
 	brush_variation = min(brush_variation, brush->getMaxVariation());
 	FillDoodadPreviewBuffer();

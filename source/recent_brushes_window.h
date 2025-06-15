@@ -23,11 +23,21 @@
 #include <wx/panel.h>
 #include <wx/sizer.h>
 #include <wx/scrolwin.h>
+#include <wx/stattext.h>
 #include <vector>
 #include <deque>
+#include <map>
 
 class Brush;
 class BrushButton;
+
+// Structure to hold brush with its palette type
+struct RecentBrushEntry {
+	Brush* brush;
+	PaletteType palette_type;
+	
+	RecentBrushEntry(Brush* b, PaletteType pt) : brush(b), palette_type(pt) {}
+};
 
 class RecentBrushesPanel : public wxScrolledWindow {
 public:
@@ -35,9 +45,10 @@ public:
 	~RecentBrushesPanel();
 
 	// Interface
-	void AddRecentBrush(Brush* brush);
+	void AddRecentBrush(Brush* brush, PaletteType palette_type, bool manual_add = true);
 	void ClearRecentBrushes();
 	void RefreshDisplay();
+	void RemoveBrush(Brush* brush);
 	
 	// Get the currently selected brush
 	Brush* GetSelectedBrush() const;
@@ -45,6 +56,11 @@ public:
 	bool SelectBrush(const Brush* whatbrush);
 	// Deselect all brushes
 	void DeselectAll();
+	
+	// Access methods for preset functionality
+	const std::deque<RecentBrushEntry>& GetRecentBrushes() const { return recent_brushes; }
+	void SetRecentBrushes(const std::deque<RecentBrushEntry>& brushes);
+	size_t GetMaxRecentBrushes() const { return MAX_RECENT_BRUSHES; }
 
 	// Event handlers
 	void OnBrushClick(wxCommandEvent& event);
@@ -52,15 +68,19 @@ public:
 	void OnSize(wxSizeEvent& event);
 	void OnPaint(wxPaintEvent& event);
 	void OnEraseBackground(wxEraseEvent& event);
+	void OnDeleteBrush(wxCommandEvent& event);
 
 private:
 	void RecalculateLayout();
 	void UpdateButtonLayout();
+	wxString GetPaletteTypeName(PaletteType type) const;
 	
-	std::deque<Brush*> recent_brushes;
+	std::deque<RecentBrushEntry> recent_brushes;
 	std::vector<BrushButton*> brush_buttons;
-	wxFlexGridSizer* grid_sizer;
+	std::vector<wxStaticText*> section_labels;
+	wxBoxSizer* main_sizer;
 	int columns;
+	Brush* brush_to_delete; // Temporary storage for context menu operations
 	static const size_t MAX_RECENT_BRUSHES = 20;
 
 	DECLARE_EVENT_TABLE()
@@ -72,9 +92,10 @@ public:
 	~RecentBrushesWindow();
 
 	// Interface
-	void AddRecentBrush(Brush* brush);
+	void AddRecentBrush(Brush* brush, PaletteType palette_type = TILESET_UNKNOWN, bool manual_add = true);
 	void ClearRecentBrushes();
 	void RefreshDisplay();
+	void RemoveBrush(Brush* brush);
 	
 	// Get the currently selected brush
 	Brush* GetSelectedBrush() const;
@@ -85,12 +106,28 @@ public:
 	void OnKey(wxKeyEvent& event);
 	void OnClose(wxCloseEvent& event);
 	void OnClearButton(wxCommandEvent& event);
+	void OnPresetChoice(wxCommandEvent& event);
+	void OnSavePreset(wxCommandEvent& event);
+	void OnLoadPreset(wxCommandEvent& event);
+	void OnDeletePreset(wxCommandEvent& event);
 	void OnPaint(wxPaintEvent& event);
 	void OnEraseBackground(wxEraseEvent& event);
 
 private:
+	void RefreshPresetList();
+	void SavePresetToXML(const wxString& name);
+	void LoadPresetFromXML(const wxString& name);
+	
 	RecentBrushesPanel* recent_panel;
+	
+	// UI controls
 	wxButton* clear_button;
+	
+	// Preset controls
+	wxChoice* preset_choice;
+	wxButton* save_button;
+	wxButton* load_button;
+	wxButton* delete_button;
 
 	DECLARE_EVENT_TABLE()
 };
