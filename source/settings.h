@@ -241,6 +241,8 @@ namespace Config {
 		TOOLTIP_SHOW_DESTINATION,     // bool: show teleport destination in tooltips
 		TOOLTIP_SHOW_HOUSEID,         // bool: show house ID in tooltips
 		HOUSE_CUSTOM_COLORS,          // bool: use house ID colors to color house tiles
+		
+		REFRESH_RADIUS,               // int: radius for visible area refresh in multiplayer
 
 		LAST,
 	};

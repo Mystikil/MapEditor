@@ -257,6 +257,21 @@ wxNotebookPage* PreferencesWindow::CreateEditorPage() {
 	merge_paste_chkbox->SetToolTip("Pasted tiles won't replace already placed tiles.");
 	sizer->Add(merge_paste_chkbox, 0, wxLEFT | wxTOP, 5);
 
+	sizer->AddSpacer(10);
+	
+	// Add refresh radius control
+	wxFlexGridSizer* refresh_sizer = newd wxFlexGridSizer(2, 10, 10);
+	refresh_sizer->AddGrowableCol(1);
+	
+	wxStaticText* refresh_radius_label = newd wxStaticText(editor_page, wxID_ANY, "Multiplayer refresh radius: ");
+	refresh_sizer->Add(refresh_radius_label, 0, wxALIGN_CENTER_VERTICAL);
+	
+	refresh_radius_spin = newd wxSpinCtrl(editor_page, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS, 5, 50, g_settings.getInteger(Config::REFRESH_RADIUS));
+	refresh_radius_spin->SetToolTip("The radius (in nodes) to refresh when using the 'Refresh Visible Area' feature in multiplayer mode.");
+	refresh_sizer->Add(refresh_radius_spin, 0);
+	
+	sizer->Add(refresh_sizer, 0, wxLEFT | wxTOP | wxEXPAND, 5);
+
 	editor_page->SetSizerAndFit(sizer);
 
 	return editor_page;
@@ -1083,6 +1098,7 @@ void PreferencesWindow::Apply() {
 	g_settings.setInteger(Config::RAW_LIKE_SIMONE, allow_multiple_orderitems_chkbox->GetValue());
 	g_settings.setInteger(Config::MERGE_MOVE, merge_move_chkbox->GetValue());
 	g_settings.setInteger(Config::MERGE_PASTE, merge_paste_chkbox->GetValue());
+	g_settings.setInteger(Config::REFRESH_RADIUS, refresh_radius_spin->GetValue());
 
 
 	// Graphics

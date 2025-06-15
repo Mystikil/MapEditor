@@ -234,6 +234,7 @@ MainMenuBar::MainMenuBar(MainFrame* frame) :
 	MAKE_ACTION(EXPERIMENTAL_FOG, wxITEM_CHECK, OnChangeViewSettings); // experimental
 
 	MAKE_ACTION(WIN_MINIMAP, wxITEM_NORMAL, OnMinimapWindow);
+	MAKE_ACTION(WIN_RECENT_BRUSHES, wxITEM_NORMAL, OnRecentBrushesWindow);
 	MAKE_ACTION(NEW_PALETTE, wxITEM_NORMAL, OnNewPalette);
 	MAKE_ACTION(TAKE_SCREENSHOT, wxITEM_NORMAL, OnTakeScreenshot);
 
@@ -2788,6 +2789,10 @@ void MainMenuBar::OnChangeFloor(wxCommandEvent& event) {
 
 void MainMenuBar::OnMinimapWindow(wxCommandEvent& event) {
 	g_gui.CreateMinimap();
+}
+
+void MainMenuBar::OnRecentBrushesWindow(wxCommandEvent& event) {
+	g_gui.ShowRecentBrushesWindow();
 }
 
 void MainMenuBar::OnNewPalette(wxCommandEvent& event) {

@@ -55,6 +55,7 @@ class SearchResultWindow;
 class MapSummaryWindow;
 class MinimapWindow;
 class PaletteWindow;
+class RecentBrushesWindow;
 class OldPropertiesWindow;
 class TilesetWindow;
 class EditTownsDialog;
@@ -227,6 +228,15 @@ public:
 	// Map Summary
 	MapSummaryWindow* GetMapSummaryWindow();
 	MapSummaryWindow* ShowMapSummaryWindow();
+
+	//=========================================================================
+	// Recent Brushes Window Interface
+	//=========================================================================
+	void HideRecentBrushesWindow();
+	RecentBrushesWindow* GetRecentBrushesWindow();
+	RecentBrushesWindow* ShowRecentBrushesWindow();
+	void AddRecentBrush(Brush* brush);
+
 	void HideMapSummaryWindow();
 	
 	// Search state persistence
@@ -441,6 +451,7 @@ public:
 	DCButton* gem; // The small gem in the lower-right corner
 	SearchResultWindow* search_result_window;
 	MapSummaryWindow* map_summary_window;
+	RecentBrushesWindow* recent_brushes_window;
 	GraphicManager gfx;
 	RevScriptManager revscript_manager;
 

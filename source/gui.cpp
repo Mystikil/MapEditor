@@ -175,6 +175,7 @@
 #include "live_client.h"
 #include "live_tab.h"
 #include "live_server.h"
+#include "recent_brushes_window.h"
 #include "dark_mode_manager.h"
 #include <wx/regex.h>
 
@@ -200,6 +201,7 @@ GUI::GUI() :
 	loaded_version(CLIENT_VERSION_NONE),
 	secondary_map(nullptr),
 	minimap(nullptr),
+	recent_brushes_window(nullptr),
 	has_last_search(false),
 	last_search_itemid(0),
 	last_search_on_selection(false),
@@ -1518,6 +1520,55 @@ MapSummaryWindow* GUI::ShowMapSummaryWindow() {
 }
 
 //=============================================================================
+// Recent Brushes Window Interface Implementation
+
+void GUI::HideRecentBrushesWindow() {
+	if (recent_brushes_window) {
+		aui_manager->GetPane(recent_brushes_window).Show(false);
+		aui_manager->Update();
+	}
+}
+
+RecentBrushesWindow* GUI::GetRecentBrushesWindow() {
+	return recent_brushes_window;
+}
+
+RecentBrushesWindow* GUI::ShowRecentBrushesWindow() {
+	if (recent_brushes_window == nullptr) {
+		recent_brushes_window = newd RecentBrushesWindow(root);
+		
+		// Add as dockable pane on the right side
+		wxAuiPaneInfo paneInfo;
+		paneInfo.Caption("Recent Brushes")
+			.Right()  // Dock on the right side initially
+			.Floatable(true)
+			.Movable(true)
+			.Dockable(true)
+			.Resizable(true)
+			.MinSize(120, 200)
+			.BestSize(150, 400)
+			.DestroyOnClose(false);
+			
+		aui_manager->AddPane(recent_brushes_window, paneInfo);
+	} else {
+		aui_manager->GetPane(recent_brushes_window).Show();
+	}
+	aui_manager->Update();
+	return recent_brushes_window;
+}
+
+void GUI::AddRecentBrush(Brush* brush) {
+	// Don't add null brushes or system brushes that shouldn't be in recent list
+	if (!brush || brush == eraser) {
+		return;
+	}
+	
+	if (recent_brushes_window) {
+		recent_brushes_window->AddRecentBrush(brush);
+	}
+}
+
+//=============================================================================
 // Palette Window Interface implementation
 
 PaletteWindow* GUI::GetPalette() const {
@@ -2398,6 +2449,9 @@ void GUI::SelectBrushInternal(Brush* brush) {
 	if (!current_brush) {
 		return;
 	}
+
+	// Add to recent brushes if it's a valid brush
+	AddRecentBrush(brush);
 
 	brush_variation = min(brush_variation, brush->getMaxVariation());
 	FillDoodadPreviewBuffer();

@@ -213,6 +213,7 @@
 	</menu>
 	<menu name="Window">
 		<item name="Minimap" hotkey="M" action="WIN_MINIMAP" help="Displays the minimap window."/>
+	
 		<item name="New Palette" action="NEW_PALETTE" help="Creates a new palette."/>
 		
 		<menu name="Palette">
@@ -265,5 +266,6 @@
 			<item name="Generate Procedural Map..." action="GENERATE_PROCEDURAL_MAP" help="Generate a procedural map using OTMapGen"/>
 		<separator/>
 <item name="Notes..." hotkey="Ctrl+N" action="MAP_NOTES" help="Create or edit notes for this map."/>
+	<item name="Recent Brushes" hotkey="Shift+ALT+R" action="WIN_RECENT_BRUSHES" help="Shows recently used brushes for quick access."/>
 	</menu>
 </menubar>

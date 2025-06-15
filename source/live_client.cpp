@@ -958,11 +958,14 @@ void LiveClient::requestVisibleRefresh() {
 		// Get the current view center position
 		Position viewPosition = mapTab->GetScreenCenterPosition();
 		
+		// Get the configured refresh radius from settings
+		int refreshRadius = g_settings.getInteger(Config::REFRESH_RADIUS);
+		
 		// Calculate the visible area in node coordinates (4x4 tiles per node)
-		int32_t startNodeX = (viewPosition.x - 15) / 4;
-		int32_t startNodeY = (viewPosition.y - 11) / 4;
-		int32_t endNodeX = (viewPosition.x + 15) / 4;
-		int32_t endNodeY = (viewPosition.y + 11) / 4;
+		int32_t startNodeX = (viewPosition.x - refreshRadius) / 4;
+		int32_t startNodeY = (viewPosition.y - refreshRadius) / 4;
+		int32_t endNodeX = (viewPosition.x + refreshRadius) / 4;
+		int32_t endNodeY = (viewPosition.y + refreshRadius) / 4;
 		
 		// Prepare and send the refresh request
 		NetworkMessage message;
@@ -974,8 +977,8 @@ void LiveClient::requestVisibleRefresh() {
 		message.write<uint8_t>(viewPosition.z);
 		message.write<bool>(viewPosition.z > GROUND_LAYER); // underground flag
 		
-		logMessage(wxString::Format("[Client]: Requesting refresh for visible area around (%d,%d,%d)", 
-			viewPosition.x, viewPosition.y, viewPosition.z));
+		logMessage(wxString::Format("[Client]: Requesting refresh for visible area around (%d,%d,%d) with radius %d", 
+			viewPosition.x, viewPosition.y, viewPosition.z, refreshRadius));
 		
 		send(message);
 		

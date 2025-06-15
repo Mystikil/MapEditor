@@ -232,6 +232,7 @@
     <ClCompile Include="..\..\source\notes_window.cpp" />
     <ClCompile Include="..\..\source\otmapgen.cpp" />
     <ClCompile Include="..\..\source\otmapgen_dialog.cpp" />
+    <ClCompile Include="..\..\source\recent_brushes_window.cpp" />
     <ClCompile Include="..\..\source\replace_items_window.cpp" />
     <ClCompile Include="..\..\source\revscript_manager.cpp" />
     <ClCompile Include="..\..\source\string_utils.cpp" />
@@ -316,6 +317,7 @@
     <ClCompile Include="..\..\source\numbertextctrl.cpp" />
     <ClCompile Include="..\..\source\properties_window.cpp" />
     <ClCompile Include="..\..\source\raw_brush.cpp" />
+    <ClInclude Include="..\..\source\recent_brushes_window.h" />
     <ClInclude Include="..\..\source\replace_items_window.h" />
     <ClInclude Include="..\..\source\revscript_manager.h" />
     <ClInclude Include="..\..\source\rme_forward_declarations.h" />

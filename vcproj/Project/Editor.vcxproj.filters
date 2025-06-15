@@ -403,6 +403,7 @@
     <ClInclude Include="..\..\source\revscript_manager.h" />
     <ClInclude Include="..\..\source\wallize_window.h" />
     <ClInclude Include="..\..\source\notes_window.h" />
+    <ClInclude Include="..\..\source\recent_brushes_window.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\source\json\json_spirit_reader.cpp">
@@ -714,6 +715,7 @@
     <ClCompile Include="..\..\source\revscript_manager.cpp" />
     <ClCompile Include="..\..\source\wallize_window.cpp" />
     <ClCompile Include="..\..\source\notes_window.cpp" />
+    <ClCompile Include="..\..\source\recent_brushes_window.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="Editor.rc">
