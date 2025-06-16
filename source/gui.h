@@ -30,6 +30,8 @@
 #include "palette_window.h"
 #include "client_version.h"
 #include "revscript_manager.h"
+#include "monster_manager.h"
+#include "monster_maker_window.h"
 #include <memory> // For smart pointers
 
 class BaseMap;
@@ -56,6 +58,7 @@ class MapSummaryWindow;
 class MinimapWindow;
 class PaletteWindow;
 class RecentBrushesWindow;
+class MonsterMakerWindow;
 class OldPropertiesWindow;
 class TilesetWindow;
 class EditTownsDialog;
@@ -224,6 +227,11 @@ public:
 	SearchResultWindow* GetSearchWindow();
 	SearchResultWindow* ShowSearchWindow();
 	void HideSearchWindow();
+	
+	// Monster Maker
+	MonsterMakerWindow* GetMonsterMakerWindow();
+	MonsterMakerWindow* ShowMonsterMakerWindow();
+	void HideMonsterMakerWindow();
 
 	// Map Summary
 	MapSummaryWindow* GetMapSummaryWindow();
@@ -454,6 +462,8 @@ public:
 	RecentBrushesWindow* recent_brushes_window;
 	GraphicManager gfx;
 	RevScriptManager revscript_manager;
+	MonsterManager monster_manager;
+	MonsterMakerWindow* monster_maker_window;
 
 	BaseMap* secondary_map; // A non-owning pointer to doodad_buffer_map when needed
 	std::unique_ptr<BaseMap> doodad_buffer_map; // The map in which doodads are temporarily stored

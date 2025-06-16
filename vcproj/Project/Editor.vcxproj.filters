@@ -404,6 +404,8 @@
     <ClInclude Include="..\..\source\wallize_window.h" />
     <ClInclude Include="..\..\source\notes_window.h" />
     <ClInclude Include="..\..\source\recent_brushes_window.h" />
+    <ClInclude Include="..\..\source\monster_maker_window.h" />
+    <ClInclude Include="..\..\source\monster_manager.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\source\json\json_spirit_reader.cpp">
@@ -716,6 +718,8 @@
     <ClCompile Include="..\..\source\wallize_window.cpp" />
     <ClCompile Include="..\..\source\notes_window.cpp" />
     <ClCompile Include="..\..\source\recent_brushes_window.cpp" />
+    <ClCompile Include="..\..\source\monster_maker_window.cpp" />
+    <ClCompile Include="..\..\source\monster_manager.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="Editor.rc">
