@@ -1,5 +1,7 @@
 #include "main.h"
 #include "monster_maker_window.h"
+#include "monster_attack_dialog.h"
+#include "monster_loot_dialog.h"
 #include "gui.h"
 #include "creature_sprite_manager.h"
 
@@ -9,6 +11,92 @@
 #include <wx/listctrl.h>
 #include <wx/stattext.h>
 #include <wx/sizer.h>
+#include <wx/menu.h>
+
+// ContextMenuListCtrl implementation
+wxBEGIN_EVENT_TABLE(ContextMenuListCtrl, wxListCtrl)
+    EVT_CONTEXT_MENU(ContextMenuListCtrl::OnContextMenu)
+    EVT_MENU(ID_CONTEXT_ADD, ContextMenuListCtrl::OnMenuAdd)
+    EVT_MENU(ID_CONTEXT_EDIT, ContextMenuListCtrl::OnMenuEdit)
+    EVT_MENU(ID_CONTEXT_DELETE, ContextMenuListCtrl::OnMenuDelete)
+wxEND_EVENT_TABLE()
+
+ContextMenuListCtrl::ContextMenuListCtrl(wxWindow* parent, wxWindowID id, MonsterMakerWindow* owner, const wxString& listType)
+    : wxListCtrl(parent, id, wxDefaultPosition, wxDefaultSize, wxLC_REPORT | wxLC_SINGLE_SEL), 
+      m_owner(owner), m_listType(listType) {
+    
+    // Create context menu
+    m_contextMenu = new wxMenu();
+    m_contextMenu->Append(ID_CONTEXT_ADD, wxString::Format("Add %s", m_listType));
+    m_contextMenu->Append(ID_CONTEXT_EDIT, wxString::Format("Edit %s", m_listType));
+    m_contextMenu->Append(ID_CONTEXT_DELETE, wxString::Format("Delete %s", m_listType));
+}
+
+void ContextMenuListCtrl::OnContextMenu(wxContextMenuEvent& event) {
+    if (!m_contextMenu) return;
+    
+    // Check if we have a selection to enable/disable Edit and Delete
+    long selectedIndex = GetNextItem(-1, wxLIST_NEXT_ALL, wxLIST_STATE_SELECTED);
+    bool hasSelection = (selectedIndex != -1);
+    
+    m_contextMenu->Enable(ID_CONTEXT_EDIT, hasSelection);
+    m_contextMenu->Enable(ID_CONTEXT_DELETE, hasSelection);
+    
+    // Get mouse position
+    wxPoint position = event.GetPosition();
+    if (position == wxPoint(-1, -1)) {
+        // Keyboard event - use first selected item position
+        if (hasSelection) {
+            wxRect rect;
+            GetItemRect(selectedIndex, rect);
+            position = ClientToScreen(rect.GetPosition());
+        } else {
+            position = ClientToScreen(wxPoint(0, 0));
+        }
+    }
+    
+    // Show context menu
+    PopupMenu(m_contextMenu, ScreenToClient(position));
+}
+
+void ContextMenuListCtrl::OnMenuAdd(wxCommandEvent& event) {
+    if (m_listType == "Attack") {
+        m_owner->AddAttack();
+    } else if (m_listType == "Loot") {
+        m_owner->AddLoot();
+    } else if (m_listType == "Defense") {
+        m_owner->AddDefense();
+    }
+}
+
+void ContextMenuListCtrl::OnMenuEdit(wxCommandEvent& event) {
+    long selectedIndex = GetNextItem(-1, wxLIST_NEXT_ALL, wxLIST_STATE_SELECTED);
+    if (selectedIndex != -1) {
+        if (m_listType == "Attack") {
+            m_owner->EditAttack(selectedIndex);
+        } else if (m_listType == "Loot") {
+            m_owner->EditLoot(selectedIndex);
+        } else if (m_listType == "Defense") {
+            m_owner->EditDefense(selectedIndex);
+        }
+    }
+}
+
+void ContextMenuListCtrl::OnMenuDelete(wxCommandEvent& event) {
+    long selectedIndex = GetNextItem(-1, wxLIST_NEXT_ALL, wxLIST_STATE_SELECTED);
+    if (selectedIndex != -1) {
+        if (wxMessageBox(wxString::Format("Delete selected %s?", m_listType), "Confirm Delete", 
+                        wxYES_NO | wxICON_QUESTION) == wxYES) {
+            if (m_listType == "Attack") {
+                m_owner->DeleteAttack(selectedIndex);
+            } else if (m_listType == "Loot") {
+                m_owner->DeleteLoot(selectedIndex);
+            } else if (m_listType == "Defense") {
+                m_owner->DeleteDefense(selectedIndex);
+            }
+        }
+    }
+}
 
 // MonsterPreviewPanel implementation
 wxBEGIN_EVENT_TABLE(MonsterPreviewPanel, wxPanel)
@@ -34,6 +122,14 @@ wxBEGIN_EVENT_TABLE(MonsterMakerWindow, wxFrame)
     EVT_BUTTON(ID_LOAD_MONSTER, MonsterMakerWindow::OnLoadMonster)
     EVT_NOTEBOOK_PAGE_CHANGED(ID_NOTEBOOK, MonsterMakerWindow::OnTabChange)
     EVT_TIMER(ID_PREVIEW_TIMER, MonsterMakerWindow::OnPreviewTimer)
+    EVT_COMBOBOX(ID_SKULL_COMBO, MonsterMakerWindow::OnSkullChange)
+    EVT_COMMAND_SCROLL(ID_STRATEGY_SLIDER, MonsterMakerWindow::OnStrategyChange)
+    EVT_COMMAND(ID_LIGHT_COLOR_SPIN, wxEVT_COMMAND_SPINCTRL_UPDATED, MonsterMakerWindow::OnLightColorChange)
+    EVT_COMMAND(ID_HEAD_PALETTE, wxEVT_COLOR_PALETTE_SELECTION, MonsterMakerWindow::OnColorPaletteChange)
+    EVT_COMMAND(ID_BODY_PALETTE, wxEVT_COLOR_PALETTE_SELECTION, MonsterMakerWindow::OnColorPaletteChange)
+    EVT_COMMAND(ID_LEGS_PALETTE, wxEVT_COLOR_PALETTE_SELECTION, MonsterMakerWindow::OnColorPaletteChange)
+    EVT_COMMAND(ID_FEET_PALETTE, wxEVT_COLOR_PALETTE_SELECTION, MonsterMakerWindow::OnColorPaletteChange)
+    EVT_CHECKBOX(ID_SHOW_NUMBERS_TOGGLE, MonsterMakerWindow::OnShowNumbersToggle)
 wxEND_EVENT_TABLE()
 
 MonsterMakerWindow::MonsterMakerWindow(wxWindow* parent) :
@@ -63,6 +159,7 @@ MonsterMakerWindow::MonsterMakerWindow(wxWindow* parent) :
     CreateVoicesTab(m_notebook);
     CreateLootTab(m_notebook);
     CreateIOTab(m_notebook);
+    CreateXMLPreviewTab(m_notebook);
     
     mainSizer->Add(m_notebook, 1, wxEXPAND | wxALL, 5);
     
@@ -83,11 +180,30 @@ MonsterMakerWindow::MonsterMakerWindow(wxWindow* parent) :
     SetSizer(mainSizer);
     
     // Bind spin control events for live preview updates
-    if (m_lookType) m_lookType->Bind(wxEVT_SPINCTRL, &MonsterMakerWindow::OnLookTypeChange, this);
-    if (m_head) m_head->Bind(wxEVT_SPINCTRL, &MonsterMakerWindow::OnColorChange, this);
-    if (m_body) m_body->Bind(wxEVT_SPINCTRL, &MonsterMakerWindow::OnColorChange, this);
-    if (m_legs) m_legs->Bind(wxEVT_SPINCTRL, &MonsterMakerWindow::OnColorChange, this);
-    if (m_feet) m_feet->Bind(wxEVT_SPINCTRL, &MonsterMakerWindow::OnColorChange, this);
+    if (m_lookType) {
+        m_lookType->Bind(wxEVT_SPINCTRL, &MonsterMakerWindow::OnLookTypeChange, this);
+        m_lookType->Bind(wxEVT_TEXT, &MonsterMakerWindow::OnLookTypeChange, this); // Real-time as you type
+    }
+    
+    // Bind events for XML preview updates
+    if (m_name) m_name->Bind(wxEVT_TEXT, &MonsterMakerWindow::OnPreviewUpdate, this);
+    if (m_nameDescription) m_nameDescription->Bind(wxEVT_TEXT, &MonsterMakerWindow::OnPreviewUpdate, this);
+    if (m_race) m_race->Bind(wxEVT_TEXT, &MonsterMakerWindow::OnPreviewUpdate, this);
+    if (m_experience) m_experience->Bind(wxEVT_SPINCTRL, &MonsterMakerWindow::OnPreviewUpdate, this);
+    if (m_speed) m_speed->Bind(wxEVT_SPINCTRL, &MonsterMakerWindow::OnPreviewUpdate, this);
+    if (m_manacost) m_manacost->Bind(wxEVT_SPINCTRL, &MonsterMakerWindow::OnPreviewUpdate, this);
+    if (m_healthMax) m_healthMax->Bind(wxEVT_SPINCTRL, &MonsterMakerWindow::OnPreviewUpdate, this);
+    
+    // Bind flag checkboxes
+    if (m_summonable) m_summonable->Bind(wxEVT_CHECKBOX, &MonsterMakerWindow::OnPreviewUpdate, this);
+    if (m_attackable) m_attackable->Bind(wxEVT_CHECKBOX, &MonsterMakerWindow::OnPreviewUpdate, this);
+    if (m_hostile) m_hostile->Bind(wxEVT_CHECKBOX, &MonsterMakerWindow::OnPreviewUpdate, this);
+    if (m_illusionable) m_illusionable->Bind(wxEVT_CHECKBOX, &MonsterMakerWindow::OnPreviewUpdate, this);
+    if (m_convinceable) m_convinceable->Bind(wxEVT_CHECKBOX, &MonsterMakerWindow::OnPreviewUpdate, this);
+    if (m_pushable) m_pushable->Bind(wxEVT_CHECKBOX, &MonsterMakerWindow::OnPreviewUpdate, this);
+    if (m_canpushitems) m_canpushitems->Bind(wxEVT_CHECKBOX, &MonsterMakerWindow::OnPreviewUpdate, this);
+    if (m_canpushcreatures) m_canpushcreatures->Bind(wxEVT_CHECKBOX, &MonsterMakerWindow::OnPreviewUpdate, this);
+    if (m_hidehealth) m_hidehealth->Bind(wxEVT_CHECKBOX, &MonsterMakerWindow::OnPreviewUpdate, this);
     
     // Set default values
     ClearAll();
@@ -139,6 +255,19 @@ void MonsterMakerWindow::CreateMonsterTab(wxNotebook* notebook) {
     m_race->Append("energy");
     gridSizer->Add(m_race, 1, wxEXPAND);
     
+    // Skull
+    gridSizer->Add(new wxStaticText(panel, wxID_ANY, "Skull:"), 0, wxALIGN_CENTER_VERTICAL);
+    m_skull = new wxComboBox(panel, ID_SKULL_COMBO, "", wxDefaultPosition, wxDefaultSize, 0, nullptr, wxCB_READONLY);
+    m_skull->Append("none");
+    m_skull->Append("yellow");
+    m_skull->Append("black");
+    m_skull->Append("red");
+    m_skull->Append("white");
+    m_skull->Append("orange");
+    m_skull->Append("green");
+    m_skull->SetSelection(0);
+    gridSizer->Add(m_skull, 1, wxEXPAND);
+    
     // Experience
     gridSizer->Add(new wxStaticText(panel, wxID_ANY, "Experience:"), 0, wxALIGN_CENTER_VERTICAL);
     m_experience = new wxSpinCtrl(panel, wxID_ANY, "", wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS, 0, 999999, 1000);
@@ -174,36 +303,59 @@ void MonsterMakerWindow::CreateMonsterTab(wxNotebook* notebook) {
     // Look section
     wxStaticBoxSizer* lookSizer = new wxStaticBoxSizer(wxVERTICAL, panel, "Appearance");
     
-    wxFlexGridSizer* lookGridSizer = new wxFlexGridSizer(5, 2, 5, 5);
-    lookGridSizer->AddGrowableCol(1);
-    
     // Look Type
-    lookGridSizer->Add(new wxStaticText(panel, wxID_ANY, "Look Type:"), 0, wxALIGN_CENTER_VERTICAL);
+    wxBoxSizer* lookTypeSizer = new wxBoxSizer(wxHORIZONTAL);
+    lookTypeSizer->Add(new wxStaticText(panel, wxID_ANY, "Look Type:"), 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 5);
     m_lookType = new wxSpinCtrl(panel, wxID_ANY, "", wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS, 1, 9999, 1);
-    lookGridSizer->Add(m_lookType, 1, wxEXPAND);
+    lookTypeSizer->Add(m_lookType, 0, wxEXPAND);
+    lookSizer->Add(lookTypeSizer, 0, wxEXPAND | wxALL, 5);
     
-    // Head Color
-    lookGridSizer->Add(new wxStaticText(panel, wxID_ANY, "Head Color:"), 0, wxALIGN_CENTER_VERTICAL);
-    m_head = new wxSpinCtrl(panel, wxID_ANY, "", wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS, 0, 132, 0);
-    lookGridSizer->Add(m_head, 1, wxEXPAND);
+    // Color palettes in a notebook for better organization
+    wxNotebook* colorNotebook = new wxNotebook(panel, wxID_ANY);
     
-    // Body Color
-    lookGridSizer->Add(new wxStaticText(panel, wxID_ANY, "Body Color:"), 0, wxALIGN_CENTER_VERTICAL);
-    m_body = new wxSpinCtrl(panel, wxID_ANY, "", wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS, 0, 132, 0);
-    lookGridSizer->Add(m_body, 1, wxEXPAND);
+    // Add checkbox to control number visibility
+    wxCheckBox* showNumbersCheck = new wxCheckBox(panel, ID_SHOW_NUMBERS_TOGGLE, "Show color numbers");
+    showNumbersCheck->SetValue(true);
+    lookSizer->Add(showNumbersCheck, 0, wxALL, 5);
     
-    // Legs Color
-    lookGridSizer->Add(new wxStaticText(panel, wxID_ANY, "Legs Color:"), 0, wxALIGN_CENTER_VERTICAL);
-    m_legs = new wxSpinCtrl(panel, wxID_ANY, "", wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS, 0, 132, 0);
-    lookGridSizer->Add(m_legs, 1, wxEXPAND);
+    // Head Color Tab
+    wxPanel* headPanel = new wxPanel(colorNotebook);
+    wxBoxSizer* headSizer = new wxBoxSizer(wxVERTICAL);
+    headSizer->Add(new wxStaticText(headPanel, wxID_ANY, "Head Color (click to select):"), 0, wxALL, 2);
+    m_headPalette = new ColorPaletteCtrl(headPanel, ID_HEAD_PALETTE, wxDefaultPosition, wxSize(320, 120));
+    headSizer->Add(m_headPalette, 0, wxALL, 2);
+    headPanel->SetSizer(headSizer);
+    colorNotebook->AddPage(headPanel, "Head");
     
-    // Feet Color
-    lookGridSizer->Add(new wxStaticText(panel, wxID_ANY, "Feet Color:"), 0, wxALIGN_CENTER_VERTICAL);
-    m_feet = new wxSpinCtrl(panel, wxID_ANY, "", wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS, 0, 132, 0);
-    lookGridSizer->Add(m_feet, 1, wxEXPAND);
+    // Body Color Tab
+    wxPanel* bodyPanel = new wxPanel(colorNotebook);
+    wxBoxSizer* bodySizer = new wxBoxSizer(wxVERTICAL);
+    bodySizer->Add(new wxStaticText(bodyPanel, wxID_ANY, "Body Color (click to select):"), 0, wxALL, 2);
+    m_bodyPalette = new ColorPaletteCtrl(bodyPanel, ID_BODY_PALETTE, wxDefaultPosition, wxSize(320, 120));
+    bodySizer->Add(m_bodyPalette, 0, wxALL, 2);
+    bodyPanel->SetSizer(bodySizer);
+    colorNotebook->AddPage(bodyPanel, "Body");
     
-    lookSizer->Add(lookGridSizer, 0, wxEXPAND | wxALL, 5);
-    mainSizer->Add(lookSizer, 0, wxEXPAND | wxALL, 5);
+    // Legs Color Tab
+    wxPanel* legsPanel = new wxPanel(colorNotebook);
+    wxBoxSizer* legsSizer = new wxBoxSizer(wxVERTICAL);
+    legsSizer->Add(new wxStaticText(legsPanel, wxID_ANY, "Legs Color (click to select):"), 0, wxALL, 2);
+    m_legsPalette = new ColorPaletteCtrl(legsPanel, ID_LEGS_PALETTE, wxDefaultPosition, wxSize(320, 120));
+    legsSizer->Add(m_legsPalette, 0, wxALL, 2);
+    legsPanel->SetSizer(legsSizer);
+    colorNotebook->AddPage(legsPanel, "Legs");
+    
+    // Feet Color Tab
+    wxPanel* feetPanel = new wxPanel(colorNotebook);
+    wxBoxSizer* feetSizer = new wxBoxSizer(wxVERTICAL);
+    feetSizer->Add(new wxStaticText(feetPanel, wxID_ANY, "Feet Color (click to select):"), 0, wxALL, 2);
+    m_feetPalette = new ColorPaletteCtrl(feetPanel, ID_FEET_PALETTE, wxDefaultPosition, wxSize(320, 120));
+    feetSizer->Add(m_feetPalette, 0, wxALL, 2);
+    feetPanel->SetSizer(feetSizer);
+    colorNotebook->AddPage(feetPanel, "Feet");
+    
+    lookSizer->Add(colorNotebook, 1, wxEXPAND | wxALL, 5);
+    mainSizer->Add(lookSizer, 1, wxEXPAND | wxALL, 5);
     
     // Preview section
     wxStaticBoxSizer* previewSizer = new wxStaticBoxSizer(wxVERTICAL, panel, "Preview");
@@ -258,12 +410,17 @@ void MonsterMakerWindow::CreateAttacksTab(wxNotebook* notebook) {
     
     wxBoxSizer* sizer = new wxBoxSizer(wxVERTICAL);
     
-    m_attacksList = new wxListCtrl(panel, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxLC_REPORT);
-    m_attacksList->AppendColumn("Name", wxLIST_FORMAT_LEFT, 100);
-    m_attacksList->AppendColumn("Type", wxLIST_FORMAT_LEFT, 80);
-    m_attacksList->AppendColumn("Damage", wxLIST_FORMAT_LEFT, 80);
+    sizer->Add(new wxStaticText(panel, wxID_ANY, "Right-click to add, edit, or delete attacks"), 0, wxALL, 5);
     
-    sizer->Add(new wxStaticText(panel, wxID_ANY, "Attacks (Coming Soon)"), 0, wxALL, 5);
+    m_attacksList = new ContextMenuListCtrl(panel, ID_ATTACKS_LIST, this, "Attack");
+    m_attacksList->AppendColumn("Name", wxLIST_FORMAT_LEFT, 100);
+    m_attacksList->AppendColumn("Damage", wxLIST_FORMAT_LEFT, 80);
+    m_attacksList->AppendColumn("Interval", wxLIST_FORMAT_LEFT, 60);
+    m_attacksList->AppendColumn("Chance %", wxLIST_FORMAT_LEFT, 60);
+    m_attacksList->AppendColumn("Range", wxLIST_FORMAT_LEFT, 50);
+    m_attacksList->AppendColumn("Radius", wxLIST_FORMAT_LEFT, 50);
+    m_attacksList->AppendColumn("Properties", wxLIST_FORMAT_LEFT, 150);
+    
     sizer->Add(m_attacksList, 1, wxEXPAND | wxALL, 5);
     
     panel->SetSizer(sizer);
@@ -275,7 +432,7 @@ void MonsterMakerWindow::CreateDefensesTab(wxNotebook* notebook) {
     
     wxBoxSizer* sizer = new wxBoxSizer(wxVERTICAL);
     
-    m_defensesList = new wxListCtrl(panel, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxLC_REPORT);
+    m_defensesList = new ContextMenuListCtrl(panel, ID_DEFENSES_LIST, this, "Defense");
     m_defensesList->AppendColumn("Name", wxLIST_FORMAT_LEFT, 100);
     m_defensesList->AppendColumn("Type", wxLIST_FORMAT_LEFT, 80);
     
@@ -330,7 +487,17 @@ void MonsterMakerWindow::CreateLootTab(wxNotebook* notebook) {
     notebook->AddPage(panel, "Loot");
     
     wxBoxSizer* sizer = new wxBoxSizer(wxVERTICAL);
-    sizer->Add(new wxStaticText(panel, wxID_ANY, "Loot table (Coming Soon)"), 0, wxALL, 5);
+    
+    sizer->Add(new wxStaticText(panel, wxID_ANY, "Right-click to add, edit, or delete loot items"), 0, wxALL, 5);
+    
+    m_lootList = new ContextMenuListCtrl(panel, ID_LOOT_LIST, this, "Loot");
+    m_lootList->AppendColumn("Item", wxLIST_FORMAT_LEFT, 120);
+    m_lootList->AppendColumn("ID/Name", wxLIST_FORMAT_LEFT, 100);
+    m_lootList->AppendColumn("Chance %", wxLIST_FORMAT_LEFT, 80);
+    m_lootList->AppendColumn("Count Max", wxLIST_FORMAT_LEFT, 80);
+    m_lootList->AppendColumn("Properties", wxLIST_FORMAT_LEFT, 150);
+    
+    sizer->Add(m_lootList, 1, wxEXPAND | wxALL, 5);
     
     panel->SetSizer(sizer);
 }
@@ -396,9 +563,10 @@ void MonsterMakerWindow::LoadMonster(const MonsterEntry& monster) {
     m_manacost->SetValue(monster.manacost);
     m_healthMax->SetValue(monster.health_max);
     m_lookType->SetValue(monster.look_type);
-    m_head->SetValue(monster.look_head);
-    m_body->SetValue(monster.look_body);
-    m_legs->SetValue(monster.look_legs);
+    m_headPalette->SetSelectedColor(monster.look_head);
+    m_bodyPalette->SetSelectedColor(monster.look_body);
+    m_legsPalette->SetSelectedColor(monster.look_legs);
+    m_feetPalette->SetSelectedColor(monster.look_feet);
     
     UpdatePreview();
 }
@@ -412,10 +580,10 @@ void MonsterMakerWindow::ClearAll() {
     m_manacost->SetValue(0);
     m_healthMax->SetValue(500);
     m_lookType->SetValue(1);
-    m_head->SetValue(0);
-    m_body->SetValue(0);
-    m_legs->SetValue(0);
-    m_feet->SetValue(0);
+    m_headPalette->SetSelectedColor(0);
+    m_bodyPalette->SetSelectedColor(0);
+    m_legsPalette->SetSelectedColor(0);
+    m_feetPalette->SetSelectedColor(0);
     
     // Clear flags
     m_summonable->SetValue(false);
@@ -436,10 +604,10 @@ void MonsterMakerWindow::UpdatePreview() {
     
     // Get current look values
     int lookType = m_lookType->GetValue();
-    int headColor = m_head->GetValue();
-    int bodyColor = m_body->GetValue();
-    int legsColor = m_legs->GetValue();
-    int feetColor = m_feet ? m_feet->GetValue() : 0;
+    int headColor = m_headPalette->GetSelectedColor();
+    int bodyColor = m_bodyPalette->GetSelectedColor();
+    int legsColor = m_legsPalette->GetSelectedColor();
+    int feetColor = m_feetPalette->GetSelectedColor();
     
     // Validate look type and use fallback if needed
     if (lookType <= 0) {
@@ -524,9 +692,10 @@ void MonsterMakerWindow::OnCreateMonster(wxCommandEvent& event) {
     entry.manacost = m_manacost->GetValue();
     entry.health_max = m_healthMax->GetValue();
     entry.look_type = m_lookType->GetValue();
-    entry.look_head = m_head->GetValue();
-    entry.look_body = m_body->GetValue();
-    entry.look_legs = m_legs->GetValue();
+    entry.look_head = m_headPalette->GetSelectedColor();
+    entry.look_body = m_bodyPalette->GetSelectedColor();
+    entry.look_legs = m_legsPalette->GetSelectedColor();
+    entry.look_feet = m_feetPalette->GetSelectedColor();
     
     // Ask for save location
     wxFileDialog saveDialog(this, "Save Monster XML", "", entry.name + ".xml", 
@@ -566,6 +735,7 @@ void MonsterMakerWindow::OnLoadMonster(wxCommandEvent& event) {
 
 void MonsterMakerWindow::OnPreviewUpdate(wxCommandEvent& event) {
     UpdatePreview();
+    UpdateXMLPreview();
 }
 
 void MonsterMakerWindow::OnTabChange(wxNotebookEvent& event) {
@@ -574,10 +744,16 @@ void MonsterMakerWindow::OnTabChange(wxNotebookEvent& event) {
 }
 
 void MonsterMakerWindow::OnLookTypeChange(wxCommandEvent& event) {
-    // Start timer for delayed preview update (150ms delay)
-    if (m_previewTimer && !m_previewTimer->IsRunning()) {
+    // For text events (typing), use shorter delay for more responsive updates
+    int delay = (event.GetEventType() == wxEVT_TEXT) ? 300 : 150;
+    
+    // Restart timer for delayed preview update
+    if (m_previewTimer) {
+        if (m_previewTimer->IsRunning()) {
+            m_previewTimer->Stop();
+        }
         m_previewUpdatePending = true;
-        m_previewTimer->Start(150, wxTIMER_ONE_SHOT);
+        m_previewTimer->Start(delay, wxTIMER_ONE_SHOT);
     }
     event.Skip();
 }
@@ -596,4 +772,410 @@ void MonsterMakerWindow::OnPreviewTimer(wxTimerEvent& event) {
         UpdatePreview();
         m_previewUpdatePending = false;
     }
+}
+
+void MonsterMakerWindow::OnSkullChange(wxCommandEvent& event) {
+    // Handle skull selection change
+    event.Skip();
+}
+
+void MonsterMakerWindow::OnStrategyChange(wxScrollEvent& event) {
+    // Handle strategy slider change
+    event.Skip();
+}
+
+void MonsterMakerWindow::OnLightColorChange(wxCommandEvent& event) {
+    // Handle light color change
+    event.Skip();
+}
+
+void MonsterMakerWindow::OnColorPaletteChange(wxCommandEvent& event) {
+    // Handle color palette selection change - update preview immediately for color changes
+    if (m_previewTimer) {
+        if (m_previewTimer->IsRunning()) {
+            m_previewTimer->Stop();
+        }
+        m_previewUpdatePending = true;
+        m_previewTimer->Start(50, wxTIMER_ONE_SHOT); // Very fast response for color changes
+    }
+    
+    // Also update XML preview
+    UpdateXMLPreview();
+    
+    event.Skip();
+}
+
+void MonsterMakerWindow::OnShowNumbersToggle(wxCommandEvent& event) {
+    bool showNumbers = event.IsChecked();
+    
+    // Update all color palettes
+    if (m_headPalette) m_headPalette->SetShowNumbers(showNumbers);
+    if (m_bodyPalette) m_bodyPalette->SetShowNumbers(showNumbers);
+    if (m_legsPalette) m_legsPalette->SetShowNumbers(showNumbers);
+    if (m_feetPalette) m_feetPalette->SetShowNumbers(showNumbers);
+}
+
+// List management methods
+void MonsterMakerWindow::AddAttack() {
+    MonsterAttackDialog dialog(this);
+    if (dialog.ShowModal() == wxID_OK) {
+        AttackEntry attack = dialog.GetAttackEntry();
+        m_currentMonster.attacks.push_back(attack);
+        UpdateAttacksList();
+    }
+}
+
+void MonsterMakerWindow::EditAttack(int index) {
+    if (index >= 0 && index < (int)m_currentMonster.attacks.size()) {
+        MonsterAttackDialog dialog(this, &m_currentMonster.attacks[index]);
+        if (dialog.ShowModal() == wxID_OK) {
+            m_currentMonster.attacks[index] = dialog.GetAttackEntry();
+            UpdateAttacksList();
+        }
+    }
+}
+
+void MonsterMakerWindow::DeleteAttack(int index) {
+    if (index >= 0 && index < (int)m_currentMonster.attacks.size()) {
+        m_currentMonster.attacks.erase(m_currentMonster.attacks.begin() + index);
+        UpdateAttacksList();
+    }
+}
+
+void MonsterMakerWindow::AddLoot() {
+    MonsterLootDialog dialog(this);
+    if (dialog.ShowModal() == wxID_OK) {
+        LootEntry loot = dialog.GetLootEntry();
+        m_currentMonster.loot.push_back(loot);
+        UpdateLootList();
+    }
+}
+
+void MonsterMakerWindow::EditLoot(int index) {
+    if (index >= 0 && index < (int)m_currentMonster.loot.size()) {
+        MonsterLootDialog dialog(this, &m_currentMonster.loot[index]);
+        if (dialog.ShowModal() == wxID_OK) {
+            m_currentMonster.loot[index] = dialog.GetLootEntry();
+            UpdateLootList();
+        }
+    }
+}
+
+void MonsterMakerWindow::DeleteLoot(int index) {
+    if (index >= 0 && index < (int)m_currentMonster.loot.size()) {
+        m_currentMonster.loot.erase(m_currentMonster.loot.begin() + index);
+        UpdateLootList();
+    }
+}
+
+void MonsterMakerWindow::AddDefense() {
+    // TODO: Implement defense dialog
+    wxMessageBox("Defense editing not yet implemented", "Coming Soon", wxOK | wxICON_INFORMATION);
+}
+
+void MonsterMakerWindow::EditDefense(int index) {
+    // TODO: Implement defense editing
+    wxMessageBox("Defense editing not yet implemented", "Coming Soon", wxOK | wxICON_INFORMATION);
+}
+
+void MonsterMakerWindow::DeleteDefense(int index) {
+    // TODO: Implement defense deletion
+    wxMessageBox("Defense editing not yet implemented", "Coming Soon", wxOK | wxICON_INFORMATION);
+}
+
+MonsterEntry MonsterMakerWindow::GetCurrentMonsterEntry() const {
+    MonsterEntry entry = m_currentMonster;
+    
+    // Update basic properties from UI
+    entry.name = nstr(m_name->GetValue());
+    entry.nameDescription = nstr(m_nameDescription->GetValue());
+    entry.race = nstr(m_race->GetValue());
+    entry.skull = nstr(m_skull->GetStringSelection());
+    entry.experience = m_experience->GetValue();
+    entry.speed = m_speed->GetValue();
+    entry.manacost = m_manacost->GetValue();
+    entry.health_max = m_healthMax->GetValue();
+    entry.health_now = m_healthMax->GetValue(); // Default to max
+    entry.look_type = m_lookType->GetValue();
+    entry.look_head = m_headPalette->GetSelectedColor();
+    entry.look_body = m_bodyPalette->GetSelectedColor();
+    entry.look_legs = m_legsPalette->GetSelectedColor();
+    entry.look_feet = m_feetPalette->GetSelectedColor();
+    
+    // Update flags from UI
+    entry.summonable = m_summonable->GetValue();
+    entry.attackable = m_attackable->GetValue();
+    entry.hostile = m_hostile->GetValue();
+    entry.illusionable = m_illusionable->GetValue();
+    entry.convinceable = m_convinceable->GetValue();
+    entry.pushable = m_pushable->GetValue();
+    entry.canPushItems = m_canpushitems->GetValue();
+    entry.canPushCreatures = m_canpushcreatures->GetValue();
+    entry.hideHealth = m_hidehealth->GetValue();
+    
+    return entry;
+}
+
+// Update list displays
+void MonsterMakerWindow::UpdateAttacksList() {
+    if (!m_attacksList) return;
+    
+    m_attacksList->DeleteAllItems();
+    for (size_t i = 0; i < m_currentMonster.attacks.size(); ++i) {
+        const AttackEntry& attack = m_currentMonster.attacks[i];
+        
+        long itemIndex = m_attacksList->InsertItem(i, wxstr(attack.name));
+        
+        // Damage range
+        wxString damageStr;
+        if (attack.minDamage == attack.maxDamage) {
+            damageStr = wxString::Format("%d", attack.maxDamage);
+        } else {
+            damageStr = wxString::Format("%d to %d", attack.minDamage, attack.maxDamage);
+        }
+        m_attacksList->SetItem(itemIndex, 1, damageStr);
+        
+        m_attacksList->SetItem(itemIndex, 2, wxString::Format("%d", attack.interval));
+        m_attacksList->SetItem(itemIndex, 3, wxString::Format("%d", attack.chance));
+        m_attacksList->SetItem(itemIndex, 4, attack.range > 0 ? wxString::Format("%d", attack.range) : "-");
+        m_attacksList->SetItem(itemIndex, 5, attack.radius > 0 ? wxString::Format("%d", attack.radius) : "-");
+        
+        // Properties summary
+        wxString properties;
+        if (attack.length > 0) properties += wxString::Format("Length:%d ", attack.length);
+        if (attack.spread > 0) properties += wxString::Format("Spread:%d ", attack.spread);
+        if (attack.speedChange != 0) properties += wxString::Format("Speed:%+d ", attack.speedChange);
+        if (attack.duration > 0) properties += wxString::Format("Duration:%ds ", attack.duration/1000);
+        if (!attack.shootEffect.empty()) properties += wxString::Format("Shoot:%s ", wxstr(attack.shootEffect));
+        if (!attack.areaEffect.empty()) properties += wxString::Format("Area:%s ", wxstr(attack.areaEffect));
+        if (!attack.conditionType.empty()) properties += wxString::Format("Condition:%s ", wxstr(attack.conditionType));
+        
+        m_attacksList->SetItem(itemIndex, 6, properties.Trim());
+    }
+    
+    UpdateXMLPreview();
+}
+
+void MonsterMakerWindow::UpdateLootList() {
+    if (!m_lootList) return;
+    
+    m_lootList->DeleteAllItems();
+    for (size_t i = 0; i < m_currentMonster.loot.size(); ++i) {
+        const LootEntry& loot = m_currentMonster.loot[i];
+        
+        wxString itemName = loot.useItemName ? wxstr(loot.itemName) : wxString::Format("ID: %d", loot.itemId);
+        long itemIndex = m_lootList->InsertItem(i, itemName);
+        m_lootList->SetItem(itemIndex, 1, loot.useItemName ? wxstr(loot.itemName) : wxString::Format("%d", loot.itemId));
+        m_lootList->SetItem(itemIndex, 2, wxString::Format("%.3f", loot.chance / 1000.0));
+        m_lootList->SetItem(itemIndex, 3, wxString::Format("%d", loot.countMax));
+        
+        wxString properties;
+        if (loot.subType > 0) properties += wxString::Format("SubType:%d ", loot.subType);
+        if (loot.actionId > 0) properties += wxString::Format("ActionID:%d ", loot.actionId);
+        if (loot.uniqueId > 0) properties += wxString::Format("UniqueID:%d ", loot.uniqueId);
+        m_lootList->SetItem(itemIndex, 4, properties);
+    }
+    
+    UpdateXMLPreview();
+}
+
+void MonsterMakerWindow::UpdateDefensesList() {
+    // TODO: Implement when defense system is ready
+}
+
+void MonsterMakerWindow::UpdateElementsList() {
+    // TODO: Implement when element system is ready
+}
+
+void MonsterMakerWindow::UpdateImmunitiesList() {
+    // TODO: Implement when immunity system is ready
+}
+
+void MonsterMakerWindow::UpdateSummonsList() {
+    // TODO: Implement when summon system is ready
+}
+
+void MonsterMakerWindow::UpdateVoicesList() {
+    // TODO: Implement when voice system is ready
+}
+
+void MonsterMakerWindow::CreateXMLPreviewTab(wxNotebook* notebook) {
+    wxPanel* panel = new wxPanel(notebook);
+    notebook->AddPage(panel, "XML Preview");
+    
+    wxBoxSizer* sizer = new wxBoxSizer(wxVERTICAL);
+    
+    sizer->Add(new wxStaticText(panel, wxID_ANY, "Live XML Preview - Updates automatically as you edit"), 0, wxALL, 5);
+    
+    m_xmlPreview = new wxTextCtrl(panel, wxID_ANY, "", wxDefaultPosition, wxDefaultSize, 
+                                  wxTE_MULTILINE | wxTE_READONLY | wxTE_RICH);
+    m_xmlPreview->SetFont(wxFont(9, wxFONTFAMILY_TELETYPE, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL));
+    
+    sizer->Add(m_xmlPreview, 1, wxEXPAND | wxALL, 5);
+    
+    panel->SetSizer(sizer);
+}
+
+void MonsterMakerWindow::UpdateXMLPreview() {
+    if (!m_xmlPreview) return;
+    
+    MonsterEntry entry = GetCurrentMonsterEntry();
+    
+    wxString xml = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n";
+    xml += wxString::Format("<monster name=\"%s\"", wxstr(entry.name));
+    
+    if (!entry.nameDescription.empty()) {
+        xml += wxString::Format(" nameDescription=\"%s\"", wxstr(entry.nameDescription));
+    }
+    if (!entry.race.empty()) {
+        xml += wxString::Format(" race=\"%s\"", wxstr(entry.race));
+    }
+    if (entry.experience > 0) {
+        xml += wxString::Format(" experience=\"%d\"", entry.experience);
+    }
+    if (entry.speed > 0) {
+        xml += wxString::Format(" speed=\"%d\"", entry.speed);
+    }
+    if (entry.manacost > 0) {
+        xml += wxString::Format(" manacost=\"%d\"", entry.manacost);
+    }
+    
+    xml += ">\n";
+    
+    // Health
+    if (entry.health_max > 0) {
+        xml += wxString::Format("\t<health now=\"%d\" max=\"%d\"/>\n", 
+                               entry.health_now > 0 ? entry.health_now : entry.health_max, 
+                               entry.health_max);
+    }
+    
+    // Look
+    if (entry.look_type > 0) {
+        xml += wxString::Format("\t<look type=\"%d\"", entry.look_type);
+        if (entry.look_head > 0) xml += wxString::Format(" head=\"%d\"", entry.look_head);
+        if (entry.look_body > 0) xml += wxString::Format(" body=\"%d\"", entry.look_body);
+        if (entry.look_legs > 0) xml += wxString::Format(" legs=\"%d\"", entry.look_legs);
+        if (entry.look_feet > 0) xml += wxString::Format(" feet=\"%d\"", entry.look_feet);
+        if (entry.look_addons > 0) xml += wxString::Format(" addons=\"%d\"", entry.look_addons);
+        if (entry.look_mount > 0) xml += wxString::Format(" mount=\"%d\"", entry.look_mount);
+        if (entry.corpse > 0) xml += wxString::Format(" corpse=\"%d\"", entry.corpse);
+        xml += "/>\n";
+    }
+    
+    // Target change
+    if (entry.interval > 0 && entry.chance > 0) {
+        xml += wxString::Format("\t<targetchange interval=\"%d\" chance=\"%d\"/>\n", entry.interval, entry.chance);
+    }
+    
+    // Flags
+    if (entry.summonable || entry.attackable || entry.hostile || entry.illusionable || 
+        entry.convinceable || entry.pushable || entry.canPushItems || entry.canPushCreatures ||
+        entry.hideHealth || entry.targetDistance > 0 || entry.staticAttack != 90 || entry.runOnHealth > 0) {
+        
+        xml += "\t<flags>\n";
+        
+        if (entry.summonable) xml += "\t\t<flag summonable=\"1\"/>\n";
+        else xml += "\t\t<flag summonable=\"0\"/>\n";
+        
+        if (entry.attackable) xml += "\t\t<flag attackable=\"1\"/>\n";
+        else xml += "\t\t<flag attackable=\"0\"/>\n";
+        
+        if (entry.hostile) xml += "\t\t<flag hostile=\"1\"/>\n";
+        else xml += "\t\t<flag hostile=\"0\"/>\n";
+        
+        if (entry.illusionable) xml += "\t\t<flag illusionable=\"1\"/>\n";
+        else xml += "\t\t<flag illusionable=\"0\"/>\n";
+        
+        if (entry.convinceable) xml += "\t\t<flag convinceable=\"1\"/>\n";
+        else xml += "\t\t<flag convinceable=\"0\"/>\n";
+        
+        if (entry.pushable) xml += "\t\t<flag pushable=\"1\"/>\n";
+        else xml += "\t\t<flag pushable=\"0\"/>\n";
+        
+        if (entry.canPushItems) xml += "\t\t<flag canpushitems=\"1\"/>\n";
+        if (entry.canPushCreatures) xml += "\t\t<flag canpushcreatures=\"1\"/>\n";
+        if (entry.hideHealth) xml += "\t\t<flag hidehealth=\"1\"/>\n";
+        
+        if (entry.targetDistance > 0) {
+            xml += wxString::Format("\t\t<flag targetdistance=\"%d\"/>\n", entry.targetDistance);
+        }
+        if (entry.staticAttack != 90) {
+            xml += wxString::Format("\t\t<flag staticattack=\"%d\"/>\n", entry.staticAttack);
+        }
+        if (entry.runOnHealth > 0) {
+            xml += wxString::Format("\t\t<flag runonhealth=\"%d\"/>\n", entry.runOnHealth);
+        }
+        
+        xml += "\t</flags>\n";
+    }
+    
+    // Attacks
+    if (!entry.attacks.empty()) {
+        xml += "\t<attacks>\n";
+        for (const auto& attack : entry.attacks) {
+            xml += wxString::Format("\t\t<attack name=\"%s\"", wxstr(attack.name));
+            if (attack.interval > 0) xml += wxString::Format(" interval=\"%d\"", attack.interval);
+            if (attack.chance < 100) xml += wxString::Format(" chance=\"%d\"", attack.chance);
+            if (attack.range > 0) xml += wxString::Format(" range=\"%d\"", attack.range);
+            if (attack.radius > 0) xml += wxString::Format(" radius=\"%d\"", attack.radius);
+            if (attack.target > 0) xml += wxString::Format(" target=\"%d\"", attack.target);
+            if (attack.length > 0) xml += wxString::Format(" length=\"%d\"", attack.length);
+            if (attack.spread > 0) xml += wxString::Format(" spread=\"%d\"", attack.spread);
+            if (attack.minDamage != 0) xml += wxString::Format(" min=\"%d\"", attack.minDamage);
+            if (attack.maxDamage != 0) xml += wxString::Format(" max=\"%d\"", attack.maxDamage);
+            if (attack.speedChange != 0) xml += wxString::Format(" speedchange=\"%d\"", attack.speedChange);
+            if (attack.duration > 0) xml += wxString::Format(" duration=\"%d\"", attack.duration);
+            
+            // Check if we need attributes section
+            bool hasAttributes = !attack.shootEffect.empty() || !attack.areaEffect.empty();
+            
+            if (hasAttributes) {
+                xml += ">\n";
+                if (!attack.shootEffect.empty()) {
+                    xml += wxString::Format("\t\t\t<attribute key=\"shootEffect\" value=\"%s\"/>\n", wxstr(attack.shootEffect));
+                }
+                if (!attack.areaEffect.empty()) {
+                    xml += wxString::Format("\t\t\t<attribute key=\"areaEffect\" value=\"%s\"/>\n", wxstr(attack.areaEffect));
+                }
+                xml += "\t\t</attack>\n";
+            } else {
+                xml += "/>\n";
+            }
+        }
+        xml += "\t</attacks>\n";
+    }
+    
+    // Loot
+    if (!entry.loot.empty()) {
+        xml += "\t<loot>\n";
+        for (const auto& loot : entry.loot) {
+            xml += "\t\t<item";
+            if (loot.useItemName && !loot.itemName.empty()) {
+                xml += wxString::Format(" name=\"%s\"", wxstr(loot.itemName));
+            } else if (loot.itemId > 0) {
+                xml += wxString::Format(" id=\"%d\"", loot.itemId);
+            }
+            if (loot.chance < 100000) {
+                xml += wxString::Format(" chance=\"%d\"", loot.chance);
+            }
+            if (loot.countMax > 1) {
+                xml += wxString::Format(" countmax=\"%d\"", loot.countMax);
+            }
+            if (loot.subType > 0) {
+                xml += wxString::Format(" subtype=\"%d\"", loot.subType);
+            }
+            if (loot.actionId > 0) {
+                xml += wxString::Format(" actionid=\"%d\"", loot.actionId);
+            }
+            if (loot.uniqueId > 0) {
+                xml += wxString::Format(" uniqueid=\"%d\"", loot.uniqueId);
+            }
+            xml += "/>\n";
+        }
+        xml += "\t</loot>\n";
+    }
+    
+    xml += "</monster>\n";
+    
+    m_xmlPreview->SetValue(xml);
 } 

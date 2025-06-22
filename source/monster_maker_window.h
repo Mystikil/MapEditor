@@ -3,6 +3,7 @@
 
 #include "main.h"
 #include "monster_manager.h"
+#include "color_palette_ctrl.h"
 
 #include <wx/wx.h>
 #include <wx/notebook.h>
@@ -10,9 +11,31 @@
 #include <wx/combobox.h>
 #include <wx/listctrl.h>
 #include <wx/timer.h>
+#include <wx/checkbox.h>
+#include <wx/slider.h>
 
-// Forward declaration
+// Forward declarations
 class MonsterMakerWindow;
+class MonsterAttackDialog;
+class MonsterLootDialog;
+
+// Custom list control with right-click context menu support
+class ContextMenuListCtrl : public wxListCtrl {
+public:
+    ContextMenuListCtrl(wxWindow* parent, wxWindowID id, MonsterMakerWindow* owner, const wxString& listType);
+    
+    void OnContextMenu(wxContextMenuEvent& event);
+    void OnMenuAdd(wxCommandEvent& event);
+    void OnMenuEdit(wxCommandEvent& event);
+    void OnMenuDelete(wxCommandEvent& event);
+    
+    DECLARE_EVENT_TABLE()
+
+private:
+    MonsterMakerWindow* m_owner;
+    wxString m_listType;
+    wxMenu* m_contextMenu;
+};
 
 // Custom preview panel that handles its own painting
 class MonsterPreviewPanel : public wxPanel {
@@ -44,6 +67,32 @@ public:
     // Preview methods
     void UpdatePreview();
     void DrawFallbackPreview(wxDC& dc, const wxSize& size, int lookType, int headColor, int bodyColor, int legsColor);
+    
+    // List management methods
+    void AddAttack();
+    void EditAttack(int index);
+    void DeleteAttack(int index);
+    void AddLoot();
+    void EditLoot(int index);
+    void DeleteLoot(int index);
+    void AddDefense();
+    void EditDefense(int index);
+    void DeleteDefense(int index);
+    
+    // Get current monster entry from UI
+    MonsterEntry GetCurrentMonsterEntry() const;
+    
+    // Update list displays
+    void UpdateAttacksList();
+    void UpdateLootList();
+    void UpdateDefensesList();
+    void UpdateElementsList();
+    void UpdateImmunitiesList();
+    void UpdateSummonsList();
+    void UpdateVoicesList();
+    
+    // XML Preview
+    void UpdateXMLPreview();
 
 private:
     // Event handlers
@@ -56,6 +105,11 @@ private:
     void OnLookTypeChange(wxCommandEvent& event);
     void OnColorChange(wxCommandEvent& event);
     void OnPreviewTimer(wxTimerEvent& event);
+    void OnSkullChange(wxCommandEvent& event);
+    void OnStrategyChange(wxScrollEvent& event);
+    void OnLightColorChange(wxCommandEvent& event);
+    void OnColorPaletteChange(wxCommandEvent& event);
+    void OnShowNumbersToggle(wxCommandEvent& event);
     
     // UI Creation
     void CreateMonsterTab(wxNotebook* notebook);
@@ -68,6 +122,7 @@ private:
     void CreateVoicesTab(wxNotebook* notebook);
     void CreateLootTab(wxNotebook* notebook);
     void CreateIOTab(wxNotebook* notebook);
+    void CreateXMLPreviewTab(wxNotebook* notebook);
     
     void SaveToFile(const wxString& filename);
     bool LoadFromFile(const wxString& filename);
@@ -75,41 +130,46 @@ private:
     // UI Components
     wxNotebook* m_notebook;
     
-    // Monster Tab
+    // Monster Tab - Enhanced
     wxTextCtrl* m_name;
     wxTextCtrl* m_nameDescription;
     wxComboBox* m_race;
-    wxSpinCtrl* m_experience;
     wxComboBox* m_skull;
+    wxSpinCtrl* m_experience;
     wxSpinCtrl* m_speed;
     wxSpinCtrl* m_manacost;
     wxSpinCtrl* m_healthNow;
     wxSpinCtrl* m_healthMax;
     
-    // Look settings
+    // Look settings - Enhanced
     wxRadioButton* m_lookTypeCheck;
     wxRadioButton* m_lookTypeExCheck;
     wxSpinCtrl* m_lookType;
-    wxSpinCtrl* m_head;
-    wxSpinCtrl* m_body;
-    wxSpinCtrl* m_legs;
-    wxSpinCtrl* m_feet;
+    ColorPaletteCtrl* m_headPalette;
+    ColorPaletteCtrl* m_bodyPalette;
+    ColorPaletteCtrl* m_legsPalette;
+    ColorPaletteCtrl* m_feetPalette;
     wxSpinCtrl* m_addons;
     wxSpinCtrl* m_mount;
     wxSpinCtrl* m_corpse;
     
-    // Combat settings
+    // Combat settings - Enhanced
     wxSpinCtrl* m_interval;
     wxSpinCtrl* m_chance;
     wxCheckBox* m_strategyCheck;
     wxSlider* m_strategy;
+    wxSpinCtrl* m_targetDistance;
+    wxSlider* m_staticAttack;
+    wxSpinCtrl* m_lightColor;
+    wxSpinCtrl* m_lightLevel;
+    wxSlider* m_runOnHealth;
     
     // Preview
     MonsterPreviewPanel* m_previewPanel;
     wxTimer* m_previewTimer;
     bool m_previewUpdatePending;
     
-    // Flags Tab
+    // Flags Tab - Complete implementation
     wxCheckBox* m_summonable;
     wxCheckBox* m_attackable;
     wxCheckBox* m_hostile;
@@ -118,27 +178,28 @@ private:
     wxCheckBox* m_pushable;
     wxCheckBox* m_canpushitems;
     wxCheckBox* m_canpushcreatures;
-    wxSpinCtrl* m_targetdistance;
-    wxSlider* m_staticattack;
     wxCheckBox* m_hidehealth;
-    wxSpinCtrl* m_lightcolor;
-    wxSpinCtrl* m_lightlevel;
-    wxSlider* m_runonhealth;
     
-    // Attacks, Defenses, etc. (to be expanded)
-    wxListCtrl* m_attacksList;
-    wxListCtrl* m_defensesList;
-    wxListCtrl* m_elementsList;
-    wxListCtrl* m_immunitiesList;
-    wxListCtrl* m_summonsList;
-    wxListCtrl* m_voicesList;
-    wxListCtrl* m_lootList;
+    // Enhanced list controls with context menus
+    ContextMenuListCtrl* m_attacksList;
+    ContextMenuListCtrl* m_defensesList;
+    ContextMenuListCtrl* m_elementsList;
+    ContextMenuListCtrl* m_immunitiesList;
+    ContextMenuListCtrl* m_summonsList;
+    ContextMenuListCtrl* m_voicesList;
+    ContextMenuListCtrl* m_lootList;
     
     // IO Tab
     wxListCtrl* m_monstersList;
     wxButton* m_loadButton;
     wxButton* m_saveButton;
     wxButton* m_createButton;
+    
+    // XML Preview Tab
+    wxTextCtrl* m_xmlPreview;
+    
+    // Current monster data
+    MonsterEntry m_currentMonster;
     
     DECLARE_EVENT_TABLE()
 };
@@ -149,7 +210,31 @@ enum {
     ID_LOAD_MONSTER,
     ID_SAVE_MONSTER,
     ID_CLOSE_BUTTON,
-    ID_PREVIEW_TIMER
+    ID_PREVIEW_TIMER,
+    ID_SKULL_COMBO,
+    ID_STRATEGY_SLIDER,
+    ID_LIGHT_COLOR_SPIN,
+    
+    // Color palette IDs
+    ID_HEAD_PALETTE,
+    ID_BODY_PALETTE,
+    ID_LEGS_PALETTE,
+    ID_FEET_PALETTE,
+    ID_SHOW_NUMBERS_TOGGLE,
+    
+    // Context menu IDs
+    ID_CONTEXT_ADD = wxID_HIGHEST + 100,
+    ID_CONTEXT_EDIT,
+    ID_CONTEXT_DELETE,
+    
+    // List control IDs
+    ID_ATTACKS_LIST,
+    ID_DEFENSES_LIST,
+    ID_ELEMENTS_LIST,
+    ID_IMMUNITIES_LIST,
+    ID_SUMMONS_LIST,
+    ID_VOICES_LIST,
+    ID_LOOT_LIST
 };
 
 #endif // RME_MONSTER_MAKER_WINDOW_H_ 

@@ -406,6 +406,11 @@
     <ClInclude Include="..\..\source\recent_brushes_window.h" />
     <ClInclude Include="..\..\source\monster_maker_window.h" />
     <ClInclude Include="..\..\source\monster_manager.h" />
+    <ClInclude Include="..\..\source\color_palette_ctrl.h">
+      <Filter>gui\controls</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\source\monster_loot_dialog.h" />
+    <ClInclude Include="..\..\source\monster_attack_dialog.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\source\json\json_spirit_reader.cpp">
@@ -720,6 +725,11 @@
     <ClCompile Include="..\..\source\recent_brushes_window.cpp" />
     <ClCompile Include="..\..\source\monster_maker_window.cpp" />
     <ClCompile Include="..\..\source\monster_manager.cpp" />
+    <ClCompile Include="..\..\source\color_palette_ctrl.cpp">
+      <Filter>gui\controls</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\source\monster_attack_dialog.cpp" />
+    <ClCompile Include="..\..\source\monster_loot_dialog.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="Editor.rc">
