@@ -78,6 +78,12 @@ public:
     void AddDefense();
     void EditDefense(int index);
     void DeleteDefense(int index);
+    void AddSummon();
+    void EditSummon(int index);
+    void DeleteSummon(int index);
+    void AddVoice();
+    void EditVoice(int index);
+    void DeleteVoice(int index);
     
     // Get current monster entry from UI
     MonsterEntry GetCurrentMonsterEntry() const;
@@ -86,8 +92,6 @@ public:
     void UpdateAttacksList();
     void UpdateLootList();
     void UpdateDefensesList();
-    void UpdateElementsList();
-    void UpdateImmunitiesList();
     void UpdateSummonsList();
     void UpdateVoicesList();
     
@@ -100,6 +104,12 @@ private:
     void OnCloseButton(wxCommandEvent& event);
     void OnCreateMonster(wxCommandEvent& event);
     void OnLoadMonster(wxCommandEvent& event);
+    void OnAddSummon(wxCommandEvent& event);
+    void OnEditSummon(wxCommandEvent& event);
+    void OnDeleteSummon(wxCommandEvent& event);
+    void OnAddVoice(wxCommandEvent& event);
+    void OnEditVoice(wxCommandEvent& event);
+    void OnDeleteVoice(wxCommandEvent& event);
     void OnPreviewUpdate(wxCommandEvent& event);
     void OnTabChange(wxNotebookEvent& event);
     void OnLookTypeChange(wxCommandEvent& event);
@@ -183,11 +193,40 @@ private:
     // Enhanced list controls with context menus
     ContextMenuListCtrl* m_attacksList;
     ContextMenuListCtrl* m_defensesList;
-    ContextMenuListCtrl* m_elementsList;
-    ContextMenuListCtrl* m_immunitiesList;
-    ContextMenuListCtrl* m_summonsList;
-    ContextMenuListCtrl* m_voicesList;
     ContextMenuListCtrl* m_lootList;
+    
+    // Elements Tab - Simple percentage controls
+    wxSpinCtrl* m_physicalPercent;
+    wxSpinCtrl* m_firePercent;
+    wxSpinCtrl* m_energyPercent;
+    wxSpinCtrl* m_earthPercent;
+    wxSpinCtrl* m_icePercent;
+    wxSpinCtrl* m_holyPercent;
+    wxSpinCtrl* m_deathPercent;
+    wxSpinCtrl* m_drownPercent;
+    
+    // Immunities Tab - Simple checkboxes
+    wxCheckBox* m_immunityFire;
+    wxCheckBox* m_immunityEnergy;
+    wxCheckBox* m_immunityEarth;
+    wxCheckBox* m_immunityIce;
+    wxCheckBox* m_immunityHoly;
+    wxCheckBox* m_immunityDeath;
+    wxCheckBox* m_immunityPhysical;
+    wxCheckBox* m_immunityDrown;
+    wxCheckBox* m_immunityParalyze;
+    wxCheckBox* m_immunityInvisible;
+    wxCheckBox* m_immunityLifedrain;
+    wxCheckBox* m_immunityDrunk;
+    
+    // Summons Tab - List and controls
+    wxSpinCtrl* m_maxSummons;
+    ContextMenuListCtrl* m_summonsList;
+    
+    // Voices Tab - List and controls
+    wxSpinCtrl* m_voiceInterval;
+    wxSpinCtrl* m_voiceChance;
+    ContextMenuListCtrl* m_voicesList;
     
     // IO Tab
     wxListCtrl* m_monstersList;
@@ -230,11 +269,17 @@ enum {
     // List control IDs
     ID_ATTACKS_LIST,
     ID_DEFENSES_LIST,
-    ID_ELEMENTS_LIST,
-    ID_IMMUNITIES_LIST,
     ID_SUMMONS_LIST,
     ID_VOICES_LIST,
-    ID_LOOT_LIST
+    ID_LOOT_LIST,
+    
+    // Button IDs for new systems
+    ID_ADD_SUMMON,
+    ID_EDIT_SUMMON,
+    ID_DELETE_SUMMON,
+    ID_ADD_VOICE,
+    ID_EDIT_VOICE,
+    ID_DELETE_VOICE
 };
 
 #endif // RME_MONSTER_MAKER_WINDOW_H_ 

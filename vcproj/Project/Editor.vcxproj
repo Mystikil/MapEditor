@@ -230,6 +230,7 @@
     <ClCompile Include="..\..\source\light_drawer.cpp" />
     <ClCompile Include="..\..\source\map_summary_window.cpp" />
     <ClCompile Include="..\..\source\monster_attack_dialog.cpp" />
+    <ClCompile Include="..\..\source\monster_defense_dialog.cpp" />
     <ClCompile Include="..\..\source\monster_loot_dialog.cpp" />
     <ClCompile Include="..\..\source\monster_maker_window.cpp" />
     <ClCompile Include="..\..\source\monster_manager.cpp" />
@@ -262,6 +263,7 @@
     <ClInclude Include="..\..\source\main_toolbar.h" />
     <ClInclude Include="..\..\source\map_summary_window.h" />
     <ClInclude Include="..\..\source\monster_attack_dialog.h" />
+    <ClInclude Include="..\..\source\monster_defense_dialog.h" />
     <ClInclude Include="..\..\source\monster_loot_dialog.h" />
     <ClInclude Include="..\..\source\monster_maker_window.h" />
     <ClInclude Include="..\..\source\monster_manager.h" />

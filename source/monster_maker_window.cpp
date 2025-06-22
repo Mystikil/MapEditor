@@ -1,6 +1,7 @@
 #include "main.h"
 #include "monster_maker_window.h"
 #include "monster_attack_dialog.h"
+#include "monster_defense_dialog.h"
 #include "monster_loot_dialog.h"
 #include "gui.h"
 #include "creature_sprite_manager.h"
@@ -66,6 +67,10 @@ void ContextMenuListCtrl::OnMenuAdd(wxCommandEvent& event) {
         m_owner->AddLoot();
     } else if (m_listType == "Defense") {
         m_owner->AddDefense();
+    } else if (m_listType == "Summon") {
+        m_owner->AddSummon();
+    } else if (m_listType == "Voice") {
+        m_owner->AddVoice();
     }
 }
 
@@ -78,6 +83,10 @@ void ContextMenuListCtrl::OnMenuEdit(wxCommandEvent& event) {
             m_owner->EditLoot(selectedIndex);
         } else if (m_listType == "Defense") {
             m_owner->EditDefense(selectedIndex);
+        } else if (m_listType == "Summon") {
+            m_owner->EditSummon(selectedIndex);
+        } else if (m_listType == "Voice") {
+            m_owner->EditVoice(selectedIndex);
         }
     }
 }
@@ -93,6 +102,10 @@ void ContextMenuListCtrl::OnMenuDelete(wxCommandEvent& event) {
                 m_owner->DeleteLoot(selectedIndex);
             } else if (m_listType == "Defense") {
                 m_owner->DeleteDefense(selectedIndex);
+            } else if (m_listType == "Summon") {
+                m_owner->DeleteSummon(selectedIndex);
+            } else if (m_listType == "Voice") {
+                m_owner->DeleteVoice(selectedIndex);
             }
         }
     }
@@ -120,6 +133,12 @@ wxBEGIN_EVENT_TABLE(MonsterMakerWindow, wxFrame)
     EVT_BUTTON(ID_CLOSE_BUTTON, MonsterMakerWindow::OnCloseButton)
     EVT_BUTTON(ID_CREATE_MONSTER, MonsterMakerWindow::OnCreateMonster)
     EVT_BUTTON(ID_LOAD_MONSTER, MonsterMakerWindow::OnLoadMonster)
+    EVT_BUTTON(ID_ADD_SUMMON, MonsterMakerWindow::OnAddSummon)
+    EVT_BUTTON(ID_EDIT_SUMMON, MonsterMakerWindow::OnEditSummon)
+    EVT_BUTTON(ID_DELETE_SUMMON, MonsterMakerWindow::OnDeleteSummon)
+    EVT_BUTTON(ID_ADD_VOICE, MonsterMakerWindow::OnAddVoice)
+    EVT_BUTTON(ID_EDIT_VOICE, MonsterMakerWindow::OnEditVoice)
+    EVT_BUTTON(ID_DELETE_VOICE, MonsterMakerWindow::OnDeleteVoice)
     EVT_NOTEBOOK_PAGE_CHANGED(ID_NOTEBOOK, MonsterMakerWindow::OnTabChange)
     EVT_TIMER(ID_PREVIEW_TIMER, MonsterMakerWindow::OnPreviewTimer)
     EVT_COMBOBOX(ID_SKULL_COMBO, MonsterMakerWindow::OnSkullChange)
@@ -204,6 +223,35 @@ MonsterMakerWindow::MonsterMakerWindow(wxWindow* parent) :
     if (m_canpushitems) m_canpushitems->Bind(wxEVT_CHECKBOX, &MonsterMakerWindow::OnPreviewUpdate, this);
     if (m_canpushcreatures) m_canpushcreatures->Bind(wxEVT_CHECKBOX, &MonsterMakerWindow::OnPreviewUpdate, this);
     if (m_hidehealth) m_hidehealth->Bind(wxEVT_CHECKBOX, &MonsterMakerWindow::OnPreviewUpdate, this);
+    
+    // Bind element controls
+    if (m_physicalPercent) m_physicalPercent->Bind(wxEVT_SPINCTRL, &MonsterMakerWindow::OnPreviewUpdate, this);
+    if (m_firePercent) m_firePercent->Bind(wxEVT_SPINCTRL, &MonsterMakerWindow::OnPreviewUpdate, this);
+    if (m_energyPercent) m_energyPercent->Bind(wxEVT_SPINCTRL, &MonsterMakerWindow::OnPreviewUpdate, this);
+    if (m_earthPercent) m_earthPercent->Bind(wxEVT_SPINCTRL, &MonsterMakerWindow::OnPreviewUpdate, this);
+    if (m_icePercent) m_icePercent->Bind(wxEVT_SPINCTRL, &MonsterMakerWindow::OnPreviewUpdate, this);
+    if (m_holyPercent) m_holyPercent->Bind(wxEVT_SPINCTRL, &MonsterMakerWindow::OnPreviewUpdate, this);
+    if (m_deathPercent) m_deathPercent->Bind(wxEVT_SPINCTRL, &MonsterMakerWindow::OnPreviewUpdate, this);
+    if (m_drownPercent) m_drownPercent->Bind(wxEVT_SPINCTRL, &MonsterMakerWindow::OnPreviewUpdate, this);
+    
+    // Bind immunity controls
+    if (m_immunityFire) m_immunityFire->Bind(wxEVT_CHECKBOX, &MonsterMakerWindow::OnPreviewUpdate, this);
+    if (m_immunityEnergy) m_immunityEnergy->Bind(wxEVT_CHECKBOX, &MonsterMakerWindow::OnPreviewUpdate, this);
+    if (m_immunityEarth) m_immunityEarth->Bind(wxEVT_CHECKBOX, &MonsterMakerWindow::OnPreviewUpdate, this);
+    if (m_immunityIce) m_immunityIce->Bind(wxEVT_CHECKBOX, &MonsterMakerWindow::OnPreviewUpdate, this);
+    if (m_immunityHoly) m_immunityHoly->Bind(wxEVT_CHECKBOX, &MonsterMakerWindow::OnPreviewUpdate, this);
+    if (m_immunityDeath) m_immunityDeath->Bind(wxEVT_CHECKBOX, &MonsterMakerWindow::OnPreviewUpdate, this);
+    if (m_immunityPhysical) m_immunityPhysical->Bind(wxEVT_CHECKBOX, &MonsterMakerWindow::OnPreviewUpdate, this);
+    if (m_immunityDrown) m_immunityDrown->Bind(wxEVT_CHECKBOX, &MonsterMakerWindow::OnPreviewUpdate, this);
+    if (m_immunityParalyze) m_immunityParalyze->Bind(wxEVT_CHECKBOX, &MonsterMakerWindow::OnPreviewUpdate, this);
+    if (m_immunityInvisible) m_immunityInvisible->Bind(wxEVT_CHECKBOX, &MonsterMakerWindow::OnPreviewUpdate, this);
+    if (m_immunityLifedrain) m_immunityLifedrain->Bind(wxEVT_CHECKBOX, &MonsterMakerWindow::OnPreviewUpdate, this);
+    if (m_immunityDrunk) m_immunityDrunk->Bind(wxEVT_CHECKBOX, &MonsterMakerWindow::OnPreviewUpdate, this);
+    
+    // Bind summon and voice controls
+    if (m_maxSummons) m_maxSummons->Bind(wxEVT_SPINCTRL, &MonsterMakerWindow::OnPreviewUpdate, this);
+    if (m_voiceInterval) m_voiceInterval->Bind(wxEVT_SPINCTRL, &MonsterMakerWindow::OnPreviewUpdate, this);
+    if (m_voiceChance) m_voiceChance->Bind(wxEVT_SPINCTRL, &MonsterMakerWindow::OnPreviewUpdate, this);
     
     // Set default values
     ClearAll();
@@ -432,11 +480,16 @@ void MonsterMakerWindow::CreateDefensesTab(wxNotebook* notebook) {
     
     wxBoxSizer* sizer = new wxBoxSizer(wxVERTICAL);
     
-    m_defensesList = new ContextMenuListCtrl(panel, ID_DEFENSES_LIST, this, "Defense");
-    m_defensesList->AppendColumn("Name", wxLIST_FORMAT_LEFT, 100);
-    m_defensesList->AppendColumn("Type", wxLIST_FORMAT_LEFT, 80);
+    sizer->Add(new wxStaticText(panel, wxID_ANY, "Right-click to add, edit, or delete defenses"), 0, wxALL, 5);
     
-    sizer->Add(new wxStaticText(panel, wxID_ANY, "Defenses (Coming Soon)"), 0, wxALL, 5);
+    m_defensesList = new ContextMenuListCtrl(panel, ID_DEFENSES_LIST, this, "Defense");
+    m_defensesList->AppendColumn("Name", wxLIST_FORMAT_LEFT, 80);
+    m_defensesList->AppendColumn("Type", wxLIST_FORMAT_LEFT, 80);
+    m_defensesList->AppendColumn("Interval", wxLIST_FORMAT_LEFT, 60);
+    m_defensesList->AppendColumn("Chance %", wxLIST_FORMAT_LEFT, 60);
+    m_defensesList->AppendColumn("Value", wxLIST_FORMAT_LEFT, 80);
+    m_defensesList->AppendColumn("Properties", wxLIST_FORMAT_LEFT, 150);
+    
     sizer->Add(m_defensesList, 1, wxEXPAND | wxALL, 5);
     
     panel->SetSizer(sizer);
@@ -447,7 +500,58 @@ void MonsterMakerWindow::CreateElementsTab(wxNotebook* notebook) {
     notebook->AddPage(panel, "Elements");
     
     wxBoxSizer* sizer = new wxBoxSizer(wxVERTICAL);
-    sizer->Add(new wxStaticText(panel, wxID_ANY, "Element resistances (Coming Soon)"), 0, wxALL, 5);
+    
+    sizer->Add(new wxStaticText(panel, wxID_ANY, "Element Damage Modifiers (% - negative values = weakness, positive = resistance)"), 0, wxALL, 5);
+    
+    // Create grid for element controls
+    wxFlexGridSizer* elementGridSizer = new wxFlexGridSizer(4, 4, 10, 10);
+    elementGridSizer->AddGrowableCol(1);
+    elementGridSizer->AddGrowableCol(3);
+    
+    // Physical
+    elementGridSizer->Add(new wxStaticText(panel, wxID_ANY, "Physical:"), 0, wxALIGN_CENTER_VERTICAL);
+    m_physicalPercent = new wxSpinCtrl(panel, wxID_ANY, "", wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS, -100, 100, 0);
+    elementGridSizer->Add(m_physicalPercent, 1, wxEXPAND);
+    
+    // Fire  
+    elementGridSizer->Add(new wxStaticText(panel, wxID_ANY, "Fire:"), 0, wxALIGN_CENTER_VERTICAL);
+    m_firePercent = new wxSpinCtrl(panel, wxID_ANY, "", wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS, -100, 100, 0);
+    elementGridSizer->Add(m_firePercent, 1, wxEXPAND);
+    
+    // Energy
+    elementGridSizer->Add(new wxStaticText(panel, wxID_ANY, "Energy:"), 0, wxALIGN_CENTER_VERTICAL);
+    m_energyPercent = new wxSpinCtrl(panel, wxID_ANY, "", wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS, -100, 100, 0);
+    elementGridSizer->Add(m_energyPercent, 1, wxEXPAND);
+    
+    // Earth
+    elementGridSizer->Add(new wxStaticText(panel, wxID_ANY, "Earth:"), 0, wxALIGN_CENTER_VERTICAL);
+    m_earthPercent = new wxSpinCtrl(panel, wxID_ANY, "", wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS, -100, 100, 0);
+    elementGridSizer->Add(m_earthPercent, 1, wxEXPAND);
+    
+    // Ice
+    elementGridSizer->Add(new wxStaticText(panel, wxID_ANY, "Ice:"), 0, wxALIGN_CENTER_VERTICAL);
+    m_icePercent = new wxSpinCtrl(panel, wxID_ANY, "", wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS, -100, 100, 0);
+    elementGridSizer->Add(m_icePercent, 1, wxEXPAND);
+    
+    // Holy
+    elementGridSizer->Add(new wxStaticText(panel, wxID_ANY, "Holy:"), 0, wxALIGN_CENTER_VERTICAL);
+    m_holyPercent = new wxSpinCtrl(panel, wxID_ANY, "", wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS, -100, 100, 0);
+    elementGridSizer->Add(m_holyPercent, 1, wxEXPAND);
+    
+    // Death
+    elementGridSizer->Add(new wxStaticText(panel, wxID_ANY, "Death:"), 0, wxALIGN_CENTER_VERTICAL);
+    m_deathPercent = new wxSpinCtrl(panel, wxID_ANY, "", wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS, -100, 100, 0);
+    elementGridSizer->Add(m_deathPercent, 1, wxEXPAND);
+    
+    // Drown
+    elementGridSizer->Add(new wxStaticText(panel, wxID_ANY, "Drown:"), 0, wxALIGN_CENTER_VERTICAL);
+    m_drownPercent = new wxSpinCtrl(panel, wxID_ANY, "", wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS, -100, 100, 0);
+    elementGridSizer->Add(m_drownPercent, 1, wxEXPAND);
+    
+    sizer->Add(elementGridSizer, 1, wxEXPAND | wxALL, 10);
+    
+    // Help text
+    sizer->Add(new wxStaticText(panel, wxID_ANY, "Examples: -25% = 25% more damage, +50% = 50% damage reduction"), 0, wxALL, 5);
     
     panel->SetSizer(sizer);
 }
@@ -457,7 +561,51 @@ void MonsterMakerWindow::CreateImmunitiesTab(wxNotebook* notebook) {
     notebook->AddPage(panel, "Immunities");
     
     wxBoxSizer* sizer = new wxBoxSizer(wxVERTICAL);
-    sizer->Add(new wxStaticText(panel, wxID_ANY, "Immunities (Coming Soon)"), 0, wxALL, 5);
+    
+    sizer->Add(new wxStaticText(panel, wxID_ANY, "Monster Immunities - Check to make the monster immune to specific effects"), 0, wxALL, 5);
+    
+    // Create grid for immunity checkboxes
+    wxFlexGridSizer* immunityGridSizer = new wxFlexGridSizer(3, 3, 10, 10);
+    
+    // Damage type immunities
+    m_immunityFire = new wxCheckBox(panel, wxID_ANY, "Fire Damage");
+    immunityGridSizer->Add(m_immunityFire, 0, wxALIGN_CENTER_VERTICAL);
+    
+    m_immunityEnergy = new wxCheckBox(panel, wxID_ANY, "Energy Damage");
+    immunityGridSizer->Add(m_immunityEnergy, 0, wxALIGN_CENTER_VERTICAL);
+    
+    m_immunityEarth = new wxCheckBox(panel, wxID_ANY, "Earth/Poison Damage");
+    immunityGridSizer->Add(m_immunityEarth, 0, wxALIGN_CENTER_VERTICAL);
+    
+    m_immunityIce = new wxCheckBox(panel, wxID_ANY, "Ice Damage");
+    immunityGridSizer->Add(m_immunityIce, 0, wxALIGN_CENTER_VERTICAL);
+    
+    m_immunityHoly = new wxCheckBox(panel, wxID_ANY, "Holy Damage");
+    immunityGridSizer->Add(m_immunityHoly, 0, wxALIGN_CENTER_VERTICAL);
+    
+    m_immunityDeath = new wxCheckBox(panel, wxID_ANY, "Death Damage");
+    immunityGridSizer->Add(m_immunityDeath, 0, wxALIGN_CENTER_VERTICAL);
+    
+    m_immunityPhysical = new wxCheckBox(panel, wxID_ANY, "Physical Damage");
+    immunityGridSizer->Add(m_immunityPhysical, 0, wxALIGN_CENTER_VERTICAL);
+    
+    m_immunityDrown = new wxCheckBox(panel, wxID_ANY, "Drowning");
+    immunityGridSizer->Add(m_immunityDrown, 0, wxALIGN_CENTER_VERTICAL);
+    
+    // Status effect immunities
+    m_immunityParalyze = new wxCheckBox(panel, wxID_ANY, "Paralyze");
+    immunityGridSizer->Add(m_immunityParalyze, 0, wxALIGN_CENTER_VERTICAL);
+    
+    m_immunityInvisible = new wxCheckBox(panel, wxID_ANY, "Invisibility");
+    immunityGridSizer->Add(m_immunityInvisible, 0, wxALIGN_CENTER_VERTICAL);
+    
+    m_immunityLifedrain = new wxCheckBox(panel, wxID_ANY, "Life Drain");
+    immunityGridSizer->Add(m_immunityLifedrain, 0, wxALIGN_CENTER_VERTICAL);
+    
+    m_immunityDrunk = new wxCheckBox(panel, wxID_ANY, "Drunk");
+    immunityGridSizer->Add(m_immunityDrunk, 0, wxALIGN_CENTER_VERTICAL);
+    
+    sizer->Add(immunityGridSizer, 1, wxEXPAND | wxALL, 10);
     
     panel->SetSizer(sizer);
 }
@@ -467,7 +615,31 @@ void MonsterMakerWindow::CreateSummonsTab(wxNotebook* notebook) {
     notebook->AddPage(panel, "Summons");
     
     wxBoxSizer* sizer = new wxBoxSizer(wxVERTICAL);
-    sizer->Add(new wxStaticText(panel, wxID_ANY, "Summons (Coming Soon)"), 0, wxALL, 5);
+    
+    // Max summons control
+    wxBoxSizer* maxSummonsSizer = new wxBoxSizer(wxHORIZONTAL);
+    maxSummonsSizer->Add(new wxStaticText(panel, wxID_ANY, "Max Summons:"), 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 5);
+    m_maxSummons = new wxSpinCtrl(panel, wxID_ANY, "", wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS, 0, 20, 0);
+    maxSummonsSizer->Add(m_maxSummons, 0, wxRIGHT, 10);
+    sizer->Add(maxSummonsSizer, 0, wxALL, 5);
+    
+    // Summons list
+    sizer->Add(new wxStaticText(panel, wxID_ANY, "Summons List:"), 0, wxALL, 5);
+    m_summonsList = new ContextMenuListCtrl(panel, ID_SUMMONS_LIST, this, "Summon");
+    m_summonsList->AppendColumn("Creature Name", wxLIST_FORMAT_LEFT, 200);
+    m_summonsList->AppendColumn("Interval (ms)", wxLIST_FORMAT_LEFT, 100);
+    m_summonsList->AppendColumn("Chance (%)", wxLIST_FORMAT_LEFT, 100);
+    sizer->Add(m_summonsList, 1, wxEXPAND | wxALL, 5);
+    
+    // Add/Edit/Delete buttons
+    wxBoxSizer* buttonSizer = new wxBoxSizer(wxHORIZONTAL);
+    buttonSizer->Add(new wxButton(panel, ID_ADD_SUMMON, "Add Summon"), 0, wxRIGHT, 5);
+    buttonSizer->Add(new wxButton(panel, ID_EDIT_SUMMON, "Edit Summon"), 0, wxRIGHT, 5);
+    buttonSizer->Add(new wxButton(panel, ID_DELETE_SUMMON, "Delete Summon"), 0);
+    sizer->Add(buttonSizer, 0, wxALL, 5);
+    
+    // Instructions
+    sizer->Add(new wxStaticText(panel, wxID_ANY, "Right-click on list for context menu. Double-click to edit."), 0, wxALL, 5);
     
     panel->SetSizer(sizer);
 }
@@ -477,7 +649,37 @@ void MonsterMakerWindow::CreateVoicesTab(wxNotebook* notebook) {
     notebook->AddPage(panel, "Voices");
     
     wxBoxSizer* sizer = new wxBoxSizer(wxVERTICAL);
-    sizer->Add(new wxStaticText(panel, wxID_ANY, "Monster voices (Coming Soon)"), 0, wxALL, 5);
+    
+    // Voice settings controls
+    wxFlexGridSizer* voiceSettingsSizer = new wxFlexGridSizer(2, 2, 5, 10);
+    voiceSettingsSizer->AddGrowableCol(1);
+    
+    voiceSettingsSizer->Add(new wxStaticText(panel, wxID_ANY, "Voice Interval (ms):"), 0, wxALIGN_CENTER_VERTICAL);
+    m_voiceInterval = new wxSpinCtrl(panel, wxID_ANY, "", wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS, 1000, 60000, 5000);
+    voiceSettingsSizer->Add(m_voiceInterval, 1, wxEXPAND);
+    
+    voiceSettingsSizer->Add(new wxStaticText(panel, wxID_ANY, "Voice Chance (%):"), 0, wxALIGN_CENTER_VERTICAL);
+    m_voiceChance = new wxSpinCtrl(panel, wxID_ANY, "", wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS, 1, 100, 10);
+    voiceSettingsSizer->Add(m_voiceChance, 1, wxEXPAND);
+    
+    sizer->Add(voiceSettingsSizer, 0, wxEXPAND | wxALL, 5);
+    
+    // Voices list
+    sizer->Add(new wxStaticText(panel, wxID_ANY, "Voice Messages:"), 0, wxALL, 5);
+    m_voicesList = new ContextMenuListCtrl(panel, ID_VOICES_LIST, this, "Voice");
+    m_voicesList->AppendColumn("Message", wxLIST_FORMAT_LEFT, 400);
+    m_voicesList->AppendColumn("Yell", wxLIST_FORMAT_LEFT, 60);
+    sizer->Add(m_voicesList, 1, wxEXPAND | wxALL, 5);
+    
+    // Add/Edit/Delete buttons
+    wxBoxSizer* buttonSizer = new wxBoxSizer(wxHORIZONTAL);
+    buttonSizer->Add(new wxButton(panel, ID_ADD_VOICE, "Add Voice"), 0, wxRIGHT, 5);
+    buttonSizer->Add(new wxButton(panel, ID_EDIT_VOICE, "Edit Voice"), 0, wxRIGHT, 5);
+    buttonSizer->Add(new wxButton(panel, ID_DELETE_VOICE, "Delete Voice"), 0);
+    sizer->Add(buttonSizer, 0, wxALL, 5);
+    
+    // Instructions
+    sizer->Add(new wxStaticText(panel, wxID_ANY, "Right-click on list for context menu. Double-click to edit."), 0, wxALL, 5);
     
     panel->SetSizer(sizer);
 }
@@ -869,18 +1071,29 @@ void MonsterMakerWindow::DeleteLoot(int index) {
 }
 
 void MonsterMakerWindow::AddDefense() {
-    // TODO: Implement defense dialog
-    wxMessageBox("Defense editing not yet implemented", "Coming Soon", wxOK | wxICON_INFORMATION);
+    MonsterDefenseDialog dialog(this);
+    if (dialog.ShowModal() == wxID_OK) {
+        DefenseEntry defense = dialog.GetDefenseEntry();
+        m_currentMonster.defenses.push_back(defense);
+        UpdateDefensesList();
+    }
 }
 
 void MonsterMakerWindow::EditDefense(int index) {
-    // TODO: Implement defense editing
-    wxMessageBox("Defense editing not yet implemented", "Coming Soon", wxOK | wxICON_INFORMATION);
+    if (index >= 0 && index < (int)m_currentMonster.defenses.size()) {
+        MonsterDefenseDialog dialog(this, &m_currentMonster.defenses[index]);
+        if (dialog.ShowModal() == wxID_OK) {
+            m_currentMonster.defenses[index] = dialog.GetDefenseEntry();
+            UpdateDefensesList();
+        }
+    }
 }
 
 void MonsterMakerWindow::DeleteDefense(int index) {
-    // TODO: Implement defense deletion
-    wxMessageBox("Defense editing not yet implemented", "Coming Soon", wxOK | wxICON_INFORMATION);
+    if (index >= 0 && index < (int)m_currentMonster.defenses.size()) {
+        m_currentMonster.defenses.erase(m_currentMonster.defenses.begin() + index);
+        UpdateDefensesList();
+    }
 }
 
 MonsterEntry MonsterMakerWindow::GetCurrentMonsterEntry() const {
@@ -980,23 +1193,191 @@ void MonsterMakerWindow::UpdateLootList() {
 }
 
 void MonsterMakerWindow::UpdateDefensesList() {
-    // TODO: Implement when defense system is ready
+    if (!m_defensesList) return;
+    
+    m_defensesList->DeleteAllItems();
+    for (size_t i = 0; i < m_currentMonster.defenses.size(); ++i) {
+        const DefenseEntry& defense = m_currentMonster.defenses[i];
+        
+        long itemIndex = m_defensesList->InsertItem(i, wxstr(defense.name));
+        m_defensesList->SetItem(itemIndex, 1, wxstr(defense.type));
+        m_defensesList->SetItem(itemIndex, 2, wxString::Format("%d", defense.interval));
+        m_defensesList->SetItem(itemIndex, 3, wxString::Format("%d", defense.chance));
+        
+        // Value range for healing defenses
+        wxString valueStr;
+        if (defense.name == "healing") {
+            if (defense.minValue == defense.maxValue) {
+                valueStr = wxString::Format("%d", defense.maxValue);
+            } else {
+                valueStr = wxString::Format("%d-%d", defense.minValue, defense.maxValue);
+            }
+        } else {
+            valueStr = "-";
+        }
+        m_defensesList->SetItem(itemIndex, 4, valueStr);
+        
+        // Properties summary
+        wxString properties;
+        if (defense.type.find("radius=") != std::string::npos) {
+            // Extract radius value
+            size_t start = defense.type.find("radius=\"") + 8;
+            size_t end = defense.type.find("\"", start);
+            if (end != std::string::npos) {
+                properties += wxString::Format("Radius:%s ", wxstr(defense.type.substr(start, end - start)));
+            }
+        }
+        if (defense.type.find("speedchange=") != std::string::npos) {
+            // Extract speedchange value
+            size_t start = defense.type.find("speedchange=\"") + 13;
+            size_t end = defense.type.find("\"", start);
+            if (end != std::string::npos) {
+                properties += wxString::Format("Speed:%s ", wxstr(defense.type.substr(start, end - start)));
+            }
+        }
+        if (defense.type.find("duration=") != std::string::npos) {
+            // Extract duration value
+            size_t start = defense.type.find("duration=\"") + 10;
+            size_t end = defense.type.find("\"", start);
+            if (end != std::string::npos) {
+                properties += wxString::Format("Duration:%sms ", wxstr(defense.type.substr(start, end - start)));
+            }
+        }
+        if (defense.type.find("areaEffect=") != std::string::npos) {
+            // Extract area effect value
+            size_t start = defense.type.find("areaEffect=\"") + 12;
+            size_t end = defense.type.find("\"", start);
+            if (end != std::string::npos) {
+                properties += wxString::Format("Effect:%s ", wxstr(defense.type.substr(start, end - start)));
+            }
+        }
+        
+        m_defensesList->SetItem(itemIndex, 5, properties);
+    }
+    
+    UpdateXMLPreview();
 }
 
-void MonsterMakerWindow::UpdateElementsList() {
-    // TODO: Implement when element system is ready
-}
 
-void MonsterMakerWindow::UpdateImmunitiesList() {
-    // TODO: Implement when immunity system is ready
-}
 
 void MonsterMakerWindow::UpdateSummonsList() {
-    // TODO: Implement when summon system is ready
+    if (!m_summonsList) return;
+    
+    m_summonsList->DeleteAllItems();
+    for (size_t i = 0; i < m_currentMonster.summons.size(); ++i) {
+        const SummonEntry& summon = m_currentMonster.summons[i];
+        
+        long itemIndex = m_summonsList->InsertItem(i, wxstr(summon.name));
+        m_summonsList->SetItem(itemIndex, 1, wxString::Format("%d", summon.interval));
+        m_summonsList->SetItem(itemIndex, 2, wxString::Format("%d", summon.chance));
+    }
 }
 
 void MonsterMakerWindow::UpdateVoicesList() {
-    // TODO: Implement when voice system is ready
+    if (!m_voicesList) return;
+    
+    m_voicesList->DeleteAllItems();
+    for (size_t i = 0; i < m_currentMonster.voices.size(); ++i) {
+        const VoiceEntry& voice = m_currentMonster.voices[i];
+        
+        long itemIndex = m_voicesList->InsertItem(i, wxstr(voice.text));
+        m_voicesList->SetItem(itemIndex, 1, voice.yell ? "Yes" : "No");
+    }
+}
+
+void MonsterMakerWindow::AddSummon() {
+    wxTextEntryDialog dialog(this, "Enter creature name:", "Add Summon", "");
+    if (dialog.ShowModal() == wxID_OK) {
+        wxString creatureName = dialog.GetValue();
+        if (!creatureName.IsEmpty()) {
+            SummonEntry summon;
+            summon.name = creatureName.ToStdString();
+            summon.interval = 2000;
+            summon.chance = 10;
+            m_currentMonster.summons.push_back(summon);
+            UpdateSummonsList();
+            UpdateXMLPreview();
+        }
+    }
+}
+
+void MonsterMakerWindow::EditSummon(int index) {
+    if (index >= 0 && index < (int)m_currentMonster.summons.size()) {
+        SummonEntry& summon = m_currentMonster.summons[index];
+        
+        wxTextEntryDialog nameDialog(this, "Enter creature name:", "Edit Summon", wxstr(summon.name));
+        if (nameDialog.ShowModal() == wxID_OK) {
+            summon.name = nameDialog.GetValue().ToStdString();
+            
+            // Get interval
+            wxString intervalStr = wxGetTextFromUser("Enter interval (ms):", "Edit Summon", wxString::Format("%d", summon.interval), this);
+            if (!intervalStr.IsEmpty()) {
+                long intervalValue;
+                if (intervalStr.ToLong(&intervalValue) && intervalValue >= 100 && intervalValue <= 60000) {
+                    summon.interval = intervalValue;
+                    
+                    // Get chance
+                    wxString chanceStr = wxGetTextFromUser("Enter chance (%):", "Edit Summon", wxString::Format("%d", summon.chance), this);
+                    if (!chanceStr.IsEmpty()) {
+                        long chanceValue;
+                        if (chanceStr.ToLong(&chanceValue) && chanceValue >= 1 && chanceValue <= 100) {
+                            summon.chance = chanceValue;
+                            UpdateSummonsList();
+                            UpdateXMLPreview();
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+void MonsterMakerWindow::DeleteSummon(int index) {
+    if (index >= 0 && index < (int)m_currentMonster.summons.size()) {
+        m_currentMonster.summons.erase(m_currentMonster.summons.begin() + index);
+        UpdateSummonsList();
+        UpdateXMLPreview();
+    }
+}
+
+void MonsterMakerWindow::AddVoice() {
+    wxTextEntryDialog dialog(this, "Enter voice message:", "Add Voice", "");
+    if (dialog.ShowModal() == wxID_OK) {
+        wxString message = dialog.GetValue();
+        if (!message.IsEmpty()) {
+            VoiceEntry voice;
+            voice.text = message.ToStdString();
+            voice.yell = false;
+            m_currentMonster.voices.push_back(voice);
+            UpdateVoicesList();
+            UpdateXMLPreview();
+        }
+    }
+}
+
+void MonsterMakerWindow::EditVoice(int index) {
+    if (index >= 0 && index < (int)m_currentMonster.voices.size()) {
+        VoiceEntry& voice = m_currentMonster.voices[index];
+        
+        wxTextEntryDialog messageDialog(this, "Enter voice message:", "Edit Voice", wxstr(voice.text));
+        if (messageDialog.ShowModal() == wxID_OK) {
+            voice.text = messageDialog.GetValue().ToStdString();
+            
+            int result = wxMessageBox("Should this voice be a yell?", "Voice Type", wxYES_NO | wxICON_QUESTION);
+            voice.yell = (result == wxYES);
+            
+            UpdateVoicesList();
+            UpdateXMLPreview();
+        }
+    }
+}
+
+void MonsterMakerWindow::DeleteVoice(int index) {
+    if (index >= 0 && index < (int)m_currentMonster.voices.size()) {
+        m_currentMonster.voices.erase(m_currentMonster.voices.begin() + index);
+        UpdateVoicesList();
+        UpdateXMLPreview();
+    }
 }
 
 void MonsterMakerWindow::CreateXMLPreviewTab(wxNotebook* notebook) {
@@ -1145,6 +1526,67 @@ void MonsterMakerWindow::UpdateXMLPreview() {
         xml += "\t</attacks>\n";
     }
     
+    // Defenses
+    if (!entry.defenses.empty()) {
+        xml += "\t<defenses>\n";
+        for (const auto& defense : entry.defenses) {
+            xml += wxString::Format("\t\t<defense name=\"%s\"", wxstr(defense.name));
+            if (defense.interval > 0) xml += wxString::Format(" interval=\"%d\"", defense.interval);
+            if (defense.chance < 100) xml += wxString::Format(" chance=\"%d\"", defense.chance);
+            
+            // Add healing values for healing defenses
+            if (defense.name == "healing") {
+                if (defense.minValue > 0) xml += wxString::Format(" min=\"%d\"", defense.minValue);
+                if (defense.maxValue > 0) xml += wxString::Format(" max=\"%d\"", defense.maxValue);
+            }
+            
+            // Parse additional properties from type field
+            wxString typeStr = wxstr(defense.type);
+            if (typeStr.Contains("radius=")) {
+                // Extract radius value
+                int start = typeStr.Find("radius=\"") + 8;
+                int end = typeStr.find("\"", start);
+                if (end != wxNOT_FOUND) {
+                    xml += " radius=\"" + typeStr.Mid(start, end - start) + "\"";
+                }
+            }
+            if (typeStr.Contains("speedchange=")) {
+                // Extract speedchange value
+                int start = typeStr.Find("speedchange=\"") + 13;
+                int end = typeStr.find("\"", start);
+                if (end != wxNOT_FOUND) {
+                    xml += " speedchange=\"" + typeStr.Mid(start, end - start) + "\"";
+                }
+            }
+            if (typeStr.Contains("duration=")) {
+                // Extract duration value
+                int start = typeStr.Find("duration=\"") + 10;
+                int end = typeStr.find("\"", start);
+                if (end != wxNOT_FOUND) {
+                    xml += " duration=\"" + typeStr.Mid(start, end - start) + "\"";
+                }
+            }
+            
+            // Check if we need attributes section for area effect
+            bool hasAreaEffect = typeStr.Contains("areaEffect=");
+            
+            if (hasAreaEffect) {
+                xml += ">\n";
+                // Extract area effect value
+                int start = typeStr.Find("areaEffect=\"") + 12;
+                int end = typeStr.find("\"", start);
+                if (end != wxNOT_FOUND) {
+                    xml += wxString::Format("\t\t\t<attribute key=\"areaEffect\" value=\"%s\"/>\n", 
+                                          typeStr.Mid(start, end - start));
+                }
+                xml += "\t\t</defense>\n";
+            } else {
+                xml += "/>\n";
+            }
+        }
+        xml += "\t</defenses>\n";
+    }
+    
     // Loot
     if (!entry.loot.empty()) {
         xml += "\t<loot>\n";
@@ -1175,7 +1617,180 @@ void MonsterMakerWindow::UpdateXMLPreview() {
         xml += "\t</loot>\n";
     }
     
+    // Elements - Get values from UI controls
+    bool hasElements = false;
+    wxString elementsXML = "";
+    
+    if (m_physicalPercent && m_physicalPercent->GetValue() != 0) {
+        elementsXML += wxString::Format("\t\t<element physicalPercent=\"%d\"/>\n", m_physicalPercent->GetValue());
+        hasElements = true;
+    }
+    if (m_firePercent && m_firePercent->GetValue() != 0) {
+        elementsXML += wxString::Format("\t\t<element firePercent=\"%d\"/>\n", m_firePercent->GetValue());
+        hasElements = true;
+    }
+    if (m_energyPercent && m_energyPercent->GetValue() != 0) {
+        elementsXML += wxString::Format("\t\t<element energyPercent=\"%d\"/>\n", m_energyPercent->GetValue());
+        hasElements = true;
+    }
+    if (m_earthPercent && m_earthPercent->GetValue() != 0) {
+        elementsXML += wxString::Format("\t\t<element earthPercent=\"%d\"/>\n", m_earthPercent->GetValue());
+        hasElements = true;
+    }
+    if (m_icePercent && m_icePercent->GetValue() != 0) {
+        elementsXML += wxString::Format("\t\t<element icePercent=\"%d\"/>\n", m_icePercent->GetValue());
+        hasElements = true;
+    }
+    if (m_holyPercent && m_holyPercent->GetValue() != 0) {
+        elementsXML += wxString::Format("\t\t<element holyPercent=\"%d\"/>\n", m_holyPercent->GetValue());
+        hasElements = true;
+    }
+    if (m_deathPercent && m_deathPercent->GetValue() != 0) {
+        elementsXML += wxString::Format("\t\t<element deathPercent=\"%d\"/>\n", m_deathPercent->GetValue());
+        hasElements = true;
+    }
+    if (m_drownPercent && m_drownPercent->GetValue() != 0) {
+        elementsXML += wxString::Format("\t\t<element drownPercent=\"%d\"/>\n", m_drownPercent->GetValue());
+        hasElements = true;
+    }
+    
+    if (hasElements) {
+        xml += "\t<elements>\n";
+        xml += elementsXML;
+        xml += "\t</elements>\n";
+    }
+    
+    // Immunities - Get values from UI controls
+    bool hasImmunities = false;
+    wxString immunitiesXML = "";
+    
+    if (m_immunityFire && m_immunityFire->GetValue()) {
+        immunitiesXML += "\t\t<immunity fire=\"1\"/>\n";
+        hasImmunities = true;
+    }
+    if (m_immunityEnergy && m_immunityEnergy->GetValue()) {
+        immunitiesXML += "\t\t<immunity energy=\"1\"/>\n";
+        hasImmunities = true;
+    }
+    if (m_immunityEarth && m_immunityEarth->GetValue()) {
+        immunitiesXML += "\t\t<immunity earth=\"1\"/>\n";
+        hasImmunities = true;
+    }
+    if (m_immunityIce && m_immunityIce->GetValue()) {
+        immunitiesXML += "\t\t<immunity ice=\"1\"/>\n";
+        hasImmunities = true;
+    }
+    if (m_immunityHoly && m_immunityHoly->GetValue()) {
+        immunitiesXML += "\t\t<immunity holy=\"1\"/>\n";
+        hasImmunities = true;
+    }
+    if (m_immunityDeath && m_immunityDeath->GetValue()) {
+        immunitiesXML += "\t\t<immunity death=\"1\"/>\n";
+        hasImmunities = true;
+    }
+    if (m_immunityPhysical && m_immunityPhysical->GetValue()) {
+        immunitiesXML += "\t\t<immunity physical=\"1\"/>\n";
+        hasImmunities = true;
+    }
+    if (m_immunityDrown && m_immunityDrown->GetValue()) {
+        immunitiesXML += "\t\t<immunity drown=\"1\"/>\n";
+        hasImmunities = true;
+    }
+    if (m_immunityParalyze && m_immunityParalyze->GetValue()) {
+        immunitiesXML += "\t\t<immunity paralyze=\"1\"/>\n";
+        hasImmunities = true;
+    }
+    if (m_immunityInvisible && m_immunityInvisible->GetValue()) {
+        immunitiesXML += "\t\t<immunity invisible=\"1\"/>\n";
+        hasImmunities = true;
+    }
+    if (m_immunityLifedrain && m_immunityLifedrain->GetValue()) {
+        immunitiesXML += "\t\t<immunity lifedrain=\"1\"/>\n";
+        hasImmunities = true;
+    }
+    if (m_immunityDrunk && m_immunityDrunk->GetValue()) {
+        immunitiesXML += "\t\t<immunity drunk=\"1\"/>\n";
+        hasImmunities = true;
+    }
+    
+    if (hasImmunities) {
+        xml += "\t<immunities>\n";
+        xml += immunitiesXML;
+        xml += "\t</immunities>\n";
+    }
+    
+    // Summons
+    if (!entry.summons.empty()) {
+        int maxSummons = m_maxSummons ? m_maxSummons->GetValue() : 0;
+        xml += wxString::Format("\t<summons maxSummons=\"%d\">\n", maxSummons > 0 ? maxSummons : (int)entry.summons.size());
+        for (const auto& summon : entry.summons) {
+            xml += wxString::Format("\t\t<summon name=\"%s\" interval=\"%d\" chance=\"%d\"/>\n",
+                                   wxstr(summon.name), summon.interval, summon.chance);
+        }
+        xml += "\t</summons>\n";
+    }
+    
+    // Voices
+    if (!entry.voices.empty()) {
+        int voiceInterval = m_voiceInterval ? m_voiceInterval->GetValue() : 5000;
+        int voiceChance = m_voiceChance ? m_voiceChance->GetValue() : 10;
+        xml += wxString::Format("\t<voices interval=\"%d\" chance=\"%d\">\n", voiceInterval, voiceChance);
+        for (const auto& voice : entry.voices) {
+            xml += wxString::Format("\t\t<voice sentence=\"%s\"", wxstr(voice.text));
+            if (voice.yell) {
+                xml += " yell=\"1\"";
+            }
+            xml += "/>\n";
+        }
+        xml += "\t</voices>\n";
+    }
+    
     xml += "</monster>\n";
     
     m_xmlPreview->SetValue(xml);
+}
+
+// New event handlers for summons and voices
+void MonsterMakerWindow::OnAddSummon(wxCommandEvent& event) {
+    AddSummon();
+}
+
+void MonsterMakerWindow::OnEditSummon(wxCommandEvent& event) {
+    if (m_summonsList) {
+        long selected = m_summonsList->GetNextItem(-1, wxLIST_NEXT_ALL, wxLIST_STATE_SELECTED);
+        if (selected != -1) {
+            EditSummon(selected);
+        }
+    }
+}
+
+void MonsterMakerWindow::OnDeleteSummon(wxCommandEvent& event) {
+    if (m_summonsList) {
+        long selected = m_summonsList->GetNextItem(-1, wxLIST_NEXT_ALL, wxLIST_STATE_SELECTED);
+        if (selected != -1) {
+            DeleteSummon(selected);
+        }
+    }
+}
+
+void MonsterMakerWindow::OnAddVoice(wxCommandEvent& event) {
+    AddVoice();
+}
+
+void MonsterMakerWindow::OnEditVoice(wxCommandEvent& event) {
+    if (m_voicesList) {
+        long selected = m_voicesList->GetNextItem(-1, wxLIST_NEXT_ALL, wxLIST_STATE_SELECTED);
+        if (selected != -1) {
+            EditVoice(selected);
+        }
+    }
+}
+
+void MonsterMakerWindow::OnDeleteVoice(wxCommandEvent& event) {
+    if (m_voicesList) {
+        long selected = m_voicesList->GetNextItem(-1, wxLIST_NEXT_ALL, wxLIST_STATE_SELECTED);
+        if (selected != -1) {
+            DeleteVoice(selected);
+        }
+    }
 } 
