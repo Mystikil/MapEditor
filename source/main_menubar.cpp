@@ -275,6 +275,7 @@ MainMenuBar::MainMenuBar(MainFrame* frame) :
 	MAKE_ACTION(GOTO_WEBSITE, wxITEM_NORMAL, OnGotoWebsite);
 	MAKE_ACTION(ABOUT, wxITEM_NORMAL, OnAbout);
 	MAKE_ACTION(SHOW_HOTKEYS, wxITEM_NORMAL, OnShowHotkeys); // Add this line
+	MAKE_ACTION(SHOW_MONSTER_MAKER, wxITEM_NORMAL, OnShowMonsterMaker);
 	MAKE_ACTION(REFRESH_ITEMS, wxITEM_NORMAL, OnRefreshItems);
 	// 669
 	MAKE_ACTION(FIND_CREATURE, wxITEM_NORMAL, OnSearchForCreature);
@@ -3384,6 +3385,10 @@ void MainMenuBar::OnMapRemoveDuplicates(wxCommandEvent& WXUNUSED(event)) {
 
 void MainMenuBar::OnShowHotkeys(wxCommandEvent& WXUNUSED(event)) {
 	g_hotkey_manager.ShowHotkeyDialog(frame);
+}
+
+void MainMenuBar::OnShowMonsterMaker(wxCommandEvent& WXUNUSED(event)) {
+	g_gui.ShowMonsterMakerWindow();
 }
 
 void MainMenuBar::OnRefreshVisibleArea(wxCommandEvent& WXUNUSED(event)) {

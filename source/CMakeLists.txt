@@ -56,6 +56,8 @@ ${CMAKE_CURRENT_LIST_DIR}/main.h
 ${CMAKE_CURRENT_LIST_DIR}/main_menubar.h
 ${CMAKE_CURRENT_LIST_DIR}/main_toolbar.h
 ${CMAKE_CURRENT_LIST_DIR}/map.h
+${CMAKE_CURRENT_LIST_DIR}/monster_manager.h
+${CMAKE_CURRENT_LIST_DIR}/monster_maker_window.h
 ${CMAKE_CURRENT_LIST_DIR}/map_allocator.h
 ${CMAKE_CURRENT_LIST_DIR}/map_display.h
 ${CMAKE_CURRENT_LIST_DIR}/map_drawer.h
@@ -86,6 +88,7 @@ ${CMAKE_CURRENT_LIST_DIR}/properties_window.h
 ${CMAKE_CURRENT_LIST_DIR}/raw_brush.h
 ${CMAKE_CURRENT_LIST_DIR}/replace_items_window.h
 ${CMAKE_CURRENT_LIST_DIR}/result_window.h
+${CMAKE_CURRENT_LIST_DIR}/revscript_manager.h
 ${CMAKE_CURRENT_LIST_DIR}/rme_forward_declarations.h
 ${CMAKE_CURRENT_LIST_DIR}/rme_net.h
 ${CMAKE_CURRENT_LIST_DIR}/selection.h
@@ -167,6 +170,8 @@ ${CMAKE_CURRENT_LIST_DIR}/map_tab.cpp
 ${CMAKE_CURRENT_LIST_DIR}/map_window.cpp
 ${CMAKE_CURRENT_LIST_DIR}/materials.cpp
 ${CMAKE_CURRENT_LIST_DIR}/minimap_window.cpp
+${CMAKE_CURRENT_LIST_DIR}/monster_manager.cpp
+${CMAKE_CURRENT_LIST_DIR}/monster_maker_window.cpp
 ${CMAKE_CURRENT_LIST_DIR}/mkpch.cpp
 ${CMAKE_CURRENT_LIST_DIR}/mt_rand.cpp
 ${CMAKE_CURRENT_LIST_DIR}/net_connection.cpp
@@ -186,6 +191,7 @@ ${CMAKE_CURRENT_LIST_DIR}/properties_window.cpp
 ${CMAKE_CURRENT_LIST_DIR}/raw_brush.cpp
 ${CMAKE_CURRENT_LIST_DIR}/replace_items_window.cpp
 ${CMAKE_CURRENT_LIST_DIR}/result_window.cpp
+${CMAKE_CURRENT_LIST_DIR}/revscript_manager.cpp
 ${CMAKE_CURRENT_LIST_DIR}/rme_net.cpp
 ${CMAKE_CURRENT_LIST_DIR}/selection.cpp
 ${CMAKE_CURRENT_LIST_DIR}/settings.cpp

@@ -250,6 +250,8 @@
 	<!-- all context menus that have been changed from vanilla functionalities -->
 		<item name="Hotkeys" hotkey="" action="SHOW_HOTKEYS" help="Hotkeys"/>
 		<separator/>
+		<item name="Monster Maker" hotkey="" action="SHOW_MONSTER_MAKER" help="Create and edit monsters with visual interface"/>
+		<separator/>
 		
 		<item name="Remove Items by ID..." action="MAP_REMOVE_ITEMS" help="Removes all items with the selected ID from the map."/>
 			<item name="Remove Duplicates..." action="MAP_REMOVE_DUPLICATES" help="Removes all duplicate items from the map."/>

@@ -176,6 +176,7 @@
 #include "live_tab.h"
 #include "live_server.h"
 #include "recent_brushes_window.h"
+#include "monster_maker_window.h"
 #include "dark_mode_manager.h"
 #include <wx/regex.h>
 
@@ -198,6 +199,7 @@ GUI::GUI() :
 	hotkeys_enabled(true),
 	search_result_window(nullptr),
 	map_summary_window(nullptr),
+	monster_maker_window(nullptr),
 	loaded_version(CLIENT_VERSION_NONE),
 	secondary_map(nullptr),
 	minimap(nullptr),
@@ -820,6 +822,7 @@ bool GUI::LoadMap(const FileName& fileName) {
 	
 	// Check if we can find an OTS data directory
 	bool scriptsLoaded = false;
+	bool monstersLoaded = false;
 	
 	// Strategy 0: Use custom OTS Data directory if set
 	std::string customDataPath = g_settings.getString(Config::OTS_DATA_DIRECTORY);
@@ -827,59 +830,80 @@ bool GUI::LoadMap(const FileName& fileName) {
 		wxString customPath = wxstr(customDataPath);
 		if (wxDir::Exists(customPath)) {
 			if (revscript_manager.scanRevScriptsDirectory(customDataPath)) {
-				SetStatusText("OTS data directory loaded (custom): " + customPath);
 				scriptsLoaded = true;
+			}
+			if (monster_manager.scanMonstersDirectory(customDataPath)) {
+				monstersLoaded = true;
+			}
+			if (scriptsLoaded || monstersLoaded) {
+				SetStatusText("OTS data directory loaded (custom): " + customPath);
 			}
 		}
 	}
 	
 	// Strategy 1: Look for data directory in same directory as map
-	if (!scriptsLoaded) {
+	if (!scriptsLoaded && !monstersLoaded) {
 		wxString dataPath = mapDir + wxFileName::GetPathSeparator() + "data";
 		if (wxDir::Exists(dataPath)) {
 			if (revscript_manager.scanRevScriptsDirectory(nstr(dataPath))) {
-				SetStatusText("OTS data directory loaded: " + dataPath);
 				scriptsLoaded = true;
+			}
+			if (monster_manager.scanMonstersDirectory(nstr(dataPath))) {
+				monstersLoaded = true;
+			}
+			if (scriptsLoaded || monstersLoaded) {
+				SetStatusText("OTS data directory loaded: " + dataPath);
 			}
 		}
 	}
 	
 	// Strategy 2: Go up one directory level and look for data
 	// This handles the common case where map is in /data/world/ and we need to find /data/
-	if (!scriptsLoaded) {
+	if (!scriptsLoaded && !monstersLoaded) {
 		wxFileName parentPath(mapDir);
 		if (parentPath.GetDirCount() > 0) {
 			parentPath.RemoveLastDir();  // Go up one level (from world to data)
 			wxString parentDataPath = parentPath.GetPath();
 			
-			// Check if this looks like the data directory (contains scripts, actions, movements)
+			// Check if this looks like the data directory (contains scripts, actions, movements, or monsters)
 			wxString scriptsCheck = parentDataPath + wxFileName::GetPathSeparator() + "scripts";
 			wxString actionsCheck = parentDataPath + wxFileName::GetPathSeparator() + "actions";
-			if (wxDir::Exists(scriptsCheck) || wxDir::Exists(actionsCheck)) {
+			wxString monstersCheck = parentDataPath + wxFileName::GetPathSeparator() + "monsters";
+			if (wxDir::Exists(scriptsCheck) || wxDir::Exists(actionsCheck) || wxDir::Exists(monstersCheck)) {
 				if (revscript_manager.scanRevScriptsDirectory(nstr(parentDataPath))) {
-					SetStatusText("OTS data directory loaded: " + parentDataPath);
 					scriptsLoaded = true;
+				}
+				if (monster_manager.scanMonstersDirectory(nstr(parentDataPath))) {
+					monstersLoaded = true;
+				}
+				if (scriptsLoaded || monstersLoaded) {
+					SetStatusText("OTS data directory loaded: " + parentDataPath);
 				}
 			}
 		}
 	}
 	
 	// Strategy 3: Look for data directory as sibling to map directory
-	if (!scriptsLoaded) {
+	if (!scriptsLoaded && !monstersLoaded) {
 		wxFileName mapParent(mapDir);
 		if (mapParent.GetDirCount() > 0) {
 			mapParent.RemoveLastDir();  // Go up to parent of map directory
 			wxString siblingDataPath = mapParent.GetPath() + wxFileName::GetPathSeparator() + "data";
 			if (wxDir::Exists(siblingDataPath)) {
 				if (revscript_manager.scanRevScriptsDirectory(nstr(siblingDataPath))) {
-					SetStatusText("OTS data directory loaded: " + siblingDataPath);
 					scriptsLoaded = true;
+				}
+				if (monster_manager.scanMonstersDirectory(nstr(siblingDataPath))) {
+					monstersLoaded = true;
+				}
+				if (scriptsLoaded || monstersLoaded) {
+					SetStatusText("OTS data directory loaded: " + siblingDataPath);
 				}
 			}
 		}
 	}
 	
-	if (!scriptsLoaded) {
+	if (!scriptsLoaded && !monstersLoaded) {
 		SetStatusText("No OTS data directory found");
 	}
 
@@ -915,6 +939,7 @@ void GUI::ReloadRevScripts() {
 	
 	// Check if we can find an OTS data directory
 	bool scriptsLoaded = false;
+	bool monstersLoaded = false;
 	
 	// Strategy 0: Use custom OTS Data directory if set
 	std::string customDataPath = g_settings.getString(Config::OTS_DATA_DIRECTORY);
@@ -922,58 +947,79 @@ void GUI::ReloadRevScripts() {
 		wxString customPath = wxstr(customDataPath);
 		if (wxDir::Exists(customPath)) {
 			if (revscript_manager.scanRevScriptsDirectory(customDataPath)) {
-				SetStatusText("OTS data directory reloaded (custom): " + customPath);
 				scriptsLoaded = true;
+			}
+			if (monster_manager.scanMonstersDirectory(customDataPath)) {
+				monstersLoaded = true;
+			}
+			if (scriptsLoaded || monstersLoaded) {
+				SetStatusText("OTS data directory reloaded (custom): " + customPath);
 			}
 		}
 	}
 	
 	// Strategy 1: Look for data directory in same directory as map
-	if (!scriptsLoaded) {
+	if (!scriptsLoaded && !monstersLoaded) {
 		wxString dataPath = mapDir + wxFileName::GetPathSeparator() + "data";
 		if (wxDir::Exists(dataPath)) {
 			if (revscript_manager.scanRevScriptsDirectory(nstr(dataPath))) {
-				SetStatusText("OTS data directory reloaded: " + dataPath);
 				scriptsLoaded = true;
+			}
+			if (monster_manager.scanMonstersDirectory(nstr(dataPath))) {
+				monstersLoaded = true;
+			}
+			if (scriptsLoaded || monstersLoaded) {
+				SetStatusText("OTS data directory reloaded: " + dataPath);
 			}
 		}
 	}
 	
 	// Strategy 2: Go up one directory level and look for data
-	if (!scriptsLoaded) {
+	if (!scriptsLoaded && !monstersLoaded) {
 		wxFileName parentPath(mapDir);
 		if (parentPath.GetDirCount() > 0) {
 			parentPath.RemoveLastDir();  // Go up one level (from world to data)
 			wxString parentDataPath = parentPath.GetPath();
 			
-			// Check if this looks like the data directory (contains scripts, actions, movements)
+			// Check if this looks like the data directory (contains scripts, actions, movements, or monsters)
 			wxString scriptsCheck = parentDataPath + wxFileName::GetPathSeparator() + "scripts";
 			wxString actionsCheck = parentDataPath + wxFileName::GetPathSeparator() + "actions";
-			if (wxDir::Exists(scriptsCheck) || wxDir::Exists(actionsCheck)) {
+			wxString monstersCheck = parentDataPath + wxFileName::GetPathSeparator() + "monsters";
+			if (wxDir::Exists(scriptsCheck) || wxDir::Exists(actionsCheck) || wxDir::Exists(monstersCheck)) {
 				if (revscript_manager.scanRevScriptsDirectory(nstr(parentDataPath))) {
-					SetStatusText("OTS data directory reloaded: " + parentDataPath);
 					scriptsLoaded = true;
+				}
+				if (monster_manager.scanMonstersDirectory(nstr(parentDataPath))) {
+					monstersLoaded = true;
+				}
+				if (scriptsLoaded || monstersLoaded) {
+					SetStatusText("OTS data directory reloaded: " + parentDataPath);
 				}
 			}
 		}
 	}
 	
 	// Strategy 3: Look for data directory as sibling to map directory
-	if (!scriptsLoaded) {
+	if (!scriptsLoaded && !monstersLoaded) {
 		wxFileName mapParent(mapDir);
 		if (mapParent.GetDirCount() > 0) {
 			mapParent.RemoveLastDir();  // Go up to parent of map directory
 			wxString siblingDataPath = mapParent.GetPath() + wxFileName::GetPathSeparator() + "data";
 			if (wxDir::Exists(siblingDataPath)) {
 				if (revscript_manager.scanRevScriptsDirectory(nstr(siblingDataPath))) {
-					SetStatusText("OTS data directory reloaded: " + siblingDataPath);
 					scriptsLoaded = true;
+				}
+				if (monster_manager.scanMonstersDirectory(nstr(siblingDataPath))) {
+					monstersLoaded = true;
+				}
+				if (scriptsLoaded || monstersLoaded) {
+					SetStatusText("OTS data directory reloaded: " + siblingDataPath);
 				}
 			}
 		}
 	}
 	
-	if (!scriptsLoaded) {
+	if (!scriptsLoaded && !monstersLoaded) {
 		SetStatusText("No OTS data directory found for reload");
 	}
 }
@@ -1597,6 +1643,34 @@ void GUI::AddRecentBrush(Brush* brush) {
 		// Only add as manual selection (true) to prevent automatic palette switching additions
 		recent_brushes_window->AddRecentBrush(brush, palette_type, true);
 	}
+}
+
+//=============================================================================
+// Monster Maker Window Interface Implementation
+
+void GUI::HideMonsterMakerWindow() {
+	if (monster_maker_window) {
+		monster_maker_window->Hide();
+	}
+}
+
+MonsterMakerWindow* GUI::GetMonsterMakerWindow() {
+	return monster_maker_window;
+}
+
+MonsterMakerWindow* GUI::ShowMonsterMakerWindow() {
+	if (monster_maker_window == nullptr) {
+		monster_maker_window = newd MonsterMakerWindow(root);
+	}
+	
+	// Refresh the monster list when showing
+	monster_maker_window->RefreshMonsterList();
+	
+	// Show as detached window
+	monster_maker_window->Show(true);
+	monster_maker_window->Raise();
+	
+	return monster_maker_window;
 }
 
 //=============================================================================
