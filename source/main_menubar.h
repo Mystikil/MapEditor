@@ -177,8 +177,9 @@ namespace MenuBar {
 		EXPERIMENTAL_FOG,
 		MAP_REMOVE_DUPLICATES,
 		SHOW_HOTKEYS,
-		SHOW_MONSTER_MAKER,
-		MAP_MENU_REPLACE_ITEMS,
+			SHOW_MONSTER_MAKER,
+	ADD_NEW_CREATURE,
+	MAP_MENU_REPLACE_ITEMS,
 		MAP_MENU_GENERATE_ISLAND,
 		MAP_VALIDATE_GROUND,
 		MAP_CREATE_BORDER,
@@ -332,6 +333,7 @@ public:
 	void OnAbout(wxCommandEvent& event);
 	void OnShowHotkeys(wxCommandEvent& event);
 	void OnShowMonsterMaker(wxCommandEvent& event);
+	void OnAddNewCreature(wxCommandEvent& event);
 
 	// Add to class MainMenuBar private section:
 	void OnRefreshItems(wxCommandEvent& event);

@@ -411,6 +411,8 @@
     </ClInclude>
     <ClInclude Include="..\..\source\monster_loot_dialog.h" />
     <ClInclude Include="..\..\source\monster_attack_dialog.h" />
+    <ClInclude Include="..\..\source\monster_defense_dialog.h" />
+    <ClInclude Include="..\..\source\npc_manager.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\source\json\json_spirit_reader.cpp">
@@ -730,6 +732,8 @@
     </ClCompile>
     <ClCompile Include="..\..\source\monster_attack_dialog.cpp" />
     <ClCompile Include="..\..\source\monster_loot_dialog.cpp" />
+    <ClCompile Include="..\..\source\monster_defense_dialog.cpp" />
+    <ClCompile Include="..\..\source\npc_manager.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="Editor.rc">

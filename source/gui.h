@@ -31,6 +31,7 @@
 #include "client_version.h"
 #include "revscript_manager.h"
 #include "monster_manager.h"
+#include "npc_manager.h"
 #include "monster_maker_window.h"
 #include <memory> // For smart pointers
 
@@ -405,6 +406,9 @@ public:
 
 	// RevScript functions
 	void ReloadRevScripts();
+	
+	// NPC functions
+	void ReloadNPCs();
 
 protected:
 	bool LoadDataFiles(wxString& error, wxArrayString& warnings);
@@ -463,6 +467,7 @@ public:
 	GraphicManager gfx;
 	RevScriptManager revscript_manager;
 	MonsterManager monster_manager;
+	NPCManager npc_manager;
 	MonsterMakerWindow* monster_maker_window;
 
 	BaseMap* secondary_map; // A non-owning pointer to doodad_buffer_map when needed

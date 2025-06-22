@@ -148,6 +148,7 @@ The current map editor monster maker is a basic implementation that only handles
    - Implement loot probability and quantity systems
    - Add loot management UI with item selection
    - Implement loot XML generation
+   - allow for dynamic loot inputting e.g fetch corpse looktype and create input window with easy Item name , count input to output to xml finely 
 
 ### Phase 3: Advanced Systems (Medium Priority)
 

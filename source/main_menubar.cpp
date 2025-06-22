@@ -72,6 +72,7 @@
 #include "map_summary_window.h"
 #include "otmapgen_dialog.h"
 #include "notes_window.h"
+#include "add_creature_dialog.h"
 
 #include <wx/chartype.h>
 
@@ -81,6 +82,9 @@
 #include "live_server.h"
 #include "string_utils.h"
 #include "hotkey_manager.h"
+#include "creature_brush.h"
+#include "brush.h"
+#include "tileset.h"
 
 const wxEventType EVT_MENU = wxEVT_COMMAND_MENU_SELECTED;
 
@@ -276,6 +280,7 @@ MainMenuBar::MainMenuBar(MainFrame* frame) :
 	MAKE_ACTION(ABOUT, wxITEM_NORMAL, OnAbout);
 	MAKE_ACTION(SHOW_HOTKEYS, wxITEM_NORMAL, OnShowHotkeys); // Add this line
 	MAKE_ACTION(SHOW_MONSTER_MAKER, wxITEM_NORMAL, OnShowMonsterMaker);
+	MAKE_ACTION(ADD_NEW_CREATURE, wxITEM_NORMAL, OnAddNewCreature);
 	MAKE_ACTION(REFRESH_ITEMS, wxITEM_NORMAL, OnRefreshItems);
 	// 669
 	MAKE_ACTION(FIND_CREATURE, wxITEM_NORMAL, OnSearchForCreature);
@@ -3389,6 +3394,38 @@ void MainMenuBar::OnShowHotkeys(wxCommandEvent& WXUNUSED(event)) {
 
 void MainMenuBar::OnShowMonsterMaker(wxCommandEvent& WXUNUSED(event)) {
 	g_gui.ShowMonsterMakerWindow();
+}
+
+void MainMenuBar::OnAddNewCreature(wxCommandEvent& WXUNUSED(event)) {
+	AddCreatureDialog dialog(frame, "");
+	if (dialog.ShowModal() == wxID_OK) {
+		// Get the created creature type
+		CreatureType* createdType = dialog.GetCreatureType();
+		if (createdType) {
+			// Refresh palettes to show the new creature
+			g_gui.RefreshPalettes();
+			
+			// Find and select the newly created creature brush
+			Brush* createdBrush = nullptr;
+			const BrushMap& brushes = g_brushes.getMap();
+			for (const auto& brushPair : brushes) {
+				Brush* brush = brushPair.second;
+				if (brush && brush->isCreature()) {
+					CreatureBrush* cb = brush->asCreature();
+					if (cb && cb->getType() == createdType) {
+						createdBrush = brush;
+						break;
+					}
+				}
+			}
+			
+			// Set the creature palette as active and select the new brush
+			if (createdBrush) {
+				g_gui.SelectBrush(createdBrush);
+				g_gui.SelectPalettePage(TILESET_CREATURE);
+			}
+		}
+	}
 }
 
 void MainMenuBar::OnRefreshVisibleArea(wxCommandEvent& WXUNUSED(event)) {
