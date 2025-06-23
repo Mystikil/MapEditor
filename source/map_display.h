@@ -70,8 +70,12 @@ public:
 	void OnCopyServerId(wxCommandEvent& event);
 	void OnCopyClientId(wxCommandEvent& event);
 	void OnCopyName(wxCommandEvent& event);
-	void OnBrowseTile(wxCommandEvent& event);
+	void OnCopyActionId(wxCommandEvent& event);
+	void OnCopyUniqueId(wxCommandEvent& event);
 	void OnPaste(wxCommandEvent& event);
+	void OnPasteActionId(wxCommandEvent& event);
+	void OnPasteUniqueId(wxCommandEvent& event);
+	void OnBrowseTile(wxCommandEvent& event);
 	void OnDelete(wxCommandEvent& event);
 	// ----
 	void OnGotoDestination(wxCommandEvent& event);

@@ -98,6 +98,10 @@ EVT_MENU(MAP_POPUP_MENU_FIND_SIMILAR_ITEMS, MapCanvas::OnFindSimilarItems)
 EVT_MENU(MAP_POPUP_MENU_COPY_SERVER_ID, MapCanvas::OnCopyServerId)
 EVT_MENU(MAP_POPUP_MENU_COPY_CLIENT_ID, MapCanvas::OnCopyClientId)
 EVT_MENU(MAP_POPUP_MENU_COPY_NAME, MapCanvas::OnCopyName)
+EVT_MENU(MAP_POPUP_MENU_COPY_ACTION_ID, MapCanvas::OnCopyActionId)
+EVT_MENU(MAP_POPUP_MENU_COPY_UNIQUE_ID, MapCanvas::OnCopyUniqueId)
+EVT_MENU(MAP_POPUP_MENU_PASTE_ACTION_ID, MapCanvas::OnPasteActionId)
+EVT_MENU(MAP_POPUP_MENU_PASTE_UNIQUE_ID, MapCanvas::OnPasteUniqueId)
 // ----
 EVT_MENU(MAP_POPUP_MENU_ROTATE, MapCanvas::OnRotateItem)
 EVT_MENU(MAP_POPUP_MENU_GOTO, MapCanvas::OnGotoDestination)
@@ -2073,6 +2077,125 @@ void MapCanvas::OnCopyName(wxCommandEvent& WXUNUSED(event)) {
 	}
 }
 
+void MapCanvas::OnCopyActionId(wxCommandEvent& WXUNUSED(event)) {
+	ASSERT(editor.selection.size() == 1);
+
+	if (wxTheClipboard->Open()) {
+		Tile* tile = editor.selection.getSelectedTile();
+		ItemVector selected_items = tile->getSelectedItems();
+		ASSERT(selected_items.size() == 1);
+
+		const Item* item = selected_items.front();
+
+		wxTextDataObject* obj = new wxTextDataObject();
+		obj->SetText(i2ws(item->getActionID()));
+		wxTheClipboard->SetData(obj);
+
+		wxTheClipboard->Close();
+	}
+}
+
+void MapCanvas::OnCopyUniqueId(wxCommandEvent& WXUNUSED(event)) {
+	ASSERT(editor.selection.size() == 1);
+
+	if (wxTheClipboard->Open()) {
+		Tile* tile = editor.selection.getSelectedTile();
+		ItemVector selected_items = tile->getSelectedItems();
+		ASSERT(selected_items.size() == 1);
+
+		const Item* item = selected_items.front();
+
+		wxTextDataObject* obj = new wxTextDataObject();
+		obj->SetText(i2ws(item->getUniqueID()));
+		wxTheClipboard->SetData(obj);
+
+		wxTheClipboard->Close();
+	}
+}
+
+void MapCanvas::OnPasteActionId(wxCommandEvent& WXUNUSED(event)) {
+	ASSERT(editor.selection.size() == 1);
+
+	if (wxTheClipboard->Open()) {
+		if (wxTheClipboard->IsSupported(wxDF_TEXT)) {
+			wxTextDataObject data;
+			wxTheClipboard->GetData(data);
+			
+			long actionId;
+			if (data.GetText().ToLong(&actionId) && actionId >= 0 && actionId <= 0xFFFF) {
+				Tile* tile = editor.selection.getSelectedTile();
+				if (!tile) {
+					wxTheClipboard->Close();
+					return;
+				}
+				
+				Tile* new_tile = tile->deepCopy(editor.map);
+				ItemVector selected_items = new_tile->getSelectedItems();
+				
+				if (selected_items.size() == 1) {
+					Item* item = selected_items.front();
+					item->setActionID(static_cast<uint16_t>(actionId));
+					
+					Action* action = editor.actionQueue->createAction(ACTION_CHANGE_PROPERTIES);
+					action->addChange(newd Change(new_tile));
+					editor.addAction(action);
+					g_gui.RefreshView();
+				} else {
+					delete new_tile;
+				}
+			} else {
+				g_gui.PopupDialog(g_gui.root, "Error", "Invalid Action ID value in clipboard. Must be a number between 0 and 65535.", wxOK);
+			}
+		}
+		wxTheClipboard->Close();
+	}
+}
+
+void MapCanvas::OnPasteUniqueId(wxCommandEvent& WXUNUSED(event)) {
+	ASSERT(editor.selection.size() == 1);
+
+	if (wxTheClipboard->Open()) {
+		if (wxTheClipboard->IsSupported(wxDF_TEXT)) {
+			wxTextDataObject data;
+			wxTheClipboard->GetData(data);
+			
+			long uniqueId;
+			if (data.GetText().ToLong(&uniqueId) && uniqueId >= 0 && uniqueId <= 0xFFFF) {
+				// Validate unique ID range (typically 1000-65535 for non-zero values)
+				if (uniqueId != 0 && (uniqueId < 1000 || uniqueId > 0xFFFF)) {
+					g_gui.PopupDialog(g_gui.root, "Error", "Unique ID must be 0 or between 1000 and 65535.", wxOK);
+					wxTheClipboard->Close();
+					return;
+				}
+				
+				Tile* tile = editor.selection.getSelectedTile();
+				if (!tile) {
+					wxTheClipboard->Close();
+					return;
+				}
+				
+				Tile* new_tile = tile->deepCopy(editor.map);
+				ItemVector selected_items = new_tile->getSelectedItems();
+				
+				if (selected_items.size() == 1) {
+					Item* item = selected_items.front();
+					item->setUniqueID(static_cast<uint16_t>(uniqueId));
+					
+					Action* action = editor.actionQueue->createAction(ACTION_CHANGE_PROPERTIES);
+					action->addChange(newd Change(new_tile));
+					editor.addAction(action);
+					g_gui.RefreshView();
+				} else {
+					delete new_tile;
+				}
+			} else {
+				g_gui.PopupDialog(g_gui.root, "Error", "Invalid Unique ID value in clipboard. Must be a number between 0 and 65535.", wxOK);
+			}
+		}
+		wxTheClipboard->Close();
+	}
+}
+
 void MapCanvas::OnBrowseTile(wxCommandEvent& WXUNUSED(event)) {
 	if (editor.selection.size() != 1) {
 		return;
@@ -2644,6 +2767,16 @@ void MapPopupMenu::Update() {
 				Append(MAP_POPUP_MENU_COPY_SERVER_ID, "Copy Item Server Id", "Copy the server id of this item");
 				Append(MAP_POPUP_MENU_COPY_CLIENT_ID, "Copy Item Client Id", "Copy the client id of this item");
 				Append(MAP_POPUP_MENU_COPY_NAME, "Copy Item Name", "Copy the name of this item");
+				
+				// Add copy/paste for ActionID and UniqueID
+				wxString actionIdLabel = wxString::Format("Copy action ID (%d)", topSelectedItem->getActionID());
+				wxString uniqueIdLabel = wxString::Format("Copy unique ID (%d)", topSelectedItem->getUniqueID());
+				
+				Append(MAP_POPUP_MENU_COPY_ACTION_ID, actionIdLabel, "Copy the action ID of this item");
+				Append(MAP_POPUP_MENU_COPY_UNIQUE_ID, uniqueIdLabel, "Copy the unique ID of this item");
+				Append(MAP_POPUP_MENU_PASTE_ACTION_ID, "Paste action ID", "Paste action ID from clipboard to this item");
+				Append(MAP_POPUP_MENU_PASTE_UNIQUE_ID, "Paste unique ID", "Paste unique ID from clipboard to this item");
+				
 				AppendSeparator();
 			}
 
