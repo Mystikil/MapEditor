@@ -236,6 +236,7 @@ void Settings::IO(IOMode mode) {
 	section("Version");
 	Int(VERSION_ID, 0);
 	Int(CHECK_SIGNATURES, 0);
+	Int(FORCE_CLIENT_ITEMS_OTB, 0);
 	Int(USE_CUSTOM_DATA_DIRECTORY, 0);
 	String(DATA_DIRECTORY, "");
 	String(EXTENSIONS_DIRECTORY, "");
@@ -454,6 +455,8 @@ void Settings::IO(IOMode mode) {
 	Int(TOOLTIP_SHOW_HOUSEID, 0);
 	Int(HOUSE_CUSTOM_COLORS, 1);
 	String(TOOLTIP_IGNORE_IDS, "");
+
+
 
 #undef section
 #undef Int

@@ -141,6 +141,7 @@ protected:
 	wxChoice* default_version_choice;
 	std::vector<wxDirPickerCtrl*> version_dir_pickers;
 	wxCheckBox* check_sigs_chkbox;
+	wxCheckBox* force_client_otb_chkbox;
 
 	// Create controls
 	wxChoice* AddPaletteStyleChoice(wxWindow* parent, wxSizer* sizer, const wxString& short_description, const wxString& description, const std::string& setting);
