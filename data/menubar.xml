@@ -273,6 +273,7 @@
 		<item name="Add New Creature" hotkey="" action="ADD_NEW_CREATURE" help="Create new placeable creatures for map editor"/>
 		<separator/>
 		<item name="Reset House IDs" hotkey="" action="RESET_HOUSE_IDS" help="Reset house IDs to fill gaps and create continuous numbering"/>
+		<item name="Reset Town IDs" hotkey="" action="RESET_TOWN_IDS" help="Reset town IDs to fill gaps and create continuous numbering"/>
 		<separator/>
 	</menu>
 </menubar>

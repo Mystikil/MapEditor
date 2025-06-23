@@ -287,6 +287,7 @@ MainMenuBar::MainMenuBar(MainFrame* frame) :
 	MAKE_ACTION(MAP_CREATE_BORDER, wxITEM_NORMAL, OnCreateBorder);
 	MAKE_ACTION(MAP_SUMMARIZE, wxITEM_NORMAL, OnMapSummarize);
 	MAKE_ACTION(RESET_HOUSE_IDS, wxITEM_NORMAL, OnResetHouseIDs);
+	MAKE_ACTION(RESET_TOWN_IDS, wxITEM_NORMAL, OnResetTownIDs);
 
 	// A deleter, this way the frame does not need
 	// to bother deleting us.
@@ -3984,6 +3985,178 @@ void MainMenuBar::OnResetHouseIDs(wxCommandEvent& WXUNUSED(event)) {
         } catch (...) {
             g_gui.DestroyLoadBar();
             g_gui.PopupDialog("Error", "An error occurred while resetting house IDs!", wxOK | wxICON_ERROR);
+        }
+    }
+
+    dialog->Destroy();
+}
+
+void MainMenuBar::OnResetTownIDs(wxCommandEvent& WXUNUSED(event)) {
+    if (!g_gui.IsEditorOpen()) {
+        return;
+    }
+
+    Editor* editor = g_gui.GetCurrentEditor();
+    if (!editor) {
+        return;
+    }
+
+    Map& map = editor->map;
+    Towns& towns = map.towns;
+
+    if (towns.count() == 0) {
+        g_gui.PopupDialog("Reset Town IDs", "No towns found on the map!", wxOK);
+        return;
+    }
+
+    // Show confirmation dialog with preview
+    std::vector<std::pair<uint32_t, uint32_t>> id_changes;
+    std::vector<Town*> town_list;
+    
+    // Collect all towns and sort by current ID
+    for (TownMap::iterator it = towns.begin(); it != towns.end(); ++it) {
+        town_list.push_back(it->second);
+    }
+    
+    std::sort(town_list.begin(), town_list.end(), [](Town* a, Town* b) {
+        return a->getID() < b->getID();
+    });
+
+    // Calculate new IDs (sequential starting from 1)
+    for (size_t i = 0; i < town_list.size(); ++i) {
+        uint32_t old_id = town_list[i]->getID();
+        uint32_t new_id = i + 1;
+        if (old_id != new_id) {
+            id_changes.push_back(std::make_pair(old_id, new_id));
+        }
+    }
+
+    if (id_changes.empty()) {
+        g_gui.PopupDialog("Reset Town IDs", "Town IDs are already sequential. No changes needed!", wxOK);
+        return;
+    }
+
+    // Create dialog showing what will change
+    wxDialog* dialog = new wxDialog(frame, wxID_ANY, "Reset Town IDs", 
+        wxDefaultPosition, wxSize(600, 400), wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER);
+    
+    wxBoxSizer* mainSizer = new wxBoxSizer(wxVERTICAL);
+    
+    // Warning text
+    wxStaticText* warning = new wxStaticText(dialog, wxID_ANY, 
+        "WARNING: This will reset town IDs to fill gaps and create continuous numbering!\n"
+        "This operation will have DATABASE CONSEQUENCES in production servers!\n"
+        "All houses belonging to these towns will be updated to use the new town IDs!");
+    warning->SetForegroundColour(*wxRED);
+    mainSizer->Add(warning, 0, wxALL | wxALIGN_CENTER, 10);
+
+    // Preview list
+    wxStaticText* previewLabel = new wxStaticText(dialog, wxID_ANY, "Preview of changes:");
+    mainSizer->Add(previewLabel, 0, wxALL, 5);
+    
+    wxListCtrl* previewList = new wxListCtrl(dialog, wxID_ANY, wxDefaultPosition, wxDefaultSize, 
+        wxLC_REPORT | wxLC_SINGLE_SEL);
+    previewList->AppendColumn("Town Name", wxLIST_FORMAT_LEFT, 300);
+    previewList->AppendColumn("Old ID", wxLIST_FORMAT_CENTER, 80);
+    previewList->AppendColumn("New ID", wxLIST_FORMAT_CENTER, 80);
+    previewList->AppendColumn("Houses", wxLIST_FORMAT_CENTER, 80);
+    
+    for (const auto& change : id_changes) {
+        Town* town = towns.getTown(change.first);
+        if (town) {
+            // Count houses in this town
+            int house_count = 0;
+            for (HouseMap::iterator house_iter = map.houses.begin(); 
+                 house_iter != map.houses.end(); ++house_iter) {
+                if (house_iter->second->townid == change.first) {
+                    house_count++;
+                }
+            }
+            
+            long index = previewList->InsertItem(previewList->GetItemCount(), wxstr(town->getName()));
+            previewList->SetItem(index, 1, wxString::Format("%d", change.first));
+            previewList->SetItem(index, 2, wxString::Format("%d", change.second));
+            previewList->SetItem(index, 3, wxString::Format("%d", house_count));
+        }
+    }
+    
+    mainSizer->Add(previewList, 1, wxEXPAND | wxALL, 5);
+
+    // Buttons
+    wxBoxSizer* buttonSizer = new wxBoxSizer(wxHORIZONTAL);
+    wxButton* okButton = new wxButton(dialog, wxID_OK, "Apply Changes");
+    wxButton* cancelButton = new wxButton(dialog, wxID_CANCEL, "Cancel");
+    buttonSizer->Add(okButton, 0, wxALL, 5);
+    buttonSizer->Add(cancelButton, 0, wxALL, 5);
+    mainSizer->Add(buttonSizer, 0, wxALIGN_CENTER | wxALL, 5);
+
+    dialog->SetSizer(mainSizer);
+    dialog->Center();
+
+    if (dialog->ShowModal() == wxID_OK) {
+        // Apply the changes
+        g_gui.CreateLoadBar("Resetting town IDs...");
+        
+        try {
+            // Create a mapping of old ID to new ID for quick lookup
+            std::map<uint32_t, uint32_t> id_mapping;
+            for (const auto& change : id_changes) {
+                id_mapping[change.first] = change.second;
+            }
+
+            // Step 1: Update all houses that belong to these towns
+            g_gui.SetLoadDone(25, "Updating houses with new town IDs...");
+            
+            for (HouseMap::iterator house_iter = map.houses.begin(); 
+                 house_iter != map.houses.end(); ++house_iter) {
+                House* house = house_iter->second;
+                auto it = id_mapping.find(house->townid);
+                if (it != id_mapping.end()) {
+                    house->townid = it->second;
+                }
+            }
+
+            // Step 2: Update town objects themselves
+            g_gui.SetLoadDone(75, "Updating town registry...");
+            
+            // We need to be careful here to avoid iterator invalidation
+            std::vector<Town*> towns_to_update;
+            for (const auto& change : id_changes) {
+                Town* town = towns.getTown(change.first);
+                if (town) {
+                    towns_to_update.push_back(town);
+                }
+            }
+            
+            for (Town* town : towns_to_update) {
+                uint32_t old_id = town->getID();
+                // Find the new ID for this town
+                for (const auto& change : id_changes) {
+                    if (change.first == old_id) {
+                        towns.changeId(town, change.second);
+                        break;
+                    }
+                }
+            }
+
+            g_gui.SetLoadDone(100);
+            g_gui.DestroyLoadBar();
+            
+            // Mark map as modified
+            map.doChange();
+            
+            wxString msg;
+            msg << "Successfully reset " << id_changes.size() << " town IDs!\n"
+                << "Town IDs are now sequential from 1 to " << town_list.size() << ".";
+            g_gui.PopupDialog("Reset Town IDs", msg, wxOK);
+            
+            // Refresh the view and palettes
+            g_gui.RefreshView();
+            g_gui.RefreshPalettes();
+            
+        } catch (...) {
+            g_gui.DestroyLoadBar();
+            g_gui.PopupDialog("Error", "An error occurred while resetting town IDs!", wxOK | wxICON_ERROR);
         }
     }
 

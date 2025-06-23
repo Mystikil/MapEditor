@@ -187,6 +187,7 @@ namespace MenuBar {
 		MAP_NOTES,
 		MENU_REFRESH_VISIBLE_AREA,
 		RESET_HOUSE_IDS,
+	RESET_TOWN_IDS,
 	};
 }
 
@@ -293,6 +294,7 @@ public:
 	void OnMapValidateGround(wxCommandEvent& event);
 	void OnMapNotes(wxCommandEvent& event);
 	void OnResetHouseIDs(wxCommandEvent& event);
+	void OnResetTownIDs(wxCommandEvent& event);
 
 	// View Menu
 	void OnToolbars(wxCommandEvent& event);
