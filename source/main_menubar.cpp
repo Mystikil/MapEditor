@@ -1296,13 +1296,13 @@ namespace OnSearchForStuff {
 						label << "/";
 					}
 				}
-				} else {
-					if (item->getUniqueID() > 0) {
-						label << "UID: " << item->getUniqueID() << " ";
-					}
-
+			} else {
 				if (item->getActionID() > 0) {
 					label << "AID:" << item->getActionID() << " ";
+				}
+
+				if (item->getUniqueID() > 0) {
+					label << "UID:" << item->getUniqueID() << " ";
 				}
 
 				label << wxstr(item->getName());
