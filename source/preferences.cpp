@@ -1027,10 +1027,13 @@ void PreferencesWindow::OnForceReloadRevScripts(wxCommandEvent& WXUNUSED(event))
 		// Call the GUI's reload method
 		g_gui.ReloadRevScripts();
 		
-		// Show statistics for debugging
-		std::string stats = g_gui.revscript_manager.getScanStatistics();
-		wxString message = "RevScripts reloaded!\n\n" + wxstr(stats);
-		wxMessageBox(message, "RevScript Reload Complete", wxOK | wxICON_INFORMATION, this);
+		// Show statistics for debugging - include RevScripts, Monsters, and NPCs
+		std::string revscript_stats = g_gui.revscript_manager.getScanStatistics();
+		std::string monster_stats = g_gui.monster_manager.getScanStatistics();
+		std::string npc_stats = g_gui.npc_manager.getScanStatistics();
+		
+		wxString message = "Scripts reloaded!\n\n" + wxstr(revscript_stats) + "\n\n" + wxstr(monster_stats) + "\n\n" + wxstr(npc_stats);
+		wxMessageBox(message, "Script Reload Complete", wxOK | wxICON_INFORMATION, this);
 	
 }
 

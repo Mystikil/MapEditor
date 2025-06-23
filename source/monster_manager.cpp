@@ -26,8 +26,8 @@ bool MonsterManager::scanMonstersDirectory(const std::string& data_dir) {
     // Look for monsters.xml in the data directory
     std::string monsters_xml_path = data_dir + "/monsters.xml";
     if (!parseMonstersXML(monsters_xml_path)) {
-        // Try alternative path /monsters/monsters.xml
-        monsters_xml_path = data_dir + "/monsters/monsters.xml";
+        // Try alternative path /monster/monsters.xml (correct TFS path)
+        monsters_xml_path = data_dir + "/monster/monsters.xml";
         if (!parseMonstersXML(monsters_xml_path)) {
             return false;
         }
@@ -81,17 +81,14 @@ bool MonsterManager::parseMonstersXML(const std::string& monsters_xml_path) {
         entry.name = name;
         entry.filename = file;
         
-        // Build full path - the file path in monsters.xml is relative to the data directory
-        wxFileName fullPath(wxstr(data_directory));
-        fullPath.AppendDir("monsters");
-        
-        // Handle file path (could be relative with subdirectories)
+        // Build full path - the file path in monsters.xml is relative to the data/monster directory
         wxFileName monsterFile(wxstr(file));
         if (monsterFile.IsAbsolute()) {
             entry.full_path = file;
         } else {
-            // Relative path - append to data directory
+            // Relative path - append to data/monster directory
             wxFileName relativePath(wxstr(data_directory));
+            relativePath.AppendDir("monster");
             relativePath.SetFullName(wxstr(file));
             entry.full_path = nstr(relativePath.GetFullPath());
         }
@@ -250,6 +247,12 @@ bool MonsterManager::createMonsterXML(const MonsterEntry& entry, const std::stri
     }
     
     return doc.save_file(output_path.c_str(), "\t", pugi::format_default, pugi::encoding_utf8);
+}
+
+bool MonsterManager::openMonsterXML(const MonsterEntry& entry) const {
+    // Use the default Windows application to open the XML file
+    wxString filename = wxstr(entry.full_path);
+    return wxLaunchDefaultApplication(filename);
 }
 
 void MonsterManager::clear() {

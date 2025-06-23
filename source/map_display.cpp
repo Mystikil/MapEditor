@@ -122,6 +122,9 @@ EVT_MENU(MAP_POPUP_MENU_BROWSE_TILE, MapCanvas::OnBrowseTile)
 // Add to the event table after other MAP_POPUP_MENU items
 EVT_MENU(MAP_POPUP_MENU_SELECTION_TO_DOODAD, MapCanvas::OnSelectionToDoodad)
 EVT_MENU(MAP_POPUP_MENU_OPEN_REVSCRIPT, MapCanvas::OnOpenRevScript)
+EVT_MENU(MAP_POPUP_MENU_OPEN_NPC_XML, MapCanvas::OnOpenNPCXML)
+EVT_MENU(MAP_POPUP_MENU_OPEN_NPC_SCRIPT, MapCanvas::OnOpenNPCScript)
+EVT_MENU(MAP_POPUP_MENU_OPEN_MONSTER_XML, MapCanvas::OnOpenMonsterXML)
 
 END_EVENT_TABLE()
 
@@ -2668,6 +2671,17 @@ void MapPopupMenu::Update() {
 
 				if (topCreature) {
 					Append(MAP_POPUP_MENU_SELECT_CREATURE_BRUSH, "Select Creature", "Uses the current creature as a creature brush");
+					
+					// Add creature-specific menu items
+					if (topCreature->isNpc()) {
+						AppendSeparator();
+						Append(MAP_POPUP_MENU_OPEN_NPC_XML, "Open NPC &XML", "Open the NPC XML file in external editor");
+						Append(MAP_POPUP_MENU_OPEN_NPC_SCRIPT, "Open NPC &Script", "Open the NPC Lua script file in external editor");
+					} else {
+						// This is a monster
+						AppendSeparator();
+						Append(MAP_POPUP_MENU_OPEN_MONSTER_XML, "Open Monster &XML", "Open the Monster XML file in external editor");
+					}
 				}
 
 				if (topSpawn) {
@@ -2764,6 +2778,17 @@ void MapPopupMenu::Update() {
 
 				if (topCreature) {
 					Append(MAP_POPUP_MENU_SELECT_CREATURE_BRUSH, "Select Creature", "Uses the current creature as a creature brush");
+					
+					// Add creature-specific menu items
+					if (topCreature->isNpc()) {
+						AppendSeparator();
+						Append(MAP_POPUP_MENU_OPEN_NPC_XML, "Open NPC &XML", "Open the NPC XML file in external editor");
+						Append(MAP_POPUP_MENU_OPEN_NPC_SCRIPT, "Open NPC &Script", "Open the NPC Lua script file in external editor");
+					} else {
+						// This is a monster
+						AppendSeparator();
+						Append(MAP_POPUP_MENU_OPEN_MONSTER_XML, "Open Monster &XML", "Open the Monster XML file in external editor");
+					}
 				}
 
 				if (topSpawn) {
@@ -4760,5 +4785,121 @@ void MapCanvas::OnOpenRevScript(wxCommandEvent& WXUNUSED(event)) {
 		if (!g_gui.revscript_manager.openRevScript(entry)) {
 			g_gui.PopupDialog("Error", "Failed to open the script file. Make sure you have a text editor installed.", wxOK);
 		}
+	}
+}
+
+void MapCanvas::OnOpenNPCXML(wxCommandEvent& WXUNUSED(event)) {
+	if (editor.selection.size() != 1) {
+		return;
+	}
+
+	Tile* tile = editor.selection.getSelectedTile();
+	if (!tile || !tile->creature) {
+		return;
+	}
+
+	Creature* creature = tile->creature;
+	if (!creature->isNpc()) {
+		return;
+	}
+
+	// Check if the NPC manager is loaded
+	if (!g_gui.npc_manager.isLoaded()) {
+		g_gui.PopupDialog("NPC Error", "No OTS data directory has been loaded. Please load a map first or configure the OTS data directory in preferences.", wxOK);
+		return;
+	}
+
+	// Find the NPC entry by name
+	NPCEntry* npc_entry = g_gui.npc_manager.findByName(creature->getName());
+	if (!npc_entry) {
+		g_gui.PopupDialog("NPC Not Found", 
+			wxString::Format("No NPC XML file found for '%s'.\nMake sure the NPC data directory is correctly configured in preferences.", 
+			wxstr(creature->getName())), wxOK);
+		return;
+	}
+
+	// Open the XML file
+	if (!g_gui.npc_manager.openNPCXML(*npc_entry)) {
+		g_gui.PopupDialog("Error", "Failed to open the NPC XML file. Make sure you have a text editor installed.", wxOK);
+	}
+}
+
+void MapCanvas::OnOpenNPCScript(wxCommandEvent& WXUNUSED(event)) {
+	if (editor.selection.size() != 1) {
+		return;
+	}
+
+	Tile* tile = editor.selection.getSelectedTile();
+	if (!tile || !tile->creature) {
+		return;
+	}
+
+	Creature* creature = tile->creature;
+	if (!creature->isNpc()) {
+		return;
+	}
+
+	// Check if the NPC manager is loaded
+	if (!g_gui.npc_manager.isLoaded()) {
+		g_gui.PopupDialog("NPC Error", "No OTS data directory has been loaded. Please load a map first or configure the OTS data directory in preferences.", wxOK);
+		return;
+	}
+
+	// Find the NPC entry by name
+	NPCEntry* npc_entry = g_gui.npc_manager.findByName(creature->getName());
+	if (!npc_entry) {
+		g_gui.PopupDialog("NPC Not Found", 
+			wxString::Format("No NPC XML file found for '%s'.\nMake sure the NPC data directory is correctly configured in preferences.", 
+			wxstr(creature->getName())), wxOK);
+		return;
+	}
+
+	// Check if the NPC has a script
+	if (!npc_entry->hasScript || npc_entry->script_path.empty()) {
+		g_gui.PopupDialog("No Script", 
+			wxString::Format("NPC '%s' does not have a script file configured.", 
+			wxstr(creature->getName())), wxOK);
+		return;
+	}
+
+	// Open the script file
+	if (!g_gui.npc_manager.openNPCScript(*npc_entry)) {
+		g_gui.PopupDialog("Error", "Failed to open the NPC script file. Make sure the script file exists and you have a text editor installed.", wxOK);
+	}
+}
+
+void MapCanvas::OnOpenMonsterXML(wxCommandEvent& WXUNUSED(event)) {
+	if (editor.selection.size() != 1) {
+		return;
+	}
+
+	Tile* tile = editor.selection.getSelectedTile();
+	if (!tile || !tile->creature) {
+		return;
+	}
+
+	Creature* creature = tile->creature;
+	if (creature->isNpc()) {
+		return; // This is for monsters only
+	}
+
+	// Check if the Monster manager is loaded
+	if (!g_gui.monster_manager.isLoaded()) {
+		g_gui.PopupDialog("Monster Error", "No OTS data directory has been loaded. Please load a map first or configure the OTS data directory in preferences.", wxOK);
+		return;
+	}
+
+	// Find the Monster entry by name
+	MonsterEntry* monster_entry = g_gui.monster_manager.findByName(creature->getName());
+	if (!monster_entry) {
+		g_gui.PopupDialog("Monster Not Found", 
+			wxString::Format("No Monster XML file found for '%s'.\nMake sure the Monster data directory is correctly configured in preferences.", 
+			wxstr(creature->getName())), wxOK);
+		return;
+	}
+
+	// Open the XML file
+	if (!g_gui.monster_manager.openMonsterXML(*monster_entry)) {
+		g_gui.PopupDialog("Error", "Failed to open the Monster XML file. Make sure you have a text editor installed.", wxOK);
 	}
 }

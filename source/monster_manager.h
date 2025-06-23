@@ -182,6 +182,9 @@ public:
     // Create a new monster XML file
     bool createMonsterXML(const MonsterEntry& entry, const std::string& output_path) const;
     
+    // Open monster XML file in external editor
+    bool openMonsterXML(const MonsterEntry& entry) const;
+    
     // Check if monsters are loaded
     bool isLoaded() const { return loaded; }
     

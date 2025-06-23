@@ -100,6 +100,9 @@ public:
 	void OnProperties(wxCommandEvent& event);
 	void OnFill(wxCommandEvent& event);
 	void OnOpenRevScript(wxCommandEvent& event);
+	void OnOpenNPCXML(wxCommandEvent& event);
+	void OnOpenNPCScript(wxCommandEvent& event);
+	void OnOpenMonsterXML(wxCommandEvent& event);
 
 	void Refresh();
 
