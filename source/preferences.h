@@ -163,6 +163,9 @@ protected:
 	// Helper method to update the UI state of invisible items controls
 	void UpdateInvisibleItemsUI();
 
+	// Helper method to update the UI state of client box controls
+	void UpdateClientBoxUI();
+
 	// Add with other checkbox declarations
 	wxCheckBox* auto_select_raw_chkbox;
 	wxCheckBox* show_map_warnings_chkbox;
@@ -176,6 +179,13 @@ protected:
 	wxColourPickerCtrl* invisible_walkable_color_pick;
 	wxColourPickerCtrl* invisible_wall_color_pick;
 	wxTextCtrl* invisible_custom_ids_textctrl;
+	
+	// Client Box Size controls
+	wxCheckBox* ingame_box_custom_size_chkbox;
+	wxSpinCtrl* ingame_box_width_spin;
+	wxSpinCtrl* ingame_box_height_spin;
+	wxSpinCtrl* ingame_box_offset_x_spin;
+	wxSpinCtrl* ingame_box_offset_y_spin;
 	
 	// LOD settings
 	wxSpinCtrl* tooltip_max_zoom_spin;

@@ -409,6 +409,14 @@ void Settings::IO(IOMode mode) {
 	Int(INVISIBLE_WALL_BLUE, 255);
 	String(INVISIBLE_CUSTOM_IDS, "");
 
+	// Client Box Settings
+	section("ClientBox");
+	Int(INGAME_BOX_CUSTOM_SIZE_ENABLED, 0);
+	Int(INGAME_BOX_WIDTH, 17);
+	Int(INGAME_BOX_HEIGHT, 13);
+	Int(INGAME_BOX_OFFSET_X, 0);
+	Int(INGAME_BOX_OFFSET_Y, 2);
+
 	// House creation settings
 	section("HouseCreation");
 	Int(MAX_HOUSE_TILES, 5000);

@@ -260,6 +260,13 @@ namespace Config {
 		INVISIBLE_WALL_BLUE,              // int: blue component for invisible walls (2187)
 		INVISIBLE_CUSTOM_IDS,             // string: custom invisible item IDs (e.g. "1234:255,0,0;5678:0,255,0")
 
+		// Client Box Settings
+		INGAME_BOX_CUSTOM_SIZE_ENABLED,   // bool: enable custom client box size
+		INGAME_BOX_WIDTH,                 // int: custom client box width (default 17)
+		INGAME_BOX_HEIGHT,                // int: custom client box height (default 13)
+		INGAME_BOX_OFFSET_X,              // int: custom X border offset (default 0)
+		INGAME_BOX_OFFSET_Y,              // int: custom Y border offset (default 2)
+
 		LAST,
 	};
 

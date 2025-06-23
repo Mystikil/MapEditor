@@ -448,6 +448,70 @@ wxNotebookPage* PreferencesWindow::CreateGraphicsPage() {
 	sizer->Add(pane, 0);
 	*/
 
+	sizer->AddSpacer(15);
+
+	// Client Box Size Settings
+	sizer->Add(newd wxStaticText(graphics_page, wxID_ANY, "Client Box Customization:"), 0, wxLEFT | wxTOP, 5);
+	
+	ingame_box_custom_size_chkbox = newd wxCheckBox(graphics_page, wxID_ANY, "Enable custom client box size");
+	ingame_box_custom_size_chkbox->SetValue(g_settings.getBoolean(Config::INGAME_BOX_CUSTOM_SIZE_ENABLED));
+	ingame_box_custom_size_chkbox->SetToolTip("When enabled, use custom size and offsets for the client box instead of the default 17x13 area.");
+	sizer->Add(ingame_box_custom_size_chkbox, 0, wxLEFT | wxTOP, 5);
+
+	// Grid for client box controls
+	auto* client_box_grid_sizer = newd wxFlexGridSizer(2, 10, 10);
+	client_box_grid_sizer->AddGrowableCol(1);
+
+	// Box Width
+	wxStaticText* box_width_label = newd wxStaticText(graphics_page, wxID_ANY, "Client box width:");
+	client_box_grid_sizer->Add(box_width_label, 0, wxALIGN_CENTER_VERTICAL);
+	
+	ingame_box_width_spin = newd wxSpinCtrl(graphics_page, wxID_ANY, 
+		i2ws(g_settings.getInteger(Config::INGAME_BOX_WIDTH)), 
+		wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS, 5, 50);
+	ingame_box_width_spin->SetToolTip("Width of the client box in tiles (default: 17)");
+	client_box_grid_sizer->Add(ingame_box_width_spin, 0);
+
+	// Box Height
+	wxStaticText* box_height_label = newd wxStaticText(graphics_page, wxID_ANY, "Client box height:");
+	client_box_grid_sizer->Add(box_height_label, 0, wxALIGN_CENTER_VERTICAL);
+	
+	ingame_box_height_spin = newd wxSpinCtrl(graphics_page, wxID_ANY, 
+		i2ws(g_settings.getInteger(Config::INGAME_BOX_HEIGHT)), 
+		wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS, 5, 50);
+	ingame_box_height_spin->SetToolTip("Height of the client box in tiles (default: 13)");
+	client_box_grid_sizer->Add(ingame_box_height_spin, 0);
+
+	// Offset X
+	wxStaticText* offset_x_label = newd wxStaticText(graphics_page, wxID_ANY, "X border offset:");
+	client_box_grid_sizer->Add(offset_x_label, 0, wxALIGN_CENTER_VERTICAL);
+	
+	ingame_box_offset_x_spin = newd wxSpinCtrl(graphics_page, wxID_ANY, 
+		i2ws(g_settings.getInteger(Config::INGAME_BOX_OFFSET_X)), 
+		wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS, -10, 10);
+	ingame_box_offset_x_spin->SetToolTip("Horizontal offset for the client box position");
+	client_box_grid_sizer->Add(ingame_box_offset_x_spin, 0);
+
+	// Offset Y
+	wxStaticText* offset_y_label = newd wxStaticText(graphics_page, wxID_ANY, "Y border offset:");
+	client_box_grid_sizer->Add(offset_y_label, 0, wxALIGN_CENTER_VERTICAL);
+	
+	ingame_box_offset_y_spin = newd wxSpinCtrl(graphics_page, wxID_ANY, 
+		i2ws(g_settings.getInteger(Config::INGAME_BOX_OFFSET_Y)), 
+		wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS, -10, 10);
+	ingame_box_offset_y_spin->SetToolTip("Vertical offset for the client box position (default: 2)");
+	client_box_grid_sizer->Add(ingame_box_offset_y_spin, 0);
+
+	sizer->Add(client_box_grid_sizer, 0, wxEXPAND | wxALL, 6);
+
+	// Connect events to update UI state
+	ingame_box_custom_size_chkbox->Bind(wxEVT_CHECKBOX, [this](wxCommandEvent&) {
+		UpdateClientBoxUI();
+	});
+	
+	// Initial update of UI state
+	UpdateClientBoxUI();
+
 	graphics_page->SetSizerAndFit(sizer);
 
 	return graphics_page;
@@ -1311,6 +1375,13 @@ void PreferencesWindow::Apply() {
 
 	// Reload invisible items color settings
 	InvisibleItemsColorManager::ReloadFromSettings();
+
+	// Client Box Settings
+	g_settings.setInteger(Config::INGAME_BOX_CUSTOM_SIZE_ENABLED, ingame_box_custom_size_chkbox->GetValue());
+	g_settings.setInteger(Config::INGAME_BOX_WIDTH, ingame_box_width_spin->GetValue());
+	g_settings.setInteger(Config::INGAME_BOX_HEIGHT, ingame_box_height_spin->GetValue());
+	g_settings.setInteger(Config::INGAME_BOX_OFFSET_X, ingame_box_offset_x_spin->GetValue());
+	g_settings.setInteger(Config::INGAME_BOX_OFFSET_Y, ingame_box_offset_y_spin->GetValue());
 }
 
 void PreferencesWindow::UpdateDarkModeUI() {
@@ -1425,4 +1496,12 @@ void PreferencesWindow::UpdateInvisibleItemsUI() {
 	invisible_walkable_color_pick->Enable(enabled);
 	invisible_wall_color_pick->Enable(enabled);
 	invisible_custom_ids_textctrl->Enable(enabled);
+}
+
+void PreferencesWindow::UpdateClientBoxUI() {
+	bool enabled = ingame_box_custom_size_chkbox->GetValue();
+	ingame_box_width_spin->Enable(enabled);
+	ingame_box_height_spin->Enable(enabled);
+	ingame_box_offset_x_spin->Enable(enabled);
+	ingame_box_offset_y_spin->Enable(enabled);
 }

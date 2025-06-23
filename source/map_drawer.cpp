@@ -696,11 +696,24 @@ void MapDrawer::DrawIngameBox() {
 	int center_x = start_x + int(screensize_x * zoom / 64);
 	int center_y = start_y + int(screensize_y * zoom / 64);
 
-	int offset_y = 2;
-	int box_start_map_x = center_x;
+	// Use custom settings if enabled, otherwise use defaults
+	int box_width, box_height, offset_x, offset_y;
+	if (g_settings.getBoolean(Config::INGAME_BOX_CUSTOM_SIZE_ENABLED)) {
+		box_width = g_settings.getInteger(Config::INGAME_BOX_WIDTH);
+		box_height = g_settings.getInteger(Config::INGAME_BOX_HEIGHT);
+		offset_x = g_settings.getInteger(Config::INGAME_BOX_OFFSET_X);
+		offset_y = g_settings.getInteger(Config::INGAME_BOX_OFFSET_Y);
+	} else {
+		box_width = ClientMapWidth;
+		box_height = ClientMapHeight;
+		offset_x = 0;
+		offset_y = 2;
+	}
+
+	int box_start_map_x = center_x + offset_x;
 	int box_start_map_y = center_y + offset_y;
-	int box_end_map_x = center_x + ClientMapWidth;
-	int box_end_map_y = center_y + ClientMapHeight + offset_y;
+	int box_end_map_x = center_x + box_width + offset_x;
+	int box_end_map_y = center_y + box_height + offset_y;
 
 	int box_start_x = box_start_map_x * TileSize - view_scroll_x;
 	int box_start_y = box_start_map_y * TileSize - view_scroll_y;
@@ -741,9 +754,9 @@ void MapDrawer::DrawIngameBox() {
 	box_end_y -= 1 * TileSize;
 	drawRect(box_start_x, box_start_y, box_end_x - box_start_x, box_end_y - box_start_y, *wxGREEN);
 
-	// player position
-	box_start_x += (ClientMapWidth - 3) / 2 * TileSize;
-	box_start_y += (ClientMapHeight - 3) / 2 * TileSize;
+	// player position (center of the client box)
+	box_start_x += (box_width - 3) / 2 * TileSize;
+	box_start_y += (box_height - 3) / 2 * TileSize;
 	box_end_x = box_start_x + TileSize;
 	box_end_y = box_start_y + TileSize;
 	drawRect(box_start_x, box_start_y, box_end_x - box_start_x, box_end_y - box_start_y, *wxGREEN);
