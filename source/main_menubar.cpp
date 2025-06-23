@@ -286,6 +286,7 @@ MainMenuBar::MainMenuBar(MainFrame* frame) :
 	MAKE_ACTION(FIND_CREATURE, wxITEM_NORMAL, OnSearchForCreature);
 	MAKE_ACTION(MAP_CREATE_BORDER, wxITEM_NORMAL, OnCreateBorder);
 	MAKE_ACTION(MAP_SUMMARIZE, wxITEM_NORMAL, OnMapSummarize);
+	MAKE_ACTION(RESET_HOUSE_IDS, wxITEM_NORMAL, OnResetHouseIDs);
 
 	// A deleter, this way the frame does not need
 	// to bother deleting us.
@@ -3818,5 +3819,174 @@ void MainMenuBar::OnMapNotes(wxCommandEvent& WXUNUSED(event)) {
     NotesWindow* notesWindow = new NotesWindow(frame, editor);
     notesWindow->ShowModal();
     notesWindow->Destroy();
+}
+
+void MainMenuBar::OnResetHouseIDs(wxCommandEvent& WXUNUSED(event)) {
+    if (!g_gui.IsEditorOpen()) {
+        return;
+    }
+
+    Editor* editor = g_gui.GetCurrentEditor();
+    if (!editor) {
+        return;
+    }
+
+    Map& map = editor->map;
+    Houses& houses = map.houses;
+
+    if (houses.count() == 0) {
+        g_gui.PopupDialog("Reset House IDs", "No houses found on the map!", wxOK);
+        return;
+    }
+
+    // Show confirmation dialog with preview
+    std::vector<std::pair<uint32_t, uint32_t>> id_changes;
+    std::vector<House*> house_list;
+    
+    // Collect all houses and sort by current ID
+    for (HouseMap::iterator it = houses.begin(); it != houses.end(); ++it) {
+        house_list.push_back(it->second);
+    }
+    
+    std::sort(house_list.begin(), house_list.end(), [](House* a, House* b) {
+        return a->getID() < b->getID();
+    });
+
+    // Calculate new IDs (sequential starting from 1)
+    for (size_t i = 0; i < house_list.size(); ++i) {
+        uint32_t old_id = house_list[i]->getID();
+        uint32_t new_id = i + 1;
+        if (old_id != new_id) {
+            id_changes.push_back(std::make_pair(old_id, new_id));
+        }
+    }
+
+    if (id_changes.empty()) {
+        g_gui.PopupDialog("Reset House IDs", "House IDs are already sequential. No changes needed!", wxOK);
+        return;
+    }
+
+    // Create dialog showing what will change
+    wxDialog* dialog = new wxDialog(frame, wxID_ANY, "Reset House IDs", 
+        wxDefaultPosition, wxSize(600, 400), wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER);
+    
+    wxBoxSizer* mainSizer = new wxBoxSizer(wxVERTICAL);
+    
+    // Warning text
+    wxStaticText* warning = new wxStaticText(dialog, wxID_ANY, 
+        "WARNING: This will reset house IDs to fill gaps and create continuous numbering!\n"
+        "This operation will have DATABASE CONSEQUENCES in production servers!\n"
+        "House ownership, guest lists, and items may be affected!");
+    warning->SetForegroundColour(*wxRED);
+    mainSizer->Add(warning, 0, wxALL | wxALIGN_CENTER, 10);
+
+    // Preview list
+    wxStaticText* previewLabel = new wxStaticText(dialog, wxID_ANY, "Preview of changes:");
+    mainSizer->Add(previewLabel, 0, wxALL, 5);
+    
+    wxListCtrl* previewList = new wxListCtrl(dialog, wxID_ANY, wxDefaultPosition, wxDefaultSize, 
+        wxLC_REPORT | wxLC_SINGLE_SEL);
+    previewList->AppendColumn("House Name", wxLIST_FORMAT_LEFT, 300);
+    previewList->AppendColumn("Old ID", wxLIST_FORMAT_CENTER, 80);
+    previewList->AppendColumn("New ID", wxLIST_FORMAT_CENTER, 80);
+    
+    for (const auto& change : id_changes) {
+        House* house = houses.getHouse(change.first);
+        if (house) {
+            long index = previewList->InsertItem(previewList->GetItemCount(), wxstr(house->name));
+            previewList->SetItem(index, 1, wxString::Format("%d", change.first));
+            previewList->SetItem(index, 2, wxString::Format("%d", change.second));
+        }
+    }
+    
+    mainSizer->Add(previewList, 1, wxEXPAND | wxALL, 5);
+
+    // Buttons
+    wxBoxSizer* buttonSizer = new wxBoxSizer(wxHORIZONTAL);
+    wxButton* okButton = new wxButton(dialog, wxID_OK, "Apply Changes");
+    wxButton* cancelButton = new wxButton(dialog, wxID_CANCEL, "Cancel");
+    buttonSizer->Add(okButton, 0, wxALL, 5);
+    buttonSizer->Add(cancelButton, 0, wxALL, 5);
+    mainSizer->Add(buttonSizer, 0, wxALIGN_CENTER | wxALL, 5);
+
+    dialog->SetSizer(mainSizer);
+    dialog->Center();
+
+    if (dialog->ShowModal() == wxID_OK) {
+        // Apply the changes
+        g_gui.CreateLoadBar("Resetting house IDs...");
+        
+        try {
+            // Create a mapping of old ID to new ID for quick lookup
+            std::map<uint32_t, uint32_t> id_mapping;
+            for (const auto& change : id_changes) {
+                id_mapping[change.first] = change.second;
+            }
+
+            // Step 1: Convert house tiles manually (avoid multiple loading dialogs)
+            uint64_t tiles_done = 0;
+            uint64_t total_tiles = map.getTileCount();
+            
+            for (MapIterator miter = map.begin(); miter != map.end(); ++miter) {
+                if (tiles_done % 0x4000 == 0) {
+                    g_gui.SetLoadDone(int((tiles_done * 80) / total_tiles), "Converting house tiles...");
+                }
+                
+                Tile* tile = (*miter)->get();
+                if (tile && tile->isHouseTile()) {
+                    uint32_t old_house_id = tile->getHouseID();
+                    auto it = id_mapping.find(old_house_id);
+                    if (it != id_mapping.end()) {
+                        tile->setHouseID(it->second);
+                    }
+                }
+                ++tiles_done;
+            }
+
+            // Step 2: Update house objects themselves
+            g_gui.SetLoadDone(90, "Updating house registry...");
+            
+            // We need to be careful here to avoid iterator invalidation
+            std::vector<House*> houses_to_update;
+            for (const auto& change : id_changes) {
+                House* house = houses.getHouse(change.first);
+                if (house) {
+                    houses_to_update.push_back(house);
+                }
+            }
+            
+            for (House* house : houses_to_update) {
+                uint32_t old_id = house->getID();
+                // Find the new ID for this house
+                for (const auto& change : id_changes) {
+                    if (change.first == old_id) {
+                        houses.changeId(house, change.second);
+                        break;
+                    }
+                }
+            }
+
+            g_gui.SetLoadDone(100);
+            g_gui.DestroyLoadBar();
+            
+            // Mark map as modified
+            map.doChange();
+            
+            wxString msg;
+            msg << "Successfully reset " << id_changes.size() << " house IDs!\n"
+                << "House IDs are now sequential from 1 to " << house_list.size() << ".";
+            g_gui.PopupDialog("Reset House IDs", msg, wxOK);
+            
+            // Refresh the view and palettes
+            g_gui.RefreshView();
+            g_gui.RefreshPalettes();
+            
+        } catch (...) {
+            g_gui.DestroyLoadBar();
+            g_gui.PopupDialog("Error", "An error occurred while resetting house IDs!", wxOK | wxICON_ERROR);
+        }
+    }
+
+    dialog->Destroy();
 }
 
