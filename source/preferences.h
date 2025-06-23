@@ -155,15 +155,27 @@ protected:
 	wxNotebookPage* CreateLODPage();
 	wxNotebookPage* CreateAutomagicPage();
 	wxNotebookPage* CreateTooltipInfoPage();
+	wxNotebookPage* CreateInvisibleItemsPage();
 
 	// Helper method to update the UI state of dark mode controls
 	void UpdateDarkModeUI();
+	
+	// Helper method to update the UI state of invisible items controls
+	void UpdateInvisibleItemsUI();
 
 	// Add with other checkbox declarations
 	wxCheckBox* auto_select_raw_chkbox;
 	wxCheckBox* show_map_warnings_chkbox;
 	wxCheckBox* autosave_chkbox;
 	wxSpinCtrl* autosave_interval_spin;
+	
+	// Invisible Items Color controls
+	wxCheckBox* invisible_items_custom_chkbox;
+	wxColourPickerCtrl* invisible_invalid_color_pick;
+	wxColourPickerCtrl* invisible_stairs_color_pick;
+	wxColourPickerCtrl* invisible_walkable_color_pick;
+	wxColourPickerCtrl* invisible_wall_color_pick;
+	wxTextCtrl* invisible_custom_ids_textctrl;
 	
 	// LOD settings
 	wxSpinCtrl* tooltip_max_zoom_spin;

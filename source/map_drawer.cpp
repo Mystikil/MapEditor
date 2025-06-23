@@ -31,6 +31,7 @@
 #include "copybuffer.h"
 #include "live_socket.h"
 #include "graphics.h"
+#include "settings.h"
 
 #include "doodad_brush.h"
 #include "creature_brush.h"
@@ -44,6 +45,139 @@
 #include "waypoint_brush.h"
 #include "light_drawer.h"
 #include "string_utils.h" // For parseIdRangesString, isIdInRanges
+
+// InvisibleItemsColorManager static members
+bool InvisibleItemsColorManager::custom_colors_enabled = false;
+InvisibleItemsColorManager::Color InvisibleItemsColorManager::invalid_color(255, 0, 0);
+InvisibleItemsColorManager::Color InvisibleItemsColorManager::stairs_color(255, 255, 0);
+InvisibleItemsColorManager::Color InvisibleItemsColorManager::walkable_color(255, 0, 0);
+InvisibleItemsColorManager::Color InvisibleItemsColorManager::wall_color(0, 255, 255);
+std::unordered_map<uint32_t, InvisibleItemsColorManager::Color> InvisibleItemsColorManager::custom_colors;
+
+void InvisibleItemsColorManager::LoadFromSettings() {
+	custom_colors_enabled = g_settings.getBoolean(Config::INVISIBLE_ITEMS_ENABLE_CUSTOM);
+	
+	invalid_color = Color(
+		g_settings.getInteger(Config::INVISIBLE_INVALID_RED),
+		g_settings.getInteger(Config::INVISIBLE_INVALID_GREEN),
+		g_settings.getInteger(Config::INVISIBLE_INVALID_BLUE)
+	);
+	
+	stairs_color = Color(
+		g_settings.getInteger(Config::INVISIBLE_STAIRS_RED),
+		g_settings.getInteger(Config::INVISIBLE_STAIRS_GREEN),
+		g_settings.getInteger(Config::INVISIBLE_STAIRS_BLUE)
+	);
+	
+	walkable_color = Color(
+		g_settings.getInteger(Config::INVISIBLE_WALKABLE_RED),
+		g_settings.getInteger(Config::INVISIBLE_WALKABLE_GREEN),
+		g_settings.getInteger(Config::INVISIBLE_WALKABLE_BLUE)
+	);
+	
+	wall_color = Color(
+		g_settings.getInteger(Config::INVISIBLE_WALL_RED),
+		g_settings.getInteger(Config::INVISIBLE_WALL_GREEN),
+		g_settings.getInteger(Config::INVISIBLE_WALL_BLUE)
+	);
+	
+	// Parse custom IDs string
+	std::string custom_ids_str = g_settings.getString(Config::INVISIBLE_CUSTOM_IDS);
+	ParseCustomIDs(custom_ids_str);
+}
+
+void InvisibleItemsColorManager::ReloadFromSettings() {
+	LoadFromSettings();
+}
+
+void InvisibleItemsColorManager::ParseCustomIDs(const std::string& custom_ids_str) {
+	custom_colors.clear();
+	
+	if (custom_ids_str.empty()) {
+		return;
+	}
+	
+	// Split by semicolon
+	std::stringstream ss(custom_ids_str);
+	std::string entry;
+	
+	while (std::getline(ss, entry, ';')) {
+		if (entry.empty()) continue;
+		
+		// Find colon separator between ID and color
+		size_t colon_pos = entry.find(':');
+		if (colon_pos == std::string::npos) continue;
+		
+		std::string id_str = entry.substr(0, colon_pos);
+		std::string color_str = entry.substr(colon_pos + 1);
+		
+		// Parse ID
+		uint32_t id;
+		try {
+			id = std::stoul(id_str);
+		} catch (...) {
+			continue; // Invalid ID, skip this entry
+		}
+		
+		// Parse color (R,G,B)
+		std::stringstream color_ss(color_str);
+		std::string component;
+		std::vector<int> rgb_values;
+		
+		while (std::getline(color_ss, component, ',') && rgb_values.size() < 3) {
+			try {
+				int value = std::stoi(component);
+				if (value >= 0 && value <= 255) {
+					rgb_values.push_back(value);
+				} else {
+					break; // Invalid color value
+				}
+			} catch (...) {
+				break; // Invalid color value
+			}
+		}
+		
+		if (rgb_values.size() == 3) {
+			custom_colors[id] = Color(rgb_values[0], rgb_values[1], rgb_values[2]);
+		}
+	}
+}
+
+bool InvisibleItemsColorManager::GetCustomColor(uint32_t clientID, int& red, int& green, int& blue) {
+	if (!custom_colors_enabled) {
+		return false;
+	}
+	
+	auto it = custom_colors.find(clientID);
+	if (it != custom_colors.end()) {
+		red = it->second.red;
+		green = it->second.green;
+		blue = it->second.blue;
+		return true;
+	}
+	
+	return false;
+}
+
+InvisibleItemsColorManager::Color InvisibleItemsColorManager::GetInvalidItemColor() {
+	return custom_colors_enabled ? invalid_color : Color(255, 0, 0);
+}
+
+InvisibleItemsColorManager::Color InvisibleItemsColorManager::GetInvisibleStairsColor() {
+	return custom_colors_enabled ? stairs_color : Color(255, 255, 0);
+}
+
+InvisibleItemsColorManager::Color InvisibleItemsColorManager::GetInvisibleWalkableColor() {
+	return custom_colors_enabled ? walkable_color : Color(255, 0, 0);
+}
+
+InvisibleItemsColorManager::Color InvisibleItemsColorManager::GetInvisibleWallColor() {
+	return custom_colors_enabled ? wall_color : Color(0, 255, 255);
+}
+
+bool InvisibleItemsColorManager::IsCustomColorsEnabled() {
+	return custom_colors_enabled;
+}
 
 using Color = std::tuple<int, int, int>;
 
@@ -181,6 +315,9 @@ bool DrawingOptions::isDrawLight() const noexcept {
 MapDrawer::MapDrawer(MapCanvas* canvas) :
 	canvas(canvas), editor(canvas->editor) {
 	light_drawer = std::make_shared<LightDrawer>();
+	
+	// Load invisible items color settings
+	InvisibleItemsColorManager::LoadFromSettings();
 }
 
 MapDrawer::~MapDrawer() {
@@ -1281,32 +1418,45 @@ void MapDrawer::BlitItem(int& draw_x, int& draw_y, const Position& pos, Item* it
 	GameSprite* spr = it.sprite;
 
 	// Display invisible and invalid items
-	// Ugly hacks. :)
 	if (!options.ingame && options.show_tech_items) {
+		// Check for custom colors first
+		int custom_red, custom_green, custom_blue;
+		if (InvisibleItemsColorManager::GetCustomColor(it.clientID, custom_red, custom_green, custom_blue)) {
+			BlitSquare(draw_x, draw_y, custom_red, custom_green, custom_blue, alpha / 3 * 2);
+			return;
+		}
+
 		// Red invalid client id
 		if (it.id == 0) {
-			BlitSquare(draw_x, draw_y, red, 0, 0, alpha);
+			auto color = InvisibleItemsColorManager::GetInvalidItemColor();
+			BlitSquare(draw_x, draw_y, color.red, color.green, color.blue, alpha);
 			return;
 		}
 
 		switch (it.clientID) {
 			// Yellow invisible stairs tile (459)
-			case 469:
-				BlitSquare(draw_x, draw_y, red, green, 0, alpha / 3 * 2);
+			case 469: {
+				auto color = InvisibleItemsColorManager::GetInvisibleStairsColor();
+				BlitSquare(draw_x, draw_y, color.red, color.green, color.blue, alpha / 3 * 2);
 				return;
+			}
 
 			// Red invisible walkable tile (460)
 			case 470:
 			case 17970:
 			case 20028:
-			case 34168:
-				BlitSquare(draw_x, draw_y, red, 0, 0, alpha / 3 * 2);
+			case 34168: {
+				auto color = InvisibleItemsColorManager::GetInvisibleWalkableColor();
+				BlitSquare(draw_x, draw_y, color.red, color.green, color.blue, alpha / 3 * 2);
 				return;
+			}
 
 			// Cyan invisible wall (1548)
-			case 2187:
-				BlitSquare(draw_x, draw_y, 0, green, blue, 80);
+			case 2187: {
+				auto color = InvisibleItemsColorManager::GetInvisibleWallColor();
+				BlitSquare(draw_x, draw_y, color.red, color.green, color.blue, 80);
 				return;
+			}
 
 			default:
 				break;

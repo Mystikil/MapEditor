@@ -244,6 +244,22 @@ namespace Config {
 		
 		REFRESH_RADIUS,               // int: radius for visible area refresh in multiplayer
 
+		// Invisible Items Color Settings
+		INVISIBLE_ITEMS_ENABLE_CUSTOM,    // bool: enable custom invisible item colors
+		INVISIBLE_INVALID_RED,            // int: red component for invalid items (id=0)
+		INVISIBLE_INVALID_GREEN,          // int: green component for invalid items (id=0)
+		INVISIBLE_INVALID_BLUE,           // int: blue component for invalid items (id=0)
+		INVISIBLE_STAIRS_RED,             // int: red component for invisible stairs (469)
+		INVISIBLE_STAIRS_GREEN,           // int: green component for invisible stairs (469)
+		INVISIBLE_STAIRS_BLUE,            // int: blue component for invisible stairs (469)
+		INVISIBLE_WALKABLE_RED,           // int: red component for invisible walkable tiles
+		INVISIBLE_WALKABLE_GREEN,         // int: green component for invisible walkable tiles
+		INVISIBLE_WALKABLE_BLUE,          // int: blue component for invisible walkable tiles
+		INVISIBLE_WALL_RED,               // int: red component for invisible walls (2187)
+		INVISIBLE_WALL_GREEN,             // int: green component for invisible walls (2187)
+		INVISIBLE_WALL_BLUE,              // int: blue component for invisible walls (2187)
+		INVISIBLE_CUSTOM_IDS,             // string: custom invisible item IDs (e.g. "1234:255,0,0;5678:0,255,0")
+
 		LAST,
 	};
 

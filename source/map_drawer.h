@@ -192,6 +192,44 @@ public:
 	}
 };
 
+// Manages custom colors for invisible items
+class InvisibleItemsColorManager {
+public:
+	struct Color {
+		int red, green, blue;
+		Color(int r = 255, int g = 255, int b = 255) : red(r), green(g), blue(b) {}
+	};
+
+	// Load settings from configuration
+	static void LoadFromSettings();
+
+	// Reload settings from configuration (useful when preferences change)
+	static void ReloadFromSettings();
+
+	// Get color for specific client ID, returns true if custom color is found
+	static bool GetCustomColor(uint32_t clientID, int& red, int& green, int& blue);
+
+	// Get default colors for predefined invisible items
+	static Color GetInvalidItemColor();
+	static Color GetInvisibleStairsColor();
+	static Color GetInvisibleWalkableColor();
+	static Color GetInvisibleWallColor();
+
+	// Check if custom colors are enabled
+	static bool IsCustomColorsEnabled();
+
+private:
+	static bool custom_colors_enabled;
+	static Color invalid_color;
+	static Color stairs_color;
+	static Color walkable_color;
+	static Color wall_color;
+	static std::unordered_map<uint32_t, Color> custom_colors;
+
+	// Parse custom IDs string from settings
+	static void ParseCustomIDs(const std::string& custom_ids_str);
+};
+
 class MapDrawer {
 	MapCanvas* canvas;
 	Editor& editor;

@@ -41,6 +41,7 @@
 #include "main_menubar.h"
 #include "main_toolbar.h"
 #include "dark_mode_manager.h"
+#include "map_drawer.h"
 
 BEGIN_EVENT_TABLE(PreferencesWindow, wxDialog)
 EVT_BUTTON(wxID_OK, PreferencesWindow::OnClickOK)
@@ -65,6 +66,7 @@ PreferencesWindow::PreferencesWindow(wxWindow* parent, bool clientVersionSelecte
 	book->AddPage(CreateLODPage(), "LOD");
 	book->AddPage(CreateAutomagicPage(), "Automagic");
 	book->AddPage(CreateTooltipInfoPage(), "Tooltip Info");
+	book->AddPage(CreateInvisibleItemsPage(), "Invisible Items");
 
 	sizer->Add(book, 1, wxEXPAND | wxALL, 10);
 
@@ -1281,10 +1283,146 @@ void PreferencesWindow::Apply() {
 	g_settings.setInteger(Config::TOOLTIP_SHOW_DESTINATION, tooltip_show_destination_chkbox->GetValue());
 	g_settings.setInteger(Config::TOOLTIP_SHOW_HOUSEID, tooltip_show_houseid_chkbox->GetValue());
 	g_settings.setInteger(Config::HOUSE_CUSTOM_COLORS, house_custom_colors_chkbox->GetValue());
+
+	// Invisible Items Colors
+	g_settings.setInteger(Config::INVISIBLE_ITEMS_ENABLE_CUSTOM, invisible_items_custom_chkbox->GetValue());
+	
+	wxColor invalid_color = invisible_invalid_color_pick->GetColour();
+	g_settings.setInteger(Config::INVISIBLE_INVALID_RED, invalid_color.Red());
+	g_settings.setInteger(Config::INVISIBLE_INVALID_GREEN, invalid_color.Green());
+	g_settings.setInteger(Config::INVISIBLE_INVALID_BLUE, invalid_color.Blue());
+	
+	wxColor stairs_color = invisible_stairs_color_pick->GetColour();
+	g_settings.setInteger(Config::INVISIBLE_STAIRS_RED, stairs_color.Red());
+	g_settings.setInteger(Config::INVISIBLE_STAIRS_GREEN, stairs_color.Green());
+	g_settings.setInteger(Config::INVISIBLE_STAIRS_BLUE, stairs_color.Blue());
+	
+	wxColor walkable_color = invisible_walkable_color_pick->GetColour();
+	g_settings.setInteger(Config::INVISIBLE_WALKABLE_RED, walkable_color.Red());
+	g_settings.setInteger(Config::INVISIBLE_WALKABLE_GREEN, walkable_color.Green());
+	g_settings.setInteger(Config::INVISIBLE_WALKABLE_BLUE, walkable_color.Blue());
+	
+	wxColor wall_color = invisible_wall_color_pick->GetColour();
+	g_settings.setInteger(Config::INVISIBLE_WALL_RED, wall_color.Red());
+	g_settings.setInteger(Config::INVISIBLE_WALL_GREEN, wall_color.Green());
+	g_settings.setInteger(Config::INVISIBLE_WALL_BLUE, wall_color.Blue());
+	
+	g_settings.setString(Config::INVISIBLE_CUSTOM_IDS, nstr(invisible_custom_ids_textctrl->GetValue()));
+
+	// Reload invisible items color settings
+	InvisibleItemsColorManager::ReloadFromSettings();
 }
 
 void PreferencesWindow::UpdateDarkModeUI() {
 	bool enabled = dark_mode_chkbox->GetValue();
 	dark_mode_color_enabled_chkbox->Enable(enabled);
 	dark_mode_color_pick->Enable(enabled && dark_mode_color_enabled_chkbox->GetValue());
+}
+
+wxNotebookPage* PreferencesWindow::CreateInvisibleItemsPage() {
+	wxNotebookPage* invisible_page = newd wxPanel(book, wxID_ANY);
+	
+	wxSizer* sizer = newd wxBoxSizer(wxVERTICAL);
+
+	// Enable custom colors checkbox
+	invisible_items_custom_chkbox = newd wxCheckBox(invisible_page, wxID_ANY, "Enable custom invisible item colors");
+	invisible_items_custom_chkbox->SetValue(g_settings.getBoolean(Config::INVISIBLE_ITEMS_ENABLE_CUSTOM));
+	invisible_items_custom_chkbox->SetToolTip("When enabled, use custom colors for invisible items instead of the default hardcoded colors.");
+	sizer->Add(invisible_items_custom_chkbox, 0, wxLEFT | wxTOP, 5);
+
+	sizer->AddSpacer(10);
+
+	// Color pickers for predefined invisible items
+	auto* grid_sizer = newd wxFlexGridSizer(2, 10, 10);
+	grid_sizer->AddGrowableCol(1);
+
+	// Invalid items color (ID = 0)
+	wxStaticText* invalid_label = newd wxStaticText(invisible_page, wxID_ANY, "Invalid items (ID=0):");
+	grid_sizer->Add(invalid_label, 0, wxALIGN_CENTER_VERTICAL);
+	
+	wxColor current_invalid_color(
+		g_settings.getInteger(Config::INVISIBLE_INVALID_RED),
+		g_settings.getInteger(Config::INVISIBLE_INVALID_GREEN),
+		g_settings.getInteger(Config::INVISIBLE_INVALID_BLUE)
+	);
+	invisible_invalid_color_pick = newd wxColourPickerCtrl(invisible_page, wxID_ANY, current_invalid_color);
+	invisible_invalid_color_pick->SetToolTip("Color for invalid items (clientID = 0)");
+	grid_sizer->Add(invisible_invalid_color_pick, 0);
+
+	// Invisible stairs color (469)
+	wxStaticText* stairs_label = newd wxStaticText(invisible_page, wxID_ANY, "Invisible stairs (469):");
+	grid_sizer->Add(stairs_label, 0, wxALIGN_CENTER_VERTICAL);
+	
+	wxColor current_stairs_color(
+		g_settings.getInteger(Config::INVISIBLE_STAIRS_RED),
+		g_settings.getInteger(Config::INVISIBLE_STAIRS_GREEN),
+		g_settings.getInteger(Config::INVISIBLE_STAIRS_BLUE)
+	);
+	invisible_stairs_color_pick = newd wxColourPickerCtrl(invisible_page, wxID_ANY, current_stairs_color);
+	invisible_stairs_color_pick->SetToolTip("Color for invisible stairs tiles (clientID = 469)");
+	grid_sizer->Add(invisible_stairs_color_pick, 0);
+
+	// Invisible walkable tiles color (470, etc.)
+	wxStaticText* walkable_label = newd wxStaticText(invisible_page, wxID_ANY, "Invisible walkable (470, 17970, 20028, 34168):");
+	grid_sizer->Add(walkable_label, 0, wxALIGN_CENTER_VERTICAL);
+	
+	wxColor current_walkable_color(
+		g_settings.getInteger(Config::INVISIBLE_WALKABLE_RED),
+		g_settings.getInteger(Config::INVISIBLE_WALKABLE_GREEN),
+		g_settings.getInteger(Config::INVISIBLE_WALKABLE_BLUE)
+	);
+	invisible_walkable_color_pick = newd wxColourPickerCtrl(invisible_page, wxID_ANY, current_walkable_color);
+	invisible_walkable_color_pick->SetToolTip("Color for invisible walkable tiles (clientID = 470, 17970, 20028, 34168)");
+	grid_sizer->Add(invisible_walkable_color_pick, 0);
+
+	// Invisible wall color (2187)
+	wxStaticText* wall_label = newd wxStaticText(invisible_page, wxID_ANY, "Invisible wall (2187):");
+	grid_sizer->Add(wall_label, 0, wxALIGN_CENTER_VERTICAL);
+	
+	wxColor current_wall_color(
+		g_settings.getInteger(Config::INVISIBLE_WALL_RED),
+		g_settings.getInteger(Config::INVISIBLE_WALL_GREEN),
+		g_settings.getInteger(Config::INVISIBLE_WALL_BLUE)
+	);
+	invisible_wall_color_pick = newd wxColourPickerCtrl(invisible_page, wxID_ANY, current_wall_color);
+	invisible_wall_color_pick->SetToolTip("Color for invisible wall tiles (clientID = 2187)");
+	grid_sizer->Add(invisible_wall_color_pick, 0);
+
+	sizer->Add(grid_sizer, 0, wxEXPAND | wxALL, 6);
+
+	sizer->AddSpacer(15);
+
+	// Custom IDs section
+	wxStaticText* custom_label = newd wxStaticText(invisible_page, wxID_ANY, "Custom invisible item IDs:");
+	sizer->Add(custom_label, 0, wxLEFT | wxTOP, 5);
+
+	wxStaticText* format_label = newd wxStaticText(invisible_page, wxID_ANY, "Format: ID:R,G,B;ID:R,G,B (e.g., 1234:255,0,0;5678:0,255,0)");
+	format_label->SetFont(format_label->GetFont().Smaller());
+	sizer->Add(format_label, 0, wxLEFT | wxTOP, 5);
+
+	invisible_custom_ids_textctrl = newd wxTextCtrl(invisible_page, wxID_ANY, 
+		wxstr(g_settings.getString(Config::INVISIBLE_CUSTOM_IDS)),
+		wxDefaultPosition, wxSize(400, 60), wxTE_MULTILINE);
+	invisible_custom_ids_textctrl->SetToolTip("Add custom invisible item IDs with their colors. Each entry should be in format ID:R,G,B separated by semicolons.");
+	sizer->Add(invisible_custom_ids_textctrl, 0, wxEXPAND | wxALL, 5);
+
+	// Connect events to update UI state
+	invisible_items_custom_chkbox->Bind(wxEVT_CHECKBOX, [this](wxCommandEvent&) {
+		UpdateInvisibleItemsUI();
+	});
+	
+	// Initial update of UI state
+	UpdateInvisibleItemsUI();
+
+	invisible_page->SetSizerAndFit(sizer);
+	return invisible_page;
+}
+
+void PreferencesWindow::UpdateInvisibleItemsUI() {
+	bool enabled = invisible_items_custom_chkbox->GetValue();
+	invisible_invalid_color_pick->Enable(enabled);
+	invisible_stairs_color_pick->Enable(enabled);
+	invisible_walkable_color_pick->Enable(enabled);
+	invisible_wall_color_pick->Enable(enabled);
+	invisible_custom_ids_textctrl->Enable(enabled);
 }
