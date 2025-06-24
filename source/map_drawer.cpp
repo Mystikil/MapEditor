@@ -655,9 +655,14 @@ void MapDrawer::DrawMap() {
 									b16 += std::get<2>(colour);
 								}
 
-								r = r16 / zones;
-								g = g16 / zones;
-								b = b16 / zones;
+								if (zones > 0) {  // Prevent division by zero
+									r = r16 / zones;
+									g = g16 / zones;
+									b = b16 / zones;
+								} else {
+									// Clear invalid zone flag to prevent future crashes
+									const_cast<Tile*>(tile)->unsetMapFlags(TILESTATE_ZONE_BRUSH);
+								}
 							}
 							BlitItem(draw_x, draw_y, tile, tile->ground, true, r, g, b, 160);
 						}
@@ -791,6 +796,12 @@ void MapDrawer::DrawDraggingShadow() {
 
 	// Draw dragging shadow
 	if (!editor.selection.isBusy() && dragging && !options.ingame) {
+		// Add debugging output for dragging shadow drawing
+		char debug_msg[512];
+		sprintf(debug_msg, "DEBUG DRAG: DrawDraggingShadow started - selection_size=%zu, dragging=%d\n", 
+			editor.selection.size(), dragging);
+		OutputDebugStringA(debug_msg);
+		
 		for (TileSet::iterator tit = editor.selection.begin(); tit != editor.selection.end(); tit++) {
 			Tile* tile = *tit;
 			Position pos = tile->getPosition();
@@ -799,12 +810,18 @@ void MapDrawer::DrawDraggingShadow() {
 			move_x = canvas->drag_start_x - mouse_map_x;
 			move_y = canvas->drag_start_y - mouse_map_y;
 			move_z = canvas->drag_start_z - floor;
+			
+			sprintf(debug_msg, "DEBUG DRAG: Processing tile at pos=(%d,%d,%d), move_offset=(%d,%d,%d)\n", 
+				pos.x, pos.y, pos.z, move_x, move_y, move_z);
+			OutputDebugStringA(debug_msg);
 
 			pos.x -= move_x;
 			pos.y -= move_y;
 			pos.z -= move_z;
 
 			if (pos.z < 0 || pos.z >= MAP_LAYERS) {
+				sprintf(debug_msg, "DEBUG DRAG: Skipping tile - invalid z coordinate: %d\n", pos.z);
+				OutputDebugStringA(debug_msg);
 				continue;
 			}
 
@@ -816,12 +833,22 @@ void MapDrawer::DrawDraggingShadow() {
 				} else {
 					offset = TileSize * (floor - pos.z);
 				}
+				
+				sprintf(debug_msg, "DEBUG DRAG: Calculating offset - pos.z=%d, GROUND_LAYER=%d, floor=%d, TileSize=%d, offset=%d\n", 
+					pos.z, GROUND_LAYER, floor, TileSize, offset);
+				OutputDebugStringA(debug_msg);
 
 				int draw_x = ((pos.x * TileSize) - view_scroll_x) - offset;
 				int draw_y = ((pos.y * TileSize) - view_scroll_y) - offset;
+				
+				sprintf(debug_msg, "DEBUG DRAG: Calculated draw position - draw_x=%d, draw_y=%d\n", draw_x, draw_y);
+				OutputDebugStringA(debug_msg);
 
 				// save performance when moving large chunks unzoomed
 				ItemVector toRender = tile->getSelectedItems(zoom > 3.0);
+				sprintf(debug_msg, "DEBUG DRAG: Got %zu items to render for tile\n", toRender.size());
+				OutputDebugStringA(debug_msg);
+				
 				Tile* desttile = editor.map.getTile(pos);
 				for (ItemVector::const_iterator iit = toRender.begin(); iit != toRender.end(); iit++) {
 					if (desttile) {
@@ -834,14 +861,24 @@ void MapDrawer::DrawDraggingShadow() {
 				// save performance when moving large chunks unzoomed
 				if (zoom <= 3.0) {
 					if (tile->creature && tile->creature->isSelected() && options.show_creatures) {
+						sprintf(debug_msg, "DEBUG DRAG: Drawing creature at (%d,%d)\n", draw_x, draw_y);
+						OutputDebugStringA(debug_msg);
 						BlitCreature(draw_x, draw_y, tile->creature);
 					}
 					if (tile->spawn && tile->spawn->isSelected()) {
+						sprintf(debug_msg, "DEBUG DRAG: Drawing spawn at (%d,%d)\n", draw_x, draw_y);
+						OutputDebugStringA(debug_msg);
 						BlitSpriteType(draw_x, draw_y, SPRITE_SPAWN, 160, 160, 160, 160);
 					}
 				}
+			} else {
+				sprintf(debug_msg, "DEBUG DRAG: Tile not on screen or not moving - pos=(%d,%d,%d), bounds=(%d,%d,%d,%d), move=(%d,%d,%d)\n", 
+					pos.x, pos.y, pos.z, start_x, start_y, end_x, end_y, move_x, move_y, move_z);
+				OutputDebugStringA(debug_msg);
 			}
 		}
+		
+		OutputDebugStringA("DEBUG DRAG: DrawDraggingShadow completed\n");
 	}
 
 	glDisable(GL_TEXTURE_2D);
@@ -1191,8 +1228,24 @@ void MapDrawer::DrawBrush() {
 						// Calculate distance from center with offset for even-sized brushes
 						float dx = (center_x + center_offset_x) - x;
 						float dy = (center_y + center_offset_y) - y;
-						float normalized_x = dx / (width / 2.0);
-						float normalized_y = dy / (height / 2.0);
+						
+						// CRITICAL FIX: Prevent division by zero
+						float width_half = width / 2.0f;
+						float height_half = height / 2.0f;
+						
+						if (width_half <= 0.0f || height_half <= 0.0f) {
+							char debug_msg[512];
+							sprintf(debug_msg, "DEBUG DRAG: CRITICAL ERROR! Division by zero prevented in circle calc - width=%d, height=%d, width_half=%f, height_half=%f\n", 
+								width, height, width_half, height_half);
+							OutputDebugStringA(debug_msg);
+							
+							// Force to minimum safe values
+							if (width_half <= 0.0f) width_half = 0.5f;
+							if (height_half <= 0.0f) height_half = 0.5f;
+						}
+						
+						float normalized_x = dx / width_half;
+						float normalized_y = dy / height_half;
 						float distance = sqrt(normalized_x * normalized_x + normalized_y * normalized_y);
 						
 						// If the normalized distance is less than 1.0, the point is inside the ellipse
@@ -1200,13 +1253,24 @@ void MapDrawer::DrawBrush() {
 							if (brush->isRaw()) {
 								DrawRawBrush(cx, cy, raw_brush->getItemType(), 160, 160, 160, 160);
 							} else {
-								glColor(brushColor);
-								glBegin(GL_QUADS);
-								glVertex2f(cx, cy + TileSize);
-								glVertex2f(cx + TileSize, cy + TileSize);
-								glVertex2f(cx + TileSize, cy);
-								glVertex2f(cx, cy);
-								glEnd();
+								if (brush->isWaypoint()) {
+									uint8_t r, g, b;
+									getColor(brush, Position(mouse_map_x + x, mouse_map_y + y, floor), r, g, b);
+									DrawBrushIndicator(cx, cy, brush, r, g, b);
+								} else {
+									if (brush->isHouseExit() || brush->isOptionalBorder()) {
+										glColorCheck(brush, Position(mouse_map_x + x, mouse_map_y + y, floor));
+									} else {
+										glColor(brushColor);
+									}
+
+									glBegin(GL_QUADS);
+									glVertex2f(cx, cy + TileSize);
+									glVertex2f(cx + TileSize, cy + TileSize);
+									glVertex2f(cx + TileSize, cy);
+									glVertex2f(cx, cy);
+									glEnd();
+								}
 							}
 						}
 					}
@@ -1367,8 +1431,20 @@ void MapDrawer::DrawBrush() {
 						double center_y = (brush_height % 2 == 0) ? 0.5 : 0.0;
 						
 						// Calculate normalized distance from ellipse center
-						double rel_x = (x - center_x) / (brush_width / 2.0);
-						double rel_y = (y - center_y) / (brush_height / 2.0);
+		// Add safety check to prevent division by zero
+		double half_width = brush_width / 2.0;
+		double half_height = brush_height / 2.0;
+		
+		if (half_width <= 0.0 || half_height <= 0.0) {
+			char debug_msg[512];
+			sprintf(debug_msg, "DEBUG DRAG: ERROR! Division by zero prevented in map_drawer.cpp - brush_width=%d, brush_height=%d, half_width=%f, half_height=%f\n", 
+				brush_width, brush_height, half_width, half_height);
+			OutputDebugStringA(debug_msg);
+			continue; // Skip this iteration to prevent crash
+		}
+		
+		double rel_x = (x - center_x) / half_width;
+		double rel_y = (y - center_y) / half_height;
 						double distance = sqrt(rel_x * rel_x + rel_y * rel_y);
 						
 						// If the normalized distance is less than 1.0, the point is inside the ellipse
@@ -2046,9 +2122,14 @@ void MapDrawer::DrawTile(TileLocation* location) {
 				b16 += std::get<2>(colour);
 			}
 
-			r = r16 / zones;
-			g = g16 / zones;
-			b = b16 / zones;
+			if (zones > 0) {  // Prevent division by zero
+				r = r16 / zones;
+				g = g16 / zones;
+				b = b16 / zones;
+			} else {
+				// Clear invalid zone flag to prevent future crashes
+				const_cast<Tile*>(tile)->unsetMapFlags(TILESTATE_ZONE_BRUSH);
+			}
 		}
 	}
 

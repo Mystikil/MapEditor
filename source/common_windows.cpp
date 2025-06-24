@@ -1537,18 +1537,18 @@ void EditTownsDialog::UpdateSelection(int new_selection) {
 
 			editor.map.getOrCreateTile(templePos)->getLocation()->increaseTownCount();
 
-			old_town->setTemplePosition(templePos);
+				old_town->setTemplePosition(templePos);
 
 			wxString new_name = name_field->GetValue();
 			wxString old_name = wxstr(old_town->getName());
 
-			old_town->setName(nstr(new_name));
+				old_town->setName(nstr(new_name));
 			
-			if (new_name != old_name) {
-				// Name has changed, update list
-				BuildListBox(false);
+				if (new_name != old_name) {
+					// Name has changed, update list
+					BuildListBox(false);
+				}
 			}
-		}
 		}
 	}
 

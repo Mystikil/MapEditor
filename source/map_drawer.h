@@ -167,6 +167,12 @@ public:
 	}
 
 	FinderPosition findClosestToCenter(const std::vector<FinderPosition>& zone) {
+		// CRITICAL FIX: Prevent division by zero when zone is empty
+		if (zone.empty()) {
+			// Return a default position if zone is empty
+			return { 0, 0, 0 };
+		}
+		
 		FinderPosition centroid = { 0, 0, 0 };
 		for (const auto& pos : zone) {
 			centroid.x += pos.x;
@@ -174,12 +180,16 @@ public:
 			centroid.z += pos.z;
 		}
 
-		centroid.x /= zone.size();
-		centroid.y /= zone.size();
-		centroid.z /= zone.size();
+		// Safe division with size check
+		size_t zone_size = zone.size();
+		if (zone_size > 0) {
+			centroid.x /= zone_size;
+			centroid.y /= zone_size;
+			centroid.z /= zone_size;
+		}
 
 		double minDistance = std::numeric_limits<double>::max();
-		FinderPosition closestPosition;
+		FinderPosition closestPosition = zone[0]; // Use first position as default
 		for (const auto& pos : zone) {
 			const double dist = pos.distance(centroid);
 			if (dist < minDistance) {

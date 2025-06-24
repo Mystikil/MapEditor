@@ -499,6 +499,13 @@ void MapCanvas::OnMouseMove(wxMouseEvent& event) {
 			int move_x = drag_start_x - mouse_map_x;
 			int move_y = drag_start_y - mouse_map_y;
 			int move_z = drag_start_z - floor;
+			
+			// Add debugging output for drag calculations
+			char debug_msg[512];
+			sprintf(debug_msg, "DEBUG DRAG: Dragging detected - start_pos=(%d,%d,%d), mouse_pos=(%d,%d,%d), move_offset=(%d,%d,%d)\n", 
+				drag_start_x, drag_start_y, drag_start_z, mouse_map_x, mouse_map_y, floor, move_x, move_y, move_z);
+			OutputDebugStringA(debug_msg);
+			
 			ss << "Dragging " << -move_x << "," << -move_y << "," << -move_z;
 			g_gui.SetStatusText(ss);
 
@@ -957,11 +964,27 @@ void MapCanvas::OnMouseActionRelease(wxMouseEvent& event) {
 	int move_x = last_click_map_x - mouse_map_x;
 	int move_y = last_click_map_y - mouse_map_y;
 	int move_z = last_click_map_z - floor;
+	
+	// Add debugging output for mouse action release
+	char debug_msg[512];
+	sprintf(debug_msg, "DEBUG DRAG: OnMouseActionRelease - mouse_pos=(%d,%d), last_click=(%d,%d,%d), move_offset=(%d,%d,%d)\n", 
+		mouse_map_x, mouse_map_y, last_click_map_x, last_click_map_y, last_click_map_z, move_x, move_y, move_z);
+	OutputDebugStringA(debug_msg);
 
 	if (g_gui.IsSelectionMode()) {
 		if (dragging && (move_x != 0 || move_y != 0 || move_z != 0)) {
+			sprintf(debug_msg, "DEBUG DRAG: Calling editor.moveSelection with Position(%d,%d,%d), dragging=%d\n", 
+				move_x, move_y, move_z, dragging);
+			OutputDebugStringA(debug_msg);
+			
 			editor.moveSelection(Position(move_x, move_y, move_z));
+			
+			OutputDebugStringA("DEBUG DRAG: editor.moveSelection completed\n");
 		} else {
+			sprintf(debug_msg, "DEBUG DRAG: Not moving selection - dragging=%d, move_offset=(%d,%d,%d)\n", 
+				dragging, move_x, move_y, move_z);
+			OutputDebugStringA(debug_msg);
+			
 			if (boundbox_selection) {
 				if (mouse_map_x == last_click_map_x && mouse_map_y == last_click_map_y && event.ControlDown()) {
 					// Mouse hasn't moved, do control+shift thingy!
@@ -1056,6 +1079,15 @@ void MapCanvas::OnMouseActionRelease(wxMouseEvent& event) {
 					if (width < threadcount) {
 						threadcount = min(1, width);
 					}
+					
+					// CRITICAL FIX: Prevent division by zero
+					if (threadcount <= 0) {
+						char debug_msg[256];
+						sprintf(debug_msg, "DEBUG DRAG: CRITICAL ERROR! threadcount=%d, width=%d - FORCING threadcount to 1\n", threadcount, width);
+						OutputDebugStringA(debug_msg);
+						threadcount = 1;
+					}
+					
 					// Let's divide!
 					int remainder = width;
 					int cleared = 0;
@@ -1134,7 +1166,23 @@ void MapCanvas::OnMouseActionRelease(wxMouseEvent& event) {
 				int map_x = start_map_x + (end_map_x - start_map_x) / 2;
 				int map_y = start_map_y + (end_map_y - start_map_y) / 2;
 
-				int width = min(g_settings.getInteger(Config::MAX_SPAWN_RADIUS), ((end_map_x - start_map_x) / 2 + (end_map_y - start_map_y) / 2) / 2);
+				// CRITICAL FIX: Prevent division by zero in spawn size calculation
+				int raw_width = (end_map_x - start_map_x) / 2 + (end_map_y - start_map_y) / 2;
+				if (raw_width <= 0) {
+					char debug_msg[256];
+					sprintf(debug_msg, "DEBUG DRAG: WARNING! Spawn calculation resulted in width %d - FORCING TO 1\n", raw_width);
+					OutputDebugStringA(debug_msg);
+					raw_width = 1;
+				}
+				
+				int width = min(g_settings.getInteger(Config::MAX_SPAWN_RADIUS), raw_width / 2);
+				if (width <= 0) {
+					char debug_msg[256];
+					sprintf(debug_msg, "DEBUG DRAG: WARNING! Final spawn width %d - FORCING TO 1\n", width);
+					OutputDebugStringA(debug_msg);
+					width = 1;
+				}
+				
 				int old = g_gui.GetBrushSize();
 				g_gui.SetBrushSize(width);
 				editor.draw(Position(map_x, map_y, floor), event.AltDown());
@@ -1909,6 +1957,21 @@ void MapCanvas::OnKeyUp(wxKeyEvent& event) {
 			int width = std::abs(current_map_x - last_click_map_x) + 1;  // +1 to include the tile itself
 			int height = std::abs(current_map_y - last_click_map_y) + 1; // +1 to include the tile itself
 			
+			// CRITICAL FIX: Prevent zero-sized brushes after movement
+			if (width <= 0) {
+				char debug_msg[256];
+				sprintf(debug_msg, "DEBUG DRAG: WARNING! Movement resulted in width %d - FORCING TO 1\n", width);
+				OutputDebugStringA(debug_msg);
+				width = 1;
+			}
+			
+			if (height <= 0) {
+				char debug_msg[256];
+				sprintf(debug_msg, "DEBUG DRAG: WARNING! Movement resulted in height %d - FORCING TO 1\n", height);
+				OutputDebugStringA(debug_msg);
+				height = 1;
+			}
+			
 			if (width > 0 && height > 0) {
 				// Enable custom brush dimensions with specific width and height
 				// No need to adjust for center pixel - accept any dimensions
@@ -1929,6 +1992,14 @@ void MapCanvas::OnKeyUp(wxKeyEvent& event) {
 			) + 1; // +1 for center tile
 			
 			int radius = diameter / 2;
+			
+			// CRITICAL FIX: Prevent zero radius after movement
+			if (radius <= 0) {
+				char debug_msg[256];
+				sprintf(debug_msg, "DEBUG DRAG: WARNING! Movement resulted in radius %d - FORCING TO 1\n", radius);
+				OutputDebugStringA(debug_msg);
+				radius = 1;
+			}
 			
 			if (radius > 0) {
 				// For circles, width and height are the same (diameter)
@@ -2999,9 +3070,23 @@ void MapCanvas::getTilesToDraw(int mouse_map_x, int mouse_map_y, int floor, Posi
 		int brush_width = g_gui.GetBrushWidth();
 		int brush_height = g_gui.GetBrushHeight();
 		
+		// Add debugging output for brush dimensions
+		char debug_msg[512];
+		sprintf(debug_msg, "DEBUG DRAG: Initial brush dimensions - width=%d, height=%d\n", brush_width, brush_height);
+		OutputDebugStringA(debug_msg);
+		
 		// Make sure we have valid non-zero dimensions
-		if (brush_width <= 0) brush_width = 1;
-		if (brush_height <= 0) brush_height = 1;
+		if (brush_width <= 0) {
+			OutputDebugStringA("DEBUG DRAG: WARNING! brush_width <= 0, forcing to 1\n");
+			brush_width = 1;
+		}
+		if (brush_height <= 0) {
+			OutputDebugStringA("DEBUG DRAG: WARNING! brush_height <= 0, forcing to 1\n");
+			brush_height = 1;
+		}
+		
+		sprintf(debug_msg, "DEBUG DRAG: Corrected brush dimensions - width=%d, height=%d\n", brush_width, brush_height);
+		OutputDebugStringA(debug_msg);
 		
 		// For even-sized brushes, we need to adjust the offset
 		int width_offset = (brush_width % 2 == 0) ? 0 : 1;
@@ -3024,6 +3109,10 @@ void MapCanvas::getTilesToDraw(int mouse_map_x, int mouse_map_y, int floor, Posi
 		int border_start_y = start_y - 1;
 		int border_end_x = end_x + 1;
 		int border_end_y = end_y + 1;
+		
+		sprintf(debug_msg, "DEBUG DRAG: Calculated bounds - start_x=%d, start_y=%d, end_x=%d, end_y=%d\n", 
+			start_x, start_y, end_x, end_y);
+		OutputDebugStringA(debug_msg);
 			
 		// Draw with a 1-tile margin around the brush for the border/preview
 		for (int y = border_start_y; y <= border_end_y; y++) {
@@ -3052,9 +3141,32 @@ void MapCanvas::getTilesToDraw(int mouse_map_x, int mouse_map_y, int floor, Posi
 					double center_x = (brush_width % 2 == 0) ? 0.5 : 0.0;
 					double center_y = (brush_height % 2 == 0) ? 0.5 : 0.0;
 					
+					// CRITICAL FIX: Prevent division by zero
+					double half_brush_width = brush_width / 2.0;
+					double half_brush_height = brush_height / 2.0;
+					
+					sprintf(debug_msg, "DEBUG DRAG: Circle calc - brush_width=%d, brush_height=%d, half_width=%f, half_height=%f\n", 
+						brush_width, brush_height, half_brush_width, half_brush_height);
+					OutputDebugStringA(debug_msg);
+					
+					// Additional safety check
+					if (half_brush_width <= 0.0 || half_brush_height <= 0.0) {
+						sprintf(debug_msg, "DEBUG DRAG: CRITICAL ERROR! Half dimensions are zero or negative: half_width=%f, half_height=%f\n", 
+							half_brush_width, half_brush_height);
+						OutputDebugStringA(debug_msg);
+						
+						// Force to minimum safe values
+						if (half_brush_width <= 0.0) half_brush_width = 0.5;
+						if (half_brush_height <= 0.0) half_brush_height = 0.5;
+						
+						sprintf(debug_msg, "DEBUG DRAG: Forced half dimensions to safe values: half_width=%f, half_height=%f\n", 
+							half_brush_width, half_brush_height);
+						OutputDebugStringA(debug_msg);
+					}
+					
 					// Calculate normalized distance from ellipse center
-					double rel_x = (x - center_x) / (brush_width / 2.0);
-					double rel_y = (y - center_y) / (brush_height / 2.0);
+					double rel_x = (x - center_x) / half_brush_width;
+					double rel_y = (y - center_y) / half_brush_height;
 					double distance = sqrt(rel_x * rel_x + rel_y * rel_y);
 					
 					// Add tiles inside the ellipse to draw

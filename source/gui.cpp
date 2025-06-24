@@ -233,7 +233,7 @@ GUI::GUI() :
 	current_brush(nullptr),
 	previous_brush(nullptr),
 	brush_shape(BRUSHSHAPE_SQUARE),
-	brush_size(0),
+	brush_size(1), // Initialize to 1 instead of 0 to prevent division by zero
 	brush_variation(0),
 	draw_locked_doors(false),
 	use_custom_thickness(false),
@@ -2465,23 +2465,61 @@ void GUI::SetDrawingMode() {
 }
 
 void GUI::SetBrushSizeInternal(int nz) {
-	if (nz != brush_size && current_brush && current_brush->isDoodad() && !current_brush->oneSizeFitsAll()) {
-		brush_size = nz;
-		FillDoodadPreviewBuffer();
-		secondary_map = doodad_buffer_map.get();
-	} else {
-		brush_size = nz;
+	// Add safety check to prevent brush_size from being 0
+	if (nz < 0) {
+		char debug_msg[256];
+		sprintf(debug_msg, "DEBUG DRAG: WARNING! SetBrushSizeInternal called with negative value %d - FORCING TO 0\n", nz);
+		OutputDebugStringA(debug_msg);
+		nz = 0; // Minimum valid brush_size index
+	}
+	
+	brush_size = nz;
+	
+	// ENHANCED FIX: Validate that the calculated actual size is safe
+	int actual_width = GetBrushWidth();
+	int actual_height = GetBrushHeight();
+	
+	if (actual_width <= 0 || actual_height <= 0) {
+		char debug_msg[512];
+		sprintf(debug_msg, "DEBUG DRAG: CRITICAL ERROR! SetBrushSizeInternal resulted in invalid dimensions: width=%d, height=%d, brush_size=%d\n", 
+			actual_width, actual_height, brush_size);
+		OutputDebugStringA(debug_msg);
+		
+		// Force to safe values
+		if (actual_width <= 0) brush_size = 0; // Reset to minimal safe brush size
+		if (actual_height <= 0) brush_size = 0;
 	}
 }
 
 void GUI::SetBrushSize(int nz) {
-	SetBrushSizeInternal(nz);
-
-	for (auto& palette : palettes) {
-		palette->OnUpdateBrushSize(brush_shape, brush_size);
+	// CRITICAL FIX: Prevent brush_size from being set to invalid values
+	if (nz < 0) {
+		char debug_msg[256];
+		sprintf(debug_msg, "DEBUG DRAG: WARNING! SetBrushSize called with negative value %d - FORCING TO 0\n", nz);
+		OutputDebugStringA(debug_msg);
+		nz = 0; // Minimum valid brush_size index
 	}
-
-	root->GetAuiToolBar()->UpdateBrushSize(brush_shape, brush_size);
+	
+	brush_size = nz;
+	
+	// ENHANCED FIX: Validate that the calculated actual size is safe
+	int actual_width = GetBrushWidth();
+	int actual_height = GetBrushHeight();
+	
+	if (actual_width <= 0 || actual_height <= 0) {
+		char debug_msg[512];
+		sprintf(debug_msg, "DEBUG DRAG: CRITICAL ERROR! SetBrushSize resulted in invalid dimensions: width=%d, height=%d, brush_size=%d\n", 
+			actual_width, actual_height, brush_size);
+		OutputDebugStringA(debug_msg);
+		
+		// Force to safe values
+		if (actual_width <= 0) brush_size = 0; // Reset to minimal safe brush size
+		if (actual_height <= 0) brush_size = 0;
+	}
+	
+	for (PaletteList::iterator iter = palettes.begin(); iter != palettes.end(); ++iter) {
+		(*iter)->OnUpdateBrushSize(brush_shape, brush_size);
+	}
 }
 
 void GUI::SetBrushVariation(int nz) {
@@ -3388,20 +3426,49 @@ void GUI::SetCustomBrushSize(bool enable, int width, int height) {
 	use_custom_brush_size = enable;
 	
 	if (width != -1) {
+		// CRITICAL FIX: Prevent zero or negative width
+		if (width <= 0) {
+			char debug_msg[256];
+			sprintf(debug_msg, "DEBUG DRAG: WARNING! SetCustomBrushSize called with invalid width %d - FORCING TO 1\n", width);
+			OutputDebugStringA(debug_msg);
+			width = 1;
+		}
 		custom_brush_width = width;
 	}
 	
 	if (height != -1) {
+		// CRITICAL FIX: Prevent zero or negative height
+		if (height <= 0) {
+			char debug_msg[256];
+			sprintf(debug_msg, "DEBUG DRAG: WARNING! SetCustomBrushSize called with invalid height %d - FORCING TO 1\n", height);
+			OutputDebugStringA(debug_msg);
+			height = 1;
+		}
 		custom_brush_height = height;
 	}
 	
-	// Make sure we have valid values
+	// ENHANCED FIX: Always validate current brush dimensions
 	if (custom_brush_width <= 0) {
-		custom_brush_width = brush_size;
+		char debug_msg[256];
+		sprintf(debug_msg, "DEBUG DRAG: CRITICAL ERROR! custom_brush_width is %d - FORCING TO 1\n", custom_brush_width);
+		OutputDebugStringA(debug_msg);
+		custom_brush_width = 1;
 	}
 	
 	if (custom_brush_height <= 0) {
-		custom_brush_height = brush_size;
+		char debug_msg[256];
+		sprintf(debug_msg, "DEBUG DRAG: CRITICAL ERROR! custom_brush_height is %d - FORCING TO 1\n", custom_brush_height);
+		OutputDebugStringA(debug_msg);
+		custom_brush_height = 1;
+	}
+	
+	// Additional safety: make sure we have non-zero fallback values
+	if (custom_brush_width <= 0) {
+		custom_brush_width = std::max(1, brush_size + 1);
+	}
+	
+	if (custom_brush_height <= 0) {
+		custom_brush_height = std::max(1, brush_size + 1);
 	}
 	
 	// Unselect all brush size buttons in the UI

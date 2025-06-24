@@ -141,8 +141,17 @@ void CopyBuffer::cut(Editor& editor, int floor) {
 		for (TileSet::iterator it = editor.selection.begin(); it != editor.selection.end(); ++it) {
 			Tile* tile = *it;
 			if (tile && (tile->getMapFlags() & TILESTATE_ZONE_BRUSH)) {
+				char debug_msg[256];
+				sprintf(debug_msg, "DEBUG DRAG: Cut operation - clearing zones from tile at (%d,%d,%d) - zones=%zu\n", 
+					tile->getPosition().x, tile->getPosition().y, tile->getPosition().z,
+					tile->getZoneIds().size());
+				OutputDebugStringA(debug_msg);
+				
 				tile->unsetMapFlags(TILESTATE_ZONE_BRUSH);
 				tile->clearZoneId();
+				
+				// ENHANCED FIX: Validate tile after zone clearing
+				tile->validateZoneConsistency();
 			}
 		}
 		
@@ -213,6 +222,10 @@ void CopyBuffer::cut(Editor& editor, int floor) {
 			copied_tile->setMapFlags(tile->getMapFlags());
 			newtile->setMapFlags(TILESTATE_NONE);
 			newtile->clearZoneId();
+			
+			// ENHANCED FIX: Validate both tiles after zone operations
+			copied_tile->validateZoneConsistency();
+			newtile->validateZoneConsistency();
 		}
 
 		ItemVector tile_selection = newtile->popSelectedItems();

@@ -579,8 +579,60 @@ public:
 
 	void SetCustomBrushSize(bool enable, int width = -1, int height = -1);
 	bool UseCustomBrushSize() const { return use_custom_brush_size; }
-	int GetBrushWidth() const { return use_custom_brush_size ? custom_brush_width : brush_size; }
-	int GetBrushHeight() const { return use_custom_brush_size ? custom_brush_height : brush_size; }
+	int GetBrushWidth() const { 
+		if (use_custom_brush_size) {
+			int result = custom_brush_width;
+			if (result <= 0) {
+				char debug_msg[256];
+				sprintf(debug_msg, "DEBUG DRAG: WARNING! GetBrushWidth custom returning %d - FORCING TO 1\n", result);
+				OutputDebugStringA(debug_msg);
+				result = 1; // Force minimum safe value to prevent division by zero
+			}
+			return result;
+		} else {
+			// Convert brush_size index to actual size
+			// brush_size 0 = size 1, brush_size 1 = size 2, etc.
+			int actual_size;
+			switch (brush_size) {
+				case 0: actual_size = 1; break;
+				case 1: actual_size = 2; break; 
+				case 2: actual_size = 3; break;
+				case 4: actual_size = 5; break;
+				case 6: actual_size = 7; break;
+				case 8: actual_size = 9; break;
+				case 11: actual_size = 12; break;
+				default: actual_size = std::max(1, brush_size + 1); break; // Fallback for unknown values
+			}
+			return actual_size;
+		}
+	}
+	int GetBrushHeight() const { 
+		if (use_custom_brush_size) {
+			int result = custom_brush_height;
+			if (result <= 0) {
+				char debug_msg[256];
+				sprintf(debug_msg, "DEBUG DRAG: WARNING! GetBrushHeight custom returning %d - FORCING TO 1\n", result);
+				OutputDebugStringA(debug_msg);
+				result = 1; // Force minimum safe value to prevent division by zero
+			}
+			return result;
+		} else {
+			// Convert brush_size index to actual size
+			// brush_size 0 = size 1, brush_size 1 = size 2, etc.
+			int actual_size;
+			switch (brush_size) {
+				case 0: actual_size = 1; break;
+				case 1: actual_size = 2; break;
+				case 2: actual_size = 3; break;
+				case 4: actual_size = 5; break;
+				case 6: actual_size = 7; break;
+				case 8: actual_size = 9; break;
+				case 11: actual_size = 12; break;
+				default: actual_size = std::max(1, brush_size + 1); break; // Fallback for unknown values
+			}
+			return actual_size;
+		}
+	}
 };
 
 extern GUI g_gui;
