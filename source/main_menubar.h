@@ -188,6 +188,7 @@ namespace MenuBar {
 		MENU_REFRESH_VISIBLE_AREA,
 		RESET_HOUSE_IDS,
 	RESET_TOWN_IDS,
+	DOODADS_FILLING_TOOL,
 	};
 }
 
@@ -295,6 +296,7 @@ public:
 	void OnMapNotes(wxCommandEvent& event);
 	void OnResetHouseIDs(wxCommandEvent& event);
 	void OnResetTownIDs(wxCommandEvent& event);
+	void OnDoodadsFillingTool(wxCommandEvent& event);
 
 	// View Menu
 	void OnToolbars(wxCommandEvent& event);

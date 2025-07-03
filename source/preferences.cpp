@@ -227,6 +227,11 @@ wxNotebookPage* PreferencesWindow::CreateEditorPage() {
 	auto_assign_doors_chkbox->SetToolTip("This will auto-assign unique door ids to all doors placed with the door brush (or doors painted over with the house brush).\nDoes NOT affect doors placed using the RAW palette.");
 	sizer->Add(auto_assign_doors_chkbox, 0, wxLEFT | wxTOP, 5);
 
+	auto_assign_depot_to_closest_temple_chkbox = newd wxCheckBox(editor_page, wxID_ANY, "Auto-assign depot to closest temple");
+	auto_assign_depot_to_closest_temple_chkbox->SetValue(g_settings.getBoolean(Config::AUTO_ASSIGN_DEPOT_TO_CLOSEST_TEMPLE));
+	auto_assign_depot_to_closest_temple_chkbox->SetToolTip("Automatically assign depot town ID to the closest temple when placing depot items. This makes depot mapping more seamless by calculating the distance to all temples and setting the depot ID accordingly.");
+	sizer->Add(auto_assign_depot_to_closest_temple_chkbox, 0, wxLEFT | wxTOP, 5);
+
 	doodad_erase_same_chkbox = newd wxCheckBox(editor_page, wxID_ANY, "Doodad brush only erases same");
 	doodad_erase_same_chkbox->SetValue(g_settings.getBoolean(Config::DOODAD_BRUSH_ERASE_LIKE));
 	doodad_erase_same_chkbox->SetToolTip("The doodad brush will only erase items that belongs to the current brush.");
@@ -1167,6 +1172,7 @@ void PreferencesWindow::Apply() {
 	g_settings.setInteger(Config::WARN_FOR_DUPLICATE_ID, duplicate_id_warn_chkbox->GetValue());
 	g_settings.setInteger(Config::HOUSE_BRUSH_REMOVE_ITEMS, house_remove_chkbox->GetValue());
 	g_settings.setInteger(Config::AUTO_ASSIGN_DOORID, auto_assign_doors_chkbox->GetValue());
+	g_settings.setInteger(Config::AUTO_ASSIGN_DEPOT_TO_CLOSEST_TEMPLE, auto_assign_depot_to_closest_temple_chkbox->GetValue());
 	g_settings.setInteger(Config::ERASER_LEAVE_UNIQUE, eraser_leave_unique_chkbox->GetValue());
 	g_settings.setInteger(Config::DOODAD_BRUSH_ERASE_LIKE, doodad_erase_same_chkbox->GetValue());
 	g_settings.setInteger(Config::AUTO_CREATE_SPAWN, auto_create_spawn_chkbox->GetValue());

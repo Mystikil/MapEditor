@@ -67,6 +67,7 @@ protected:
 	wxCheckBox* duplicate_id_warn_chkbox;
 	wxCheckBox* house_remove_chkbox;
 	wxCheckBox* auto_assign_doors_chkbox;
+	wxCheckBox* auto_assign_depot_to_closest_temple_chkbox;
 	wxCheckBox* eraser_leave_unique_chkbox;
 	wxCheckBox* doodad_erase_same_chkbox;
 	wxCheckBox* auto_create_spawn_chkbox;

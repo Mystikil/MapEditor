@@ -73,6 +73,7 @@
 #include "otmapgen_dialog.h"
 #include "notes_window.h"
 #include "add_creature_dialog.h"
+#include "doodads_filling_dialog.h"
 
 #include <wx/chartype.h>
 
@@ -99,6 +100,7 @@ BEGIN_EVENT_TABLE(MainMenuBar, wxEvtHandler)
 	
 	EVT_MENU(MenuBar::FIND_CREATURE, MainMenuBar::OnSearchForCreature)
 	EVT_MENU(MenuBar::RELOAD_REVSCRIPTS, MainMenuBar::OnReloadRevScripts)
+	EVT_MENU(MenuBar::DOODADS_FILLING_TOOL, MainMenuBar::OnDoodadsFillingTool)
 END_EVENT_TABLE()
 
 MainMenuBar::MainMenuBar(MainFrame* frame) :
@@ -192,6 +194,7 @@ MainMenuBar::MainMenuBar(MainFrame* frame) :
 	MAKE_ACTION(MAP_PROPERTIES, wxITEM_NORMAL, OnMapProperties);
 	MAKE_ACTION(MAP_STATISTICS, wxITEM_NORMAL, OnMapStatistics);
 	MAKE_ACTION(MAP_NOTES, wxITEM_NORMAL, OnMapNotes);
+	MAKE_ACTION(DOODADS_FILLING_TOOL, wxITEM_NORMAL, OnDoodadsFillingTool);
 
 	MAKE_ACTION(VIEW_TOOLBARS_BRUSHES, wxITEM_CHECK, OnToolbars);
 	MAKE_ACTION(VIEW_TOOLBARS_POSITION, wxITEM_CHECK, OnToolbars);
@@ -288,6 +291,7 @@ MainMenuBar::MainMenuBar(MainFrame* frame) :
 	MAKE_ACTION(MAP_SUMMARIZE, wxITEM_NORMAL, OnMapSummarize);
 	MAKE_ACTION(RESET_HOUSE_IDS, wxITEM_NORMAL, OnResetHouseIDs);
 	MAKE_ACTION(RESET_TOWN_IDS, wxITEM_NORMAL, OnResetTownIDs);
+	MAKE_ACTION(DOODADS_FILLING_TOOL, wxITEM_NORMAL, OnDoodadsFillingTool);
 
 	// A deleter, this way the frame does not need
 	// to bother deleting us.
@@ -4161,5 +4165,227 @@ void MainMenuBar::OnResetTownIDs(wxCommandEvent& WXUNUSED(event)) {
     }
 
     dialog->Destroy();
+}
+
+void MainMenuBar::OnDoodadsFillingTool(wxCommandEvent& WXUNUSED(event)) {
+    if (!g_gui.IsEditorOpen()) {
+        return;
+    }
+
+    Editor* editor = g_gui.GetCurrentEditor();
+    if (!editor) {
+        return;
+    }
+
+    Map& map = editor->map;
+
+    // Show the doodads filling dialog
+    DoodadsFillingDialog dialog(frame, "Doodads Filling Tool");
+    
+    if (dialog.ShowModal() == wxID_OK) {
+        // Get configuration from dialog
+        wxString tileRangesStr = dialog.GetTileRanges();
+        std::vector<DoodadsFillingDialog::DoodadItem> doodadItems = dialog.GetDoodadItems();
+        int clumping = dialog.GetClumping();
+        double clumpingFactor = dialog.GetClumpingFactor();
+        int spacing = dialog.GetSpacing();
+        bool placeOnSelection = dialog.GetPlaceOnSelection();
+        
+        // Parse tile ranges
+        std::string rangesStr = std::string(tileRangesStr.mb_str());
+        std::vector<std::pair<uint16_t, uint16_t>> tileRanges = parseIdRangesString(rangesStr);
+        
+        if (tileRanges.empty() || doodadItems.empty()) {
+            return;
+        }
+        
+        // Calculate total chance for weighted random selection
+        int totalChance = 0;
+        for (const auto& item : doodadItems) {
+            totalChance += item.chance;
+        }
+        
+        if (totalChance <= 0) {
+            g_gui.PopupDialog("Error", "Total doodad chances must be greater than 0!", wxOK | wxICON_ERROR);
+            return;
+        }
+        
+        // Start the placement process
+        g_gui.CreateLoadBar("Placing doodads...");
+        
+        try {
+            BatchAction* batch = editor->actionQueue->createBatch(ACTION_DRAW);
+            Action* action = editor->actionQueue->createAction(batch);
+            
+            std::vector<Position> candidateTiles;
+            std::vector<Position> placedPositions;
+            int itemsPlaced = 0;
+            long long totalTiles = 0;
+            long long processedTiles = 0;
+            
+            // First pass: collect all candidate tiles
+            g_gui.SetLoadDone(10, "Finding candidate tiles...");
+            
+            if (placeOnSelection && editor->selection.size() > 0) {
+                // Search within selection
+                for (TileSet::iterator it = editor->selection.begin(); it != editor->selection.end(); ++it) {
+                    Tile* tile = *it;
+                    if (tile && tile->ground) {
+                        uint16_t groundId = tile->ground->getID();
+                        if (isIdInRanges(groundId, tileRanges)) {
+                            candidateTiles.push_back(tile->getPosition());
+                        }
+                    }
+                    totalTiles++;
+                }
+            } else {
+                // Search entire map
+                totalTiles = map.getTileCount();
+                long long checked = 0;
+                
+                for (MapIterator it = map.begin(); it != map.end(); ++it) {
+                    Tile* tile = (*it)->get();
+                    if (tile && tile->ground) {
+                        uint16_t groundId = tile->ground->getID();
+                        if (isIdInRanges(groundId, tileRanges)) {
+                            candidateTiles.push_back(tile->getPosition());
+                        }
+                    }
+                    
+                    checked++;
+                    if (checked % 10000 == 0) {
+                        g_gui.SetLoadDone(10 + (checked * 40 / totalTiles), "Finding candidate tiles...");
+                    }
+                }
+            }
+            
+            if (candidateTiles.empty()) {
+                g_gui.DestroyLoadBar();
+                g_gui.PopupDialog("No Tiles Found", "No tiles matching the specified ranges were found!", wxOK | wxICON_INFORMATION);
+                return;
+            }
+            
+            g_gui.SetLoadDone(50, "Placing doodads...");
+            
+            // Initialize random seed
+            srand(static_cast<unsigned int>(time(nullptr)));
+            
+            // Second pass: place doodads with spacing and clumping logic
+            for (size_t i = 0; i < candidateTiles.size(); ++i) {
+                Position pos = candidateTiles[i];
+                
+                // Check spacing constraint
+                bool tooClose = false;
+                for (const Position& placedPos : placedPositions) {
+                    int dx = abs(pos.x - placedPos.x);
+                    int dy = abs(pos.y - placedPos.y);
+                    int dz = abs(pos.z - placedPos.z);
+                    
+                    // Consider z-level differences as well
+                    int distance = std::max({dx, dy, dz});
+                    if (distance < spacing) {
+                        tooClose = true;
+                        break;
+                    }
+                }
+                
+                if (tooClose) {
+                    continue;
+                }
+                
+                // Apply clumping logic
+                double placementChance = clumping / 100.0;
+                
+                // Modify chance based on proximity to already placed items (clumping factor)
+                if (!placedPositions.empty() && clumpingFactor > 1.0) {
+                    // Find closest placed item
+                    double minDistance = DBL_MAX;
+                    for (const Position& placedPos : placedPositions) {
+                        double dx = pos.x - placedPos.x;
+                        double dy = pos.y - placedPos.y;
+                        double distance = sqrt(dx*dx + dy*dy);
+                        minDistance = std::min(minDistance, distance);
+                    }
+                    
+                    // Increase chance if close to other placed items
+                    if (minDistance < 10.0) { // Within 10 tiles
+                        placementChance *= clumpingFactor * (10.0 - minDistance) / 10.0;
+                    }
+                }
+                
+                // Random placement check
+                if ((rand() % 100) >= (placementChance * 100)) {
+                    continue;
+                }
+                
+                // Select a random doodad item based on weights
+                int randomChance = rand() % totalChance;
+                int currentChance = 0;
+                uint16_t selectedItemId = 0;
+                
+                for (const auto& item : doodadItems) {
+                    currentChance += item.chance;
+                    if (randomChance < currentChance) {
+                        selectedItemId = item.id;
+                        break;
+                    }
+                }
+                
+                if (selectedItemId == 0) {
+                    continue;
+                }
+                
+                // Place the item
+                Tile* tile = map.getTile(pos);
+                if (tile) {
+                    Item* newItem = Item::Create(selectedItemId);
+                    if (newItem) {
+                        // Create a copy of the tile for modification
+                        Tile* newTile = tile->deepCopy(map);
+                        newTile->addItem(newItem);
+                        action->addChange(newd Change(newTile));
+                        placedPositions.push_back(pos);
+                        itemsPlaced++;
+                    }
+                }
+                
+                // Update progress
+                if (i % 1000 == 0) {
+                    int progress = 50 + (i * 45 / candidateTiles.size());
+                    g_gui.SetLoadDone(progress, wxString::Format("Placing doodads... (%d placed)", itemsPlaced));
+                }
+            }
+            
+            g_gui.SetLoadDone(100);
+            g_gui.DestroyLoadBar();
+            
+            // Commit the action
+            editor->actionQueue->addBatch(batch);
+            
+            // Show results
+            wxString message = wxString::Format(
+                "Doodads filling completed!\n\n"
+                "Candidate tiles found: %zu\n"
+                "Items placed: %d\n"
+                "Placement success rate: %.1f%%",
+                candidateTiles.size(),
+                itemsPlaced,
+                candidateTiles.empty() ? 0.0 : (itemsPlaced * 100.0 / candidateTiles.size())
+            );
+            
+            g_gui.PopupDialog("Doodads Filling Complete", message, wxOK | wxICON_INFORMATION);
+            
+            // Refresh the view
+            g_gui.RefreshView();
+            
+        } catch (const std::exception& e) {
+            g_gui.DestroyLoadBar();
+            wxString errorMsg = wxString::Format("Error during doodads placement: %s", e.what());
+            g_gui.PopupDialog("Error", errorMsg, wxOK | wxICON_ERROR);
+        } catch (...) {
+            g_gui.DestroyLoadBar();
+            g_gui.PopupDialog("Error", "An unknown error occurred during doodads placement!", wxOK | wxICON_ERROR);
+        }
+    }
 }
 

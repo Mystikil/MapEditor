@@ -223,6 +223,7 @@
     <ClCompile Include="..\..\source\container_properties_window.cpp" />
     <ClCompile Include="..\..\source\creature_sprite_manager.cpp" />
     <ClCompile Include="..\..\source\dark_mode_manager.cpp" />
+    <ClCompile Include="..\..\source\doodads_filling_dialog.cpp" />
     <ClCompile Include="..\..\source\find_creature_window.cpp" />
     <ClCompile Include="..\..\source\find_item_window.cpp" />
     <ClCompile Include="..\..\source\ground_validation_dialog.cpp" />
@@ -256,6 +257,7 @@
     <ClInclude Include="..\..\source\color_utils.h" />
     <ClInclude Include="..\..\source\creature_sprite_manager.h" />
     <ClInclude Include="..\..\source\dark_mode_manager.h" />
+    <ClInclude Include="..\..\source\doodads_filling_dialog.h" />
     <ClInclude Include="..\..\source\find_creature_window.h" />
     <ClInclude Include="..\..\source\ground_validation_dialog.h" />
     <ClInclude Include="..\..\source\hotkey_manager.h" />
