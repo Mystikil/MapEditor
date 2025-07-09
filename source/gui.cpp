@@ -2539,6 +2539,12 @@ void GUI::SetBrushShape(BrushShape bs) {
 		secondary_map = doodad_buffer_map.get();
 	}
 	brush_shape = bs;
+	
+	// Disable custom brush size when switching to circle brush
+	if (bs == BRUSHSHAPE_CIRCLE && use_custom_brush_size) {
+		use_custom_brush_size = false;
+		SetStatusText("Custom brush size disabled for circle brush");
+	}
 
 	for (auto& palette : palettes) {
 		palette->OnUpdateBrushSize(brush_shape, brush_size);
@@ -3423,6 +3429,12 @@ bool GUI::IsCurrentActionIDEnabled() const {
 }
 
 void GUI::SetCustomBrushSize(bool enable, int width, int height) {
+	// Only allow custom brush size for square brushes
+	if (enable && brush_shape != BRUSHSHAPE_SQUARE) {
+		// Silently ignore request to enable custom brush size for circle brushes
+		return;
+	}
+	
 	use_custom_brush_size = enable;
 	
 	if (width != -1) {
@@ -3472,7 +3484,7 @@ void GUI::SetCustomBrushSize(bool enable, int width, int height) {
 	}
 	
 	// Unselect all brush size buttons in the UI
-	if (enable) {
+	if (enable && brush_shape == BRUSHSHAPE_SQUARE) {
 		for (auto& palette : palettes) {
 			palette->OnUpdateBrushSize(brush_shape, -1);
 		}

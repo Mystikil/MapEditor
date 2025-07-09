@@ -579,8 +579,11 @@ public:
 
 	void SetCustomBrushSize(bool enable, int width = -1, int height = -1);
 	bool UseCustomBrushSize() const { return use_custom_brush_size; }
+	bool IsCustomBrushSizeActive() const { return use_custom_brush_size && brush_shape == BRUSHSHAPE_SQUARE; }
+	int GetBrushRadius() const { return brush_size; } // Returns the traditional brush radius index for circles
 	int GetBrushWidth() const { 
-		if (use_custom_brush_size) {
+		// Only use custom brush size for square brushes
+		if (use_custom_brush_size && brush_shape == BRUSHSHAPE_SQUARE) {
 			int result = custom_brush_width;
 			if (result <= 0) {
 				char debug_msg[256];
@@ -590,7 +593,7 @@ public:
 			}
 			return result;
 		} else {
-			// Convert brush_size index to actual size
+			// Convert brush_size index to actual size for both circle and square when not using custom size
 			// brush_size 0 = size 1, brush_size 1 = size 2, etc.
 			int actual_size;
 			switch (brush_size) {
@@ -607,7 +610,8 @@ public:
 		}
 	}
 	int GetBrushHeight() const { 
-		if (use_custom_brush_size) {
+		// Only use custom brush size for square brushes
+		if (use_custom_brush_size && brush_shape == BRUSHSHAPE_SQUARE) {
 			int result = custom_brush_height;
 			if (result <= 0) {
 				char debug_msg[256];
@@ -617,7 +621,7 @@ public:
 			}
 			return result;
 		} else {
-			// Convert brush_size index to actual size
+			// Convert brush_size index to actual size for both circle and square when not using custom size
 			// brush_size 0 = size 1, brush_size 1 = size 2, etc.
 			int actual_size;
 			switch (brush_size) {
