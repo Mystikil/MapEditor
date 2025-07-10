@@ -8,350 +8,406 @@
 #include <wx/filedlg.h>
 #include <wx/progdlg.h>
 #include <wx/textdlg.h>
+#include <wx/renderer.h>
+
+// Custom grid renderer for item sprites
+class ItemSpriteRenderer : public wxGridCellRenderer
+{
+public:
+    void Draw(wxGrid& grid, wxGridCellAttr& attr, wxDC& dc,
+              const wxRect& rect, int row, int col, bool isSelected) override
+    {
+        // Get the client ID from the grid (now in column 2)
+        wxString clientIdStr = grid.GetCellValue(row, 2);
+        long clientId;
+        if (!clientIdStr.ToLong(&clientId)) return;
+
+        // Get the sprite using client ID
+        Sprite* sprite = g_gui.gfx.getSprite(clientId);
+        if (!sprite) return;
+
+        // Calculate center position for the sprite
+        int x = rect.GetLeft() + (rect.GetWidth() - 32) / 2;
+        int y = rect.GetTop() + (rect.GetHeight() - 32) / 2;
+
+        // Draw background if selected
+        if (isSelected) {
+            wxBrush brush(grid.GetSelectionBackground());
+            wxPen pen(grid.GetSelectionForeground());
+            dc.SetBrush(brush);
+            dc.SetPen(pen);
+            dc.DrawRectangle(rect);
+        }
+
+        // Draw the sprite
+        sprite->DrawTo(&dc, SPRITE_SIZE_32x32, x, y);
+    }
+
+    wxSize GetBestSize(wxGrid& grid, wxGridCellAttr& attr, wxDC& dc,
+                      int row, int col) override
+    {
+        return wxSize(32, 32);
+    }
+
+    wxGridCellRenderer* Clone() const override
+    {
+        return new ItemSpriteRenderer();
+    }
+};
 
 // Event table
 wxBEGIN_EVENT_TABLE(ItemEditorWindow, wxDialog)
-	EVT_BUTTON(wxID_OK, ItemEditorWindow::OnOK)
-	EVT_BUTTON(wxID_CANCEL, ItemEditorWindow::OnCancel)
-	EVT_LIST_ITEM_SELECTED(ID_ITEM_LIST, ItemEditorWindow::OnItemSelected)
-	EVT_BUTTON(ID_SAVE_OTB, ItemEditorWindow::OnSaveOTB)
-	EVT_BUTTON(ID_RELOAD_OTB, ItemEditorWindow::OnReloadOTB)
-	EVT_BUTTON(ID_GENERATE_MISSING, ItemEditorWindow::OnGenerateMissing)
-	EVT_BUTTON(ID_CREATE_ITEM, ItemEditorWindow::OnCreateItem)
-	EVT_BUTTON(ID_DUPLICATE_ITEM, ItemEditorWindow::OnDuplicateItem)
-	EVT_BUTTON(ID_DELETE_ITEM, ItemEditorWindow::OnDeleteItem)
-	EVT_BUTTON(ID_FIND_ITEM, ItemEditorWindow::OnFindItem)
-	EVT_CHOICE(ID_GROUP_CHOICE, ItemEditorWindow::OnGroupChanged)
-	EVT_CHOICE(ID_TYPE_CHOICE, ItemEditorWindow::OnTypeChanged)
+    EVT_BUTTON(wxID_OK, ItemEditorWindow::OnOK)
+    EVT_BUTTON(wxID_CANCEL, ItemEditorWindow::OnCancel)
+    EVT_GRID_SELECT_CELL(ItemEditorWindow::OnItemSelected)
+    EVT_BUTTON(ID_SAVE_OTB, ItemEditorWindow::OnSaveOTB)
+    EVT_BUTTON(ID_RELOAD_OTB, ItemEditorWindow::OnReloadOTB)
+    EVT_BUTTON(ID_GENERATE_MISSING, ItemEditorWindow::OnGenerateMissing)
+    EVT_BUTTON(ID_CREATE_ITEM, ItemEditorWindow::OnCreateItem)
+    EVT_BUTTON(ID_DUPLICATE_ITEM, ItemEditorWindow::OnDuplicateItem)
+    EVT_BUTTON(ID_DELETE_ITEM, ItemEditorWindow::OnDeleteItem)
+    EVT_BUTTON(ID_FIND_ITEM, ItemEditorWindow::OnFindItem)
+    EVT_CHOICE(ID_GROUP_CHOICE, ItemEditorWindow::OnGroupChanged)
+    EVT_CHOICE(ID_TYPE_CHOICE, ItemEditorWindow::OnTypeChanged)
 wxEND_EVENT_TABLE()
 
 ItemEditorWindow::ItemEditorWindow(wxWindow* parent)
-	: wxDialog(parent, wxID_ANY, "Item Editor", wxDefaultPosition, wxSize(1000, 700), wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER | wxMAXIMIZE_BOX)
-	, m_itemList(nullptr)
-	, m_notebook(nullptr)
-	, m_currentItemId(0)
-	, m_itemsModified(false)
+    : wxDialog(parent, wxID_ANY, "Item Editor", wxDefaultPosition, wxSize(1000, 700), wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER | wxMAXIMIZE_BOX)
+    , m_itemGrid(nullptr)
+    , m_currentItemId(0)
+    , m_itemsModified(false)
 {
-	SetIcon(wxICON(editor_icon));
-	CreateControls();
-	LoadItemList();
-	EnablePropertyControls(false);
+    SetIcon(wxICON(editor_icon));
+    CreateControls();
+    LoadItemList();
+    EnablePropertyControls(false);
 }
 
 ItemEditorWindow::~ItemEditorWindow()
 {
-	// Destructor - cleanup is handled automatically by wxWidgets
+    // Destructor - cleanup is handled automatically by wxWidgets
 }
 
 void ItemEditorWindow::CreateControls()
 {
-	wxBoxSizer* mainSizer = new wxBoxSizer(wxVERTICAL);
+    wxBoxSizer* mainSizer = new wxBoxSizer(wxVERTICAL);
 
-	// Create splitter window for item list and properties
-	wxSplitterWindow* splitter = new wxSplitterWindow(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxSP_3DSASH | wxSP_LIVE_UPDATE);
-	
-	// Left panel - Item list
-	wxPanel* leftPanel = new wxPanel(splitter);
-	CreateItemList(leftPanel);
-	
-	// Right panel - Properties
-	wxPanel* rightPanel = new wxPanel(splitter);
-	CreatePropertiesPanel(rightPanel);
-	
-	splitter->SplitVertically(leftPanel, rightPanel, 350);
-	splitter->SetMinimumPaneSize(200);
-	
-	mainSizer->Add(splitter, 1, wxEXPAND | wxALL, 5);
-	
-	// Button panel
-	CreateButtonPanel();
-	mainSizer->Add(m_buttonPanel, 0, wxEXPAND | wxALL, 5);
-	
-	// OK/Cancel buttons
-	wxStdDialogButtonSizer* buttonSizer = CreateStdDialogButtonSizer(wxOK | wxCANCEL);
-	mainSizer->Add(buttonSizer, 0, wxEXPAND | wxALL, 5);
-	
-	SetSizer(mainSizer);
+    // Create splitter window for item list and properties
+    wxSplitterWindow* splitter = new wxSplitterWindow(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxSP_3DSASH | wxSP_LIVE_UPDATE);
+    
+    // Left panel - Item grid
+    wxPanel* leftPanel = new wxPanel(splitter);
+    CreateItemGrid(leftPanel);
+    
+    // Right panel - Properties
+    wxPanel* rightPanel = new wxPanel(splitter);
+    CreatePropertiesPanel(rightPanel);
+    
+    splitter->SplitVertically(leftPanel, rightPanel, 350);
+    splitter->SetMinimumPaneSize(200);
+    
+    mainSizer->Add(splitter, 1, wxEXPAND | wxALL, 5);
+    
+    // Button panel
+    CreateButtonPanel();
+    mainSizer->Add(m_buttonPanel, 0, wxEXPAND | wxALL, 5);
+    
+    // OK/Cancel buttons
+    wxStdDialogButtonSizer* buttonSizer = CreateStdDialogButtonSizer(wxOK | wxCANCEL);
+    mainSizer->Add(buttonSizer, 0, wxEXPAND | wxALL, 5);
+    
+    SetSizer(mainSizer);
 }
 
-void ItemEditorWindow::CreateItemList(wxPanel* parent)
+void ItemEditorWindow::CreateItemGrid(wxPanel* parent)
 {
-	wxBoxSizer* sizer = new wxBoxSizer(wxVERTICAL);
-	
-	wxStaticText* label = new wxStaticText(parent, wxID_ANY, "Items:");
-	sizer->Add(label, 0, wxALL, 5);
-	
-	m_itemList = new wxListCtrl(parent, ID_ITEM_LIST, wxDefaultPosition, wxDefaultSize, 
-		wxLC_REPORT | wxLC_SINGLE_SEL | wxLC_HRULES | wxLC_VRULES);
-	
-	// Add columns
-	m_itemList->InsertColumn(0, "ID", wxLIST_FORMAT_LEFT, 80);
-	m_itemList->InsertColumn(1, "Client ID", wxLIST_FORMAT_LEFT, 80);
-	m_itemList->InsertColumn(2, "Name", wxLIST_FORMAT_LEFT, 180);
-	m_itemList->InsertColumn(3, "Group", wxLIST_FORMAT_LEFT, 100);
-	
-	sizer->Add(m_itemList, 1, wxEXPAND | wxALL, 5);
-	parent->SetSizer(sizer);
+    wxBoxSizer* sizer = new wxBoxSizer(wxVERTICAL);
+    
+    wxStaticText* label = new wxStaticText(parent, wxID_ANY, "Items:");
+    sizer->Add(label, 0, wxALL, 5);
+    
+    m_itemGrid = new wxGrid(parent, ID_ITEM_GRID);
+    m_itemGrid->CreateGrid(0, 5); // Rows will be added dynamically
+    
+    // Configure columns with correct order
+    m_itemGrid->SetColLabelValue(0, "Sprite");
+    m_itemGrid->SetColLabelValue(1, "Server ID");
+    m_itemGrid->SetColLabelValue(2, "Client ID");
+    m_itemGrid->SetColLabelValue(3, "Name");
+    m_itemGrid->SetColLabelValue(4, "Group");
+    
+    // Set appropriate column sizes
+    m_itemGrid->SetColSize(0, 40);  // Sprite column - just enough for 32x32
+    m_itemGrid->SetColSize(1, 80);  // Server ID
+    m_itemGrid->SetColSize(2, 80);  // Client ID
+    m_itemGrid->SetColSize(3, 180); // Name
+    m_itemGrid->SetColSize(4, 100); // Group
+    
+    // Set row size to accommodate sprites
+    m_itemGrid->SetDefaultRowSize(36, true); // Slightly larger than 32x32 for padding
+    
+    // Set sprite renderer for the sprite column only
+    wxGridCellAttr* attr = new wxGridCellAttr;
+    attr->SetRenderer(new ItemSpriteRenderer());
+    m_itemGrid->SetColAttr(0, attr);
+    
+    sizer->Add(m_itemGrid, 1, wxEXPAND | wxALL, 5);
+    parent->SetSizer(sizer);
 }
 
 void ItemEditorWindow::CreatePropertiesPanel(wxPanel* parent)
 {
-	wxBoxSizer* sizer = new wxBoxSizer(wxVERTICAL);
-	
-	wxStaticText* label = new wxStaticText(parent, wxID_ANY, "Item Properties:");
-	sizer->Add(label, 0, wxALL, 5);
-	
-	m_notebook = new wxNotebook(parent, ID_PROPERTIES_NOTEBOOK);
-	
-	// General properties tab
-	m_generalPanel = new wxPanel(m_notebook);
-	CreateGeneralTab();
-	m_notebook->AddPage(m_generalPanel, "General");
-	
-	// Flags tab
-	m_flagsPanel = new wxPanel(m_notebook);
-	CreateFlagsTab();
-	m_notebook->AddPage(m_flagsPanel, "Flags");
-	
-	// Attributes tab
-	m_attributesPanel = new wxPanel(m_notebook);
-	CreateAttributesTab();
-	m_notebook->AddPage(m_attributesPanel, "Attributes");
-	
-	sizer->Add(m_notebook, 1, wxEXPAND | wxALL, 5);
-	parent->SetSizer(sizer);
-}
-
-void ItemEditorWindow::CreateGeneralTab()
-{
-	wxFlexGridSizer* sizer = new wxFlexGridSizer(2, 5, 5);
-	sizer->AddGrowableCol(1, 1);
-	
-	// Server ID
-	sizer->Add(new wxStaticText(m_generalPanel, wxID_ANY, "Server ID:"), 0, wxALIGN_CENTER_VERTICAL);
-	m_serverIdCtrl = new wxSpinCtrl(m_generalPanel, wxID_ANY, "", wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS, 100, 65535);
-	sizer->Add(m_serverIdCtrl, 1, wxEXPAND);
-	
-	// Client ID
-	sizer->Add(new wxStaticText(m_generalPanel, wxID_ANY, "Client ID:"), 0, wxALIGN_CENTER_VERTICAL);
-	m_clientIdCtrl = new wxSpinCtrl(m_generalPanel, wxID_ANY, "", wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS, 100, 65535);
-	sizer->Add(m_clientIdCtrl, 1, wxEXPAND);
-	
-	// Name
-	sizer->Add(new wxStaticText(m_generalPanel, wxID_ANY, "Name:"), 0, wxALIGN_CENTER_VERTICAL);
-	m_nameCtrl = new wxTextCtrl(m_generalPanel, wxID_ANY);
-	sizer->Add(m_nameCtrl, 1, wxEXPAND);
-	
-	// Description
-	sizer->Add(new wxStaticText(m_generalPanel, wxID_ANY, "Description:"), 0, wxALIGN_CENTER_VERTICAL);
-	m_descCtrl = new wxTextCtrl(m_generalPanel, wxID_ANY, "", wxDefaultPosition, wxDefaultSize, wxTE_MULTILINE);
-	sizer->Add(m_descCtrl, 1, wxEXPAND);
-	
-	// Group
-	sizer->Add(new wxStaticText(m_generalPanel, wxID_ANY, "Group:"), 0, wxALIGN_CENTER_VERTICAL);
-	m_groupChoice = new wxChoice(m_generalPanel, ID_GROUP_CHOICE);
-	m_groupChoice->Append("None");
-	m_groupChoice->Append("Ground");
-	m_groupChoice->Append("Container");
-	m_groupChoice->Append("Weapon");
-	m_groupChoice->Append("Ammunition");
-	m_groupChoice->Append("Armor");
-	m_groupChoice->Append("Rune");
-	m_groupChoice->Append("Teleport");
-	m_groupChoice->Append("Magic Field");
-	m_groupChoice->Append("Writeable");
-	m_groupChoice->Append("Key");
-	m_groupChoice->Append("Splash");
-	m_groupChoice->Append("Fluid");
-	m_groupChoice->Append("Door");
-	m_groupChoice->Append("Podium");
-	sizer->Add(m_groupChoice, 1, wxEXPAND);
-	
-	// Type
-	sizer->Add(new wxStaticText(m_generalPanel, wxID_ANY, "Type:"), 0, wxALIGN_CENTER_VERTICAL);
-	m_typeChoice = new wxChoice(m_generalPanel, ID_TYPE_CHOICE);
-	m_typeChoice->Append("None");
-	m_typeChoice->Append("Depot");
-	m_typeChoice->Append("Mailbox");
-	m_typeChoice->Append("Trash Holder");
-	m_typeChoice->Append("Container");
-	m_typeChoice->Append("Door");
-	m_typeChoice->Append("Magic Field");
-	m_typeChoice->Append("Teleport");
-	m_typeChoice->Append("Bed");
-	m_typeChoice->Append("Key");
-	m_typeChoice->Append("Podium");
-	sizer->Add(m_typeChoice, 1, wxEXPAND);
-	
-	// Weight
-	sizer->Add(new wxStaticText(m_generalPanel, wxID_ANY, "Weight:"), 0, wxALIGN_CENTER_VERTICAL);
-	m_weightCtrl = new wxTextCtrl(m_generalPanel, wxID_ANY, "0.0");
-	sizer->Add(m_weightCtrl, 1, wxEXPAND);
-	
-	m_generalPanel->SetSizer(sizer);
-}
-
-void ItemEditorWindow::CreateFlagsTab()
-{
-	wxBoxSizer* mainSizer = new wxBoxSizer(wxVERTICAL);
-	
-	// Movement flags
-	wxStaticBoxSizer* movementBox = new wxStaticBoxSizer(wxVERTICAL, m_flagsPanel, "Movement");
-	m_unpassableFlag = new wxCheckBox(m_flagsPanel, wxID_ANY, "Unpassable");
-	m_blockMissilesFlag = new wxCheckBox(m_flagsPanel, wxID_ANY, "Block Missiles");
-	m_blockPathfinderFlag = new wxCheckBox(m_flagsPanel, wxID_ANY, "Block Pathfinder");
-	m_hasElevationFlag = new wxCheckBox(m_flagsPanel, wxID_ANY, "Has Elevation");
-	movementBox->Add(m_unpassableFlag, 0, wxALL, 2);
-	movementBox->Add(m_blockMissilesFlag, 0, wxALL, 2);
-	movementBox->Add(m_blockPathfinderFlag, 0, wxALL, 2);
-	movementBox->Add(m_hasElevationFlag, 0, wxALL, 2);
-	mainSizer->Add(movementBox, 0, wxEXPAND | wxALL, 5);
-	
-	// Item flags
-	wxStaticBoxSizer* itemBox = new wxStaticBoxSizer(wxVERTICAL, m_flagsPanel, "Item Properties");
-	m_pickupableFlag = new wxCheckBox(m_flagsPanel, wxID_ANY, "Pickupable");
-	m_moveableFlag = new wxCheckBox(m_flagsPanel, wxID_ANY, "Moveable");
-	m_stackableFlag = new wxCheckBox(m_flagsPanel, wxID_ANY, "Stackable");
-	m_readableFlag = new wxCheckBox(m_flagsPanel, wxID_ANY, "Readable");
-	m_rotableFlag = new wxCheckBox(m_flagsPanel, wxID_ANY, "Rotatable");
-	itemBox->Add(m_pickupableFlag, 0, wxALL, 2);
-	itemBox->Add(m_moveableFlag, 0, wxALL, 2);
-	itemBox->Add(m_stackableFlag, 0, wxALL, 2);
-	itemBox->Add(m_readableFlag, 0, wxALL, 2);
-	itemBox->Add(m_rotableFlag, 0, wxALL, 2);
-	mainSizer->Add(itemBox, 0, wxEXPAND | wxALL, 5);
-	
-	// Hook flags
-	wxStaticBoxSizer* hookBox = new wxStaticBoxSizer(wxVERTICAL, m_flagsPanel, "Hooks");
-	m_hangableFlag = new wxCheckBox(m_flagsPanel, wxID_ANY, "Hangable");
-	m_hookEastFlag = new wxCheckBox(m_flagsPanel, wxID_ANY, "Hook East");
-	m_hookSouthFlag = new wxCheckBox(m_flagsPanel, wxID_ANY, "Hook South");
-	m_allowDistReadFlag = new wxCheckBox(m_flagsPanel, wxID_ANY, "Allow Distance Read");
-	hookBox->Add(m_hangableFlag, 0, wxALL, 2);
-	hookBox->Add(m_hookEastFlag, 0, wxALL, 2);
-	hookBox->Add(m_hookSouthFlag, 0, wxALL, 2);
-	hookBox->Add(m_allowDistReadFlag, 0, wxALL, 2);
-	mainSizer->Add(hookBox, 0, wxEXPAND | wxALL, 5);
-	
-	// Floor change flags
-	wxStaticBoxSizer* floorBox = new wxStaticBoxSizer(wxVERTICAL, m_flagsPanel, "Floor Changes");
-	m_floorChangeDownFlag = new wxCheckBox(m_flagsPanel, wxID_ANY, "Floor Change Down");
-	m_floorChangeNorthFlag = new wxCheckBox(m_flagsPanel, wxID_ANY, "Floor Change North");
-	m_floorChangeSouthFlag = new wxCheckBox(m_flagsPanel, wxID_ANY, "Floor Change South");
-	m_floorChangeEastFlag = new wxCheckBox(m_flagsPanel, wxID_ANY, "Floor Change East");
-	m_floorChangeWestFlag = new wxCheckBox(m_flagsPanel, wxID_ANY, "Floor Change West");
-	floorBox->Add(m_floorChangeDownFlag, 0, wxALL, 2);
-	floorBox->Add(m_floorChangeNorthFlag, 0, wxALL, 2);
-	floorBox->Add(m_floorChangeSouthFlag, 0, wxALL, 2);
-	floorBox->Add(m_floorChangeEastFlag, 0, wxALL, 2);
-	floorBox->Add(m_floorChangeWestFlag, 0, wxALL, 2);
-	mainSizer->Add(floorBox, 0, wxEXPAND | wxALL, 5);
-	
-	m_flagsPanel->SetSizer(mainSizer);
-}
-
-void ItemEditorWindow::CreateAttributesTab()
-{
-	wxFlexGridSizer* sizer = new wxFlexGridSizer(2, 5, 5);
-	sizer->AddGrowableCol(1, 1);
-	
-	// Light Level
-	sizer->Add(new wxStaticText(m_attributesPanel, wxID_ANY, "Light Level:"), 0, wxALIGN_CENTER_VERTICAL);
-	m_lightLevelCtrl = new wxSpinCtrl(m_attributesPanel, wxID_ANY, "", wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS, 0, 255);
-	sizer->Add(m_lightLevelCtrl, 1, wxEXPAND);
-	
-	// Light Color
-	sizer->Add(new wxStaticText(m_attributesPanel, wxID_ANY, "Light Color:"), 0, wxALIGN_CENTER_VERTICAL);
-	m_lightColorCtrl = new wxSpinCtrl(m_attributesPanel, wxID_ANY, "", wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS, 0, 255);
-	sizer->Add(m_lightColorCtrl, 1, wxEXPAND);
-	
-	// Minimap Color
-	sizer->Add(new wxStaticText(m_attributesPanel, wxID_ANY, "Minimap Color:"), 0, wxALIGN_CENTER_VERTICAL);
-	m_minimapColorCtrl = new wxSpinCtrl(m_attributesPanel, wxID_ANY, "", wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS, 0, 255);
-	sizer->Add(m_minimapColorCtrl, 1, wxEXPAND);
-	
-	// Max Text Length
-	sizer->Add(new wxStaticText(m_attributesPanel, wxID_ANY, "Max Text Length:"), 0, wxALIGN_CENTER_VERTICAL);
-	m_maxTextLenCtrl = new wxSpinCtrl(m_attributesPanel, wxID_ANY, "", wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS, 0, 65535);
-	sizer->Add(m_maxTextLenCtrl, 1, wxEXPAND);
-	
-	// Rotate To
-	sizer->Add(new wxStaticText(m_attributesPanel, wxID_ANY, "Rotate To:"), 0, wxALIGN_CENTER_VERTICAL);
-	m_rotateToCtrl = new wxSpinCtrl(m_attributesPanel, wxID_ANY, "", wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS, 0, 65535);
-	sizer->Add(m_rotateToCtrl, 1, wxEXPAND);
-	
-	// Volume
-	sizer->Add(new wxStaticText(m_attributesPanel, wxID_ANY, "Volume:"), 0, wxALIGN_CENTER_VERTICAL);
-	m_volumeCtrl = new wxSpinCtrl(m_attributesPanel, wxID_ANY, "", wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS, 0, 65535);
-	sizer->Add(m_volumeCtrl, 1, wxEXPAND);
-	
-	m_attributesPanel->SetSizer(sizer);
+    wxBoxSizer* sizer = new wxBoxSizer(wxVERTICAL);
+    
+    wxStaticText* label = new wxStaticText(parent, wxID_ANY, "Item Properties:");
+    sizer->Add(label, 0, wxALL, 5);
+    
+    m_propertiesPanel = new wxScrolledWindow(parent, wxID_ANY);
+    wxBoxSizer* scrollSizer = new wxBoxSizer(wxVERTICAL);
+    
+    // General properties section
+    wxStaticBoxSizer* generalBox = new wxStaticBoxSizer(wxVERTICAL, m_propertiesPanel, "General");
+    wxFlexGridSizer* generalSizer = new wxFlexGridSizer(2, 5, 5);
+    generalSizer->AddGrowableCol(1, 1);
+    
+    // Server ID
+    generalSizer->Add(new wxStaticText(m_propertiesPanel, wxID_ANY, "Server ID:"), 0, wxALIGN_CENTER_VERTICAL);
+    m_serverIdCtrl = new wxSpinCtrl(m_propertiesPanel, wxID_ANY, "", wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS, 100, 65535);
+    generalSizer->Add(m_serverIdCtrl, 1, wxEXPAND);
+    
+    // Client ID
+    generalSizer->Add(new wxStaticText(m_propertiesPanel, wxID_ANY, "Client ID:"), 0, wxALIGN_CENTER_VERTICAL);
+    m_clientIdCtrl = new wxSpinCtrl(m_propertiesPanel, wxID_ANY, "", wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS, 100, 65535);
+    generalSizer->Add(m_clientIdCtrl, 1, wxEXPAND);
+    
+    // Name
+    generalSizer->Add(new wxStaticText(m_propertiesPanel, wxID_ANY, "Name:"), 0, wxALIGN_CENTER_VERTICAL);
+    m_nameCtrl = new wxTextCtrl(m_propertiesPanel, wxID_ANY);
+    generalSizer->Add(m_nameCtrl, 1, wxEXPAND);
+    
+    // Description
+    generalSizer->Add(new wxStaticText(m_propertiesPanel, wxID_ANY, "Description:"), 0, wxALIGN_CENTER_VERTICAL);
+    m_descCtrl = new wxTextCtrl(m_propertiesPanel, wxID_ANY, "", wxDefaultPosition, wxDefaultSize, wxTE_MULTILINE);
+    generalSizer->Add(m_descCtrl, 1, wxEXPAND);
+    
+    // Group
+    generalSizer->Add(new wxStaticText(m_propertiesPanel, wxID_ANY, "Group:"), 0, wxALIGN_CENTER_VERTICAL);
+    m_groupChoice = new wxChoice(m_propertiesPanel, ID_GROUP_CHOICE);
+    m_groupChoice->Append("None");
+    m_groupChoice->Append("Ground");
+    m_groupChoice->Append("Container");
+    m_groupChoice->Append("Weapon");
+    m_groupChoice->Append("Ammunition");
+    m_groupChoice->Append("Armor");
+    m_groupChoice->Append("Rune");
+    m_groupChoice->Append("Teleport");
+    m_groupChoice->Append("Magic Field");
+    m_groupChoice->Append("Writeable");
+    m_groupChoice->Append("Key");
+    m_groupChoice->Append("Splash");
+    m_groupChoice->Append("Fluid");
+    m_groupChoice->Append("Door");
+    m_groupChoice->Append("Podium");
+    generalSizer->Add(m_groupChoice, 1, wxEXPAND);
+    
+    // Type
+    generalSizer->Add(new wxStaticText(m_propertiesPanel, wxID_ANY, "Type:"), 0, wxALIGN_CENTER_VERTICAL);
+    m_typeChoice = new wxChoice(m_propertiesPanel, ID_TYPE_CHOICE);
+    m_typeChoice->Append("None");
+    m_typeChoice->Append("Depot");
+    m_typeChoice->Append("Mailbox");
+    m_typeChoice->Append("Trash Holder");
+    m_typeChoice->Append("Container");
+    m_typeChoice->Append("Door");
+    m_typeChoice->Append("Magic Field");
+    m_typeChoice->Append("Teleport");
+    m_typeChoice->Append("Bed");
+    m_typeChoice->Append("Key");
+    m_typeChoice->Append("Podium");
+    generalSizer->Add(m_typeChoice, 1, wxEXPAND);
+    
+    // Weight
+    generalSizer->Add(new wxStaticText(m_propertiesPanel, wxID_ANY, "Weight:"), 0, wxALIGN_CENTER_VERTICAL);
+    m_weightCtrl = new wxTextCtrl(m_propertiesPanel, wxID_ANY, "0.0");
+    generalSizer->Add(m_weightCtrl, 1, wxEXPAND);
+    
+    generalBox->Add(generalSizer, 1, wxEXPAND | wxALL, 5);
+    scrollSizer->Add(generalBox, 0, wxEXPAND | wxALL, 5);
+    
+    // Flags section
+    wxStaticBoxSizer* flagsBox = new wxStaticBoxSizer(wxVERTICAL, m_propertiesPanel, "Flags");
+    wxFlexGridSizer* flagsSizer = new wxFlexGridSizer(3, 5, 5);
+    
+    m_unpassableFlag = new wxCheckBox(m_propertiesPanel, wxID_ANY, "Unpassable");
+    m_blockMissilesFlag = new wxCheckBox(m_propertiesPanel, wxID_ANY, "Block Missiles");
+    m_blockPathfinderFlag = new wxCheckBox(m_propertiesPanel, wxID_ANY, "Block Pathfinder");
+    m_hasElevationFlag = new wxCheckBox(m_propertiesPanel, wxID_ANY, "Has Elevation");
+    m_pickupableFlag = new wxCheckBox(m_propertiesPanel, wxID_ANY, "Pickupable");
+    m_moveableFlag = new wxCheckBox(m_propertiesPanel, wxID_ANY, "Moveable");
+    m_stackableFlag = new wxCheckBox(m_propertiesPanel, wxID_ANY, "Stackable");
+    m_readableFlag = new wxCheckBox(m_propertiesPanel, wxID_ANY, "Readable");
+    m_rotableFlag = new wxCheckBox(m_propertiesPanel, wxID_ANY, "Rotatable");
+    m_hangableFlag = new wxCheckBox(m_propertiesPanel, wxID_ANY, "Hangable");
+    m_hookEastFlag = new wxCheckBox(m_propertiesPanel, wxID_ANY, "Hook East");
+    m_hookSouthFlag = new wxCheckBox(m_propertiesPanel, wxID_ANY, "Hook South");
+    m_allowDistReadFlag = new wxCheckBox(m_propertiesPanel, wxID_ANY, "Allow Dist Read");
+    m_floorChangeDownFlag = new wxCheckBox(m_propertiesPanel, wxID_ANY, "Floor Change Down");
+    m_floorChangeNorthFlag = new wxCheckBox(m_propertiesPanel, wxID_ANY, "Floor Change North");
+    m_floorChangeSouthFlag = new wxCheckBox(m_propertiesPanel, wxID_ANY, "Floor Change South");
+    m_floorChangeEastFlag = new wxCheckBox(m_propertiesPanel, wxID_ANY, "Floor Change East");
+    m_floorChangeWestFlag = new wxCheckBox(m_propertiesPanel, wxID_ANY, "Floor Change West");
+    
+    flagsSizer->Add(m_unpassableFlag);
+    flagsSizer->Add(m_blockMissilesFlag);
+    flagsSizer->Add(m_blockPathfinderFlag);
+    flagsSizer->Add(m_hasElevationFlag);
+    flagsSizer->Add(m_pickupableFlag);
+    flagsSizer->Add(m_moveableFlag);
+    flagsSizer->Add(m_stackableFlag);
+    flagsSizer->Add(m_readableFlag);
+    flagsSizer->Add(m_rotableFlag);
+    flagsSizer->Add(m_hangableFlag);
+    flagsSizer->Add(m_hookEastFlag);
+    flagsSizer->Add(m_hookSouthFlag);
+    flagsSizer->Add(m_allowDistReadFlag);
+    flagsSizer->Add(m_floorChangeDownFlag);
+    flagsSizer->Add(m_floorChangeNorthFlag);
+    flagsSizer->Add(m_floorChangeSouthFlag);
+    flagsSizer->Add(m_floorChangeEastFlag);
+    flagsSizer->Add(m_floorChangeWestFlag);
+    
+    flagsBox->Add(flagsSizer, 1, wxEXPAND | wxALL, 5);
+    scrollSizer->Add(flagsBox, 0, wxEXPAND | wxALL, 5);
+    
+    // Attributes section
+    wxStaticBoxSizer* attributesBox = new wxStaticBoxSizer(wxVERTICAL, m_propertiesPanel, "Attributes");
+    wxFlexGridSizer* attributesSizer = new wxFlexGridSizer(2, 5, 5);
+    attributesSizer->AddGrowableCol(1, 1);
+    
+    // Light Level
+    attributesSizer->Add(new wxStaticText(m_propertiesPanel, wxID_ANY, "Light Level:"), 0, wxALIGN_CENTER_VERTICAL);
+    m_lightLevelCtrl = new wxSpinCtrl(m_propertiesPanel, wxID_ANY, "", wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS, 0, 255);
+    attributesSizer->Add(m_lightLevelCtrl, 1, wxEXPAND);
+    
+    // Light Color
+    attributesSizer->Add(new wxStaticText(m_propertiesPanel, wxID_ANY, "Light Color:"), 0, wxALIGN_CENTER_VERTICAL);
+    m_lightColorCtrl = new wxSpinCtrl(m_propertiesPanel, wxID_ANY, "", wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS, 0, 255);
+    attributesSizer->Add(m_lightColorCtrl, 1, wxEXPAND);
+    
+    // Minimap Color
+    attributesSizer->Add(new wxStaticText(m_propertiesPanel, wxID_ANY, "Minimap Color:"), 0, wxALIGN_CENTER_VERTICAL);
+    m_minimapColorCtrl = new wxSpinCtrl(m_propertiesPanel, wxID_ANY, "", wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS, 0, 255);
+    attributesSizer->Add(m_minimapColorCtrl, 1, wxEXPAND);
+    
+    // Max Text Length
+    attributesSizer->Add(new wxStaticText(m_propertiesPanel, wxID_ANY, "Max Text Length:"), 0, wxALIGN_CENTER_VERTICAL);
+    m_maxTextLenCtrl = new wxSpinCtrl(m_propertiesPanel, wxID_ANY, "", wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS, 0, 65535);
+    attributesSizer->Add(m_maxTextLenCtrl, 1, wxEXPAND);
+    
+    // Rotate To
+    attributesSizer->Add(new wxStaticText(m_propertiesPanel, wxID_ANY, "Rotate To:"), 0, wxALIGN_CENTER_VERTICAL);
+    m_rotateToCtrl = new wxSpinCtrl(m_propertiesPanel, wxID_ANY, "", wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS, 0, 65535);
+    attributesSizer->Add(m_rotateToCtrl, 1, wxEXPAND);
+    
+    // Volume
+    attributesSizer->Add(new wxStaticText(m_propertiesPanel, wxID_ANY, "Volume:"), 0, wxALIGN_CENTER_VERTICAL);
+    m_volumeCtrl = new wxSpinCtrl(m_propertiesPanel, wxID_ANY, "", wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS, 0, 255);
+    attributesSizer->Add(m_volumeCtrl, 1, wxEXPAND);
+    
+    attributesBox->Add(attributesSizer, 1, wxEXPAND | wxALL, 5);
+    scrollSizer->Add(attributesBox, 0, wxEXPAND | wxALL, 5);
+    
+    m_propertiesPanel->SetSizer(scrollSizer);
+    m_propertiesPanel->SetScrollRate(0, 20);
+    m_propertiesPanel->FitInside();
+    
+    sizer->Add(m_propertiesPanel, 1, wxEXPAND | wxALL, 5);
+    parent->SetSizer(sizer);
 }
 
 void ItemEditorWindow::CreateButtonPanel()
 {
-	m_buttonPanel = new wxPanel(this);
-	wxBoxSizer* sizer = new wxBoxSizer(wxHORIZONTAL);
-	
-	m_saveButton = new wxButton(m_buttonPanel, ID_SAVE_OTB, "Save OTB");
-	m_reloadButton = new wxButton(m_buttonPanel, ID_RELOAD_OTB, "Reload OTB");
-	m_generateButton = new wxButton(m_buttonPanel, ID_GENERATE_MISSING, "Generate Missing");
-	
-	sizer->Add(m_saveButton, 0, wxALL, 5);
-	sizer->Add(m_reloadButton, 0, wxALL, 5);
-	sizer->Add(m_generateButton, 0, wxALL, 5);
-	sizer->AddStretchSpacer(1);
-	
-	m_createButton = new wxButton(m_buttonPanel, ID_CREATE_ITEM, "Create Item");
-	m_duplicateButton = new wxButton(m_buttonPanel, ID_DUPLICATE_ITEM, "Duplicate");
-	m_deleteButton = new wxButton(m_buttonPanel, ID_DELETE_ITEM, "Delete");
-	m_findButton = new wxButton(m_buttonPanel, ID_FIND_ITEM, "Find");
-	
-	sizer->Add(m_createButton, 0, wxALL, 5);
-	sizer->Add(m_duplicateButton, 0, wxALL, 5);
-	sizer->Add(m_deleteButton, 0, wxALL, 5);
-	sizer->Add(m_findButton, 0, wxALL, 5);
-	
-	m_buttonPanel->SetSizer(sizer);
+    m_buttonPanel = new wxPanel(this);
+    wxBoxSizer* sizer = new wxBoxSizer(wxHORIZONTAL);
+    
+    // Left side buttons
+    m_saveButton = new wxButton(m_buttonPanel, ID_SAVE_OTB, "Save OTB");
+    m_reloadButton = new wxButton(m_buttonPanel, ID_RELOAD_OTB, "Reload OTB");
+    m_generateButton = new wxButton(m_buttonPanel, ID_GENERATE_MISSING, "Generate Missing");
+    
+    sizer->Add(m_saveButton, 0, wxALL, 5);
+    sizer->Add(m_reloadButton, 0, wxALL, 5);
+    sizer->Add(m_generateButton, 0, wxALL, 5);
+    sizer->AddStretchSpacer(1);
+    
+    // Right side buttons
+    m_createButton = new wxButton(m_buttonPanel, ID_CREATE_ITEM, "Create Item");
+    m_duplicateButton = new wxButton(m_buttonPanel, ID_DUPLICATE_ITEM, "Duplicate");
+    m_deleteButton = new wxButton(m_buttonPanel, ID_DELETE_ITEM, "Delete");
+    m_findButton = new wxButton(m_buttonPanel, ID_FIND_ITEM, "Find");
+    
+    sizer->Add(m_createButton, 0, wxALL, 5);
+    sizer->Add(m_duplicateButton, 0, wxALL, 5);
+    sizer->Add(m_deleteButton, 0, wxALL, 5);
+    sizer->Add(m_findButton, 0, wxALL, 5);
+    
+    m_buttonPanel->SetSizer(sizer);
 }
 
 void ItemEditorWindow::LoadItemList()
 {
-	m_itemList->DeleteAllItems();
-	
-	for (uint16_t id = 100; id <= g_items.getMaxID(); ++id) {
-		if (g_items.typeExists(id)) {
-			const ItemType& item = g_items[id];
-			
-			long index = m_itemList->InsertItem(m_itemList->GetItemCount(), wxString::Format("%d", id));
-			m_itemList->SetItem(index, 1, wxString::Format("%d", item.clientID));
-			m_itemList->SetItem(index, 2, wxString(item.name.c_str(), wxConvUTF8));
-			
-			wxString groupName;
-			switch (item.group) {
-				case ITEM_GROUP_NONE: groupName = "None"; break;
-				case ITEM_GROUP_GROUND: groupName = "Ground"; break;
-				case ITEM_GROUP_CONTAINER: groupName = "Container"; break;
-				case ITEM_GROUP_WEAPON: groupName = "Weapon"; break;
-				case ITEM_GROUP_AMMUNITION: groupName = "Ammunition"; break;
-				case ITEM_GROUP_ARMOR: groupName = "Armor"; break;
-				case ITEM_GROUP_RUNE: groupName = "Rune"; break;
-				case ITEM_GROUP_TELEPORT: groupName = "Teleport"; break;
-				case ITEM_GROUP_MAGICFIELD: groupName = "Magic Field"; break;
-				case ITEM_GROUP_WRITEABLE: groupName = "Writeable"; break;
-				case ITEM_GROUP_KEY: groupName = "Key"; break;
-				case ITEM_GROUP_SPLASH: groupName = "Splash"; break;
-				case ITEM_GROUP_FLUID: groupName = "Fluid"; break;
-				case ITEM_GROUP_DOOR: groupName = "Door"; break;
-				case ITEM_GROUP_PODIUM: groupName = "Podium"; break;
-				default: groupName = "Unknown"; break;
-			}
-			m_itemList->SetItem(index, 3, groupName);
-			
-			// Store the item ID as data
-			m_itemList->SetItemData(index, id);
-		}
-	}
+    // Show progress dialog
+    wxProgressDialog progress("Loading Items", "Loading item data...",
+                            g_items.getMaxID(), this,
+                            wxPD_APP_MODAL | wxPD_AUTO_HIDE | wxPD_SMOOTH);
+    
+    // Clear existing grid
+    if (m_itemGrid->GetNumberRows() > 0) {
+        m_itemGrid->DeleteRows(0, m_itemGrid->GetNumberRows());
+    }
+    
+    // Add items to grid
+    size_t count = 0;
+    for (uint16_t id = 100; id <= g_items.getMaxID(); ++id) {
+        if (g_items.typeExists(id)) {
+            const ItemType& item = g_items[id];
+            m_itemGrid->AppendRows(1);
+            int row = m_itemGrid->GetNumberRows() - 1;
+            
+            // Column 0 is sprite - handled by renderer
+            m_itemGrid->SetCellValue(row, 0, ""); // Leave empty, renderer will use client ID
+            m_itemGrid->SetCellValue(row, 1, wxString::Format("%d", id)); // Server ID
+            m_itemGrid->SetCellValue(row, 2, wxString::Format("%d", item.clientID)); // Client ID
+            m_itemGrid->SetCellValue(row, 3, wxString::FromUTF8(item.name.c_str())); // Name
+            
+            wxString groupName;
+            switch (item.group) {
+                case ITEM_GROUP_NONE: groupName = "None"; break;
+                case ITEM_GROUP_GROUND: groupName = "Ground"; break;
+                case ITEM_GROUP_CONTAINER: groupName = "Container"; break;
+                case ITEM_GROUP_WEAPON: groupName = "Weapon"; break;
+                case ITEM_GROUP_AMMUNITION: groupName = "Ammunition"; break;
+                case ITEM_GROUP_ARMOR: groupName = "Armor"; break;
+                case ITEM_GROUP_RUNE: groupName = "Rune"; break;
+                case ITEM_GROUP_TELEPORT: groupName = "Teleport"; break;
+                case ITEM_GROUP_MAGICFIELD: groupName = "Magic Field"; break;
+                case ITEM_GROUP_WRITEABLE: groupName = "Writeable"; break;
+                case ITEM_GROUP_KEY: groupName = "Key"; break;
+                case ITEM_GROUP_SPLASH: groupName = "Splash"; break;
+                case ITEM_GROUP_FLUID: groupName = "Fluid"; break;
+                case ITEM_GROUP_DOOR: groupName = "Door"; break;
+                case ITEM_GROUP_PODIUM: groupName = "Podium"; break;
+                default: groupName = "Unknown"; break;
+            }
+            m_itemGrid->SetCellValue(row, 4, groupName);
+            
+            if (++count % 100 == 0) {
+                progress.Update(count);
+            }
+        }
+    }
+    
+    m_itemGrid->AutoSizeColumns();
 }
 
 void ItemEditorWindow::LoadItemProperties(uint16_t itemId)
@@ -537,15 +593,19 @@ void ItemEditorWindow::OnCancel(wxCommandEvent& event)
 	EndModal(wxID_CANCEL);
 }
 
-void ItemEditorWindow::OnItemSelected(wxListEvent& event)
+void ItemEditorWindow::OnItemSelected(wxGridEvent& event)
 {
-	SaveItemProperties(); // Save current item first
-	
-	long index = event.GetIndex();
-	if (index >= 0) {
-		uint16_t itemId = static_cast<uint16_t>(m_itemList->GetItemData(index));
-		LoadItemProperties(itemId);
-	}
+    SaveItemProperties(); // Save current item first
+    
+    long row = event.GetRow();
+    if (row >= 0) {
+        wxString idStr = m_itemGrid->GetCellValue(row, 1); // Server ID
+        long itemId;
+        if (idStr.ToLong(&itemId)) {
+            LoadItemProperties(itemId);
+        }
+    }
+    event.Skip();
 }
 
 void ItemEditorWindow::OnSaveOTB(wxCommandEvent& event)
@@ -618,10 +678,12 @@ void ItemEditorWindow::OnCreateItem(wxCommandEvent& event)
 	LoadItemList();
 	
 	// Find and select the new item in the list
-	for (int i = 0; i < m_itemList->GetItemCount(); ++i) {
-		if (m_itemList->GetItemData(i) == newId) {
-			m_itemList->SetItemState(i, wxLIST_STATE_SELECTED, wxLIST_STATE_SELECTED);
-			m_itemList->EnsureVisible(i);
+	for (int i = 0; i < m_itemGrid->GetNumberRows(); ++i) {
+		wxString idStr = m_itemGrid->GetCellValue(i, 1); // Server ID
+		long id;
+		if (idStr.ToLong(&id) && id == newId) {
+			m_itemGrid->SelectRow(i);
+			m_itemGrid->MakeCellVisible(i, 1); // Select by Server ID
 			LoadItemProperties(newId);
 			break;
 		}
@@ -692,10 +754,12 @@ void ItemEditorWindow::OnDuplicateItem(wxCommandEvent& event)
 	LoadItemList();
 	
 	// Find and select the new item in the list
-	for (int i = 0; i < m_itemList->GetItemCount(); ++i) {
-		if (m_itemList->GetItemData(i) == newId) {
-			m_itemList->SetItemState(i, wxLIST_STATE_SELECTED, wxLIST_STATE_SELECTED);
-			m_itemList->EnsureVisible(i);
+	for (int i = 0; i < m_itemGrid->GetNumberRows(); ++i) {
+		wxString idStr = m_itemGrid->GetCellValue(i, 1); // Server ID
+		long id;
+		if (idStr.ToLong(&id) && id == newId) {
+			m_itemGrid->SelectRow(i);
+			m_itemGrid->MakeCellVisible(i, 1); // Select by Server ID
 			LoadItemProperties(newId);
 			break;
 		}
@@ -735,17 +799,19 @@ void ItemEditorWindow::OnFindItem(wxCommandEvent& event)
 		long itemId;
 		if (dialog.GetValue().ToLong(&itemId) && itemId >= 100 && itemId <= 65535) {
 			// Find item in list
-			for (int i = 0; i < m_itemList->GetItemCount(); ++i) {
-				if (m_itemList->GetItemData(i) == itemId) {
-					m_itemList->SetItemState(i, wxLIST_STATE_SELECTED, wxLIST_STATE_SELECTED);
-					m_itemList->EnsureVisible(i);
+			for (int i = 0; i < m_itemGrid->GetNumberRows(); ++i) {
+				wxString idStr = m_itemGrid->GetCellValue(i, 1); // Server ID
+				long id;
+				if (idStr.ToLong(&id) && id == itemId) {
+					m_itemGrid->SelectRow(i);
+					m_itemGrid->MakeCellVisible(i, 1); // Select by Server ID
 					LoadItemProperties(itemId);
 					return;
 				}
 			}
 			wxMessageBox("Item not found.", "Find Item", wxOK | wxICON_INFORMATION, this);
 		} else {
-			wxMessageBox("Invalid item ID.", "Error", wxOK | wxICON_ERROR, this);
+			wxMessageBox("Invalid item ID. Must be between 100 and 65535.", "Find Item", wxOK | wxICON_ERROR, this);
 		}
 	}
 }
