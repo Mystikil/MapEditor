@@ -10,6 +10,11 @@
 #include <wx/textdlg.h>
 #include <wx/renderer.h>
 
+// Add timer ID
+enum {
+    ID_REFRESH_TIMER = 1000
+};
+
 // Custom grid renderer for item sprites
 class ItemSpriteRenderer : public wxGridCellRenderer
 {
@@ -69,6 +74,8 @@ wxBEGIN_EVENT_TABLE(ItemEditorWindow, wxDialog)
     EVT_BUTTON(ID_FIND_ITEM, ItemEditorWindow::OnFindItem)
     EVT_CHOICE(ID_GROUP_CHOICE, ItemEditorWindow::OnGroupChanged)
     EVT_CHOICE(ID_TYPE_CHOICE, ItemEditorWindow::OnTypeChanged)
+    EVT_SPINCTRL(wxID_ANY, ItemEditorWindow::OnSpinCtrlChanged)
+    EVT_TIMER(ID_REFRESH_TIMER, ItemEditorWindow::OnRefreshTimer)
 wxEND_EVENT_TABLE()
 
 ItemEditorWindow::ItemEditorWindow(wxWindow* parent)
@@ -76,6 +83,7 @@ ItemEditorWindow::ItemEditorWindow(wxWindow* parent)
     , m_itemGrid(nullptr)
     , m_currentItemId(0)
     , m_itemsModified(false)
+    , m_refreshTimer(this, ID_REFRESH_TIMER)
 {
     SetIcon(wxICON(editor_icon));
     CreateControls();
@@ -136,19 +144,32 @@ void ItemEditorWindow::CreateItemGrid(wxPanel* parent)
     m_itemGrid->SetColLabelValue(3, "Name");
     m_itemGrid->SetColLabelValue(4, "Group");
     
-    // Set appropriate column sizes
+    // Set appropriate column sizes and lock them
     m_itemGrid->SetColSize(0, 40);  // Sprite column - just enough for 32x32
     m_itemGrid->SetColSize(1, 80);  // Server ID
     m_itemGrid->SetColSize(2, 80);  // Client ID
     m_itemGrid->SetColSize(3, 180); // Name
     m_itemGrid->SetColSize(4, 100); // Group
     
-    // Set row size to accommodate sprites
+    // Lock all column sizes
+    for(int i = 0; i < m_itemGrid->GetNumberCols(); ++i) {
+        m_itemGrid->SetColMinimalWidth(i, m_itemGrid->GetColSize(i));
+        m_itemGrid->SetColFormatCustom(i, wxGRID_VALUE_STRING); // Ensure consistent formatting
+    }
+    
+    // Disable column and row resizing completely
+    m_itemGrid->EnableDragRowSize(false);
+    m_itemGrid->EnableDragColSize(false);
+    m_itemGrid->DisableColResize(true);
+    
+    // Set and lock row size
     m_itemGrid->SetDefaultRowSize(36, true); // Slightly larger than 32x32 for padding
     
     // Set sprite renderer for the sprite column only
     wxGridCellAttr* attr = new wxGridCellAttr;
     attr->SetRenderer(new ItemSpriteRenderer());
+    attr->SetAlignment(wxALIGN_CENTER, wxALIGN_CENTER); // Center both horizontally and vertically
+    attr->SetReadOnly(true); // Make sprite column read-only
     m_itemGrid->SetColAttr(0, attr);
     
     sizer->Add(m_itemGrid, 1, wxEXPAND | wxALL, 5);
@@ -460,13 +481,31 @@ void ItemEditorWindow::LoadItemProperties(uint16_t itemId)
 
 void ItemEditorWindow::SaveItemProperties()
 {
-	if (m_currentItemId == 0 || !g_items.typeExists(m_currentItemId)) {
-		return;
-	}
-	
-	ItemType& item = g_items.getItemType(m_currentItemId);
-	ApplyChangesToItem(&item);
-	m_itemsModified = true;
+    if (m_currentItemId == 0 || !g_items.typeExists(m_currentItemId)) {
+        return;
+    }
+    
+    ItemType& item = g_items.getItemType(m_currentItemId);
+    
+    // Store old client ID to check if it changed
+    uint16_t oldClientId = item.clientID;
+    
+    ApplyChangesToItem(&item);
+    m_itemsModified = true;
+    
+    // If client ID changed, update the grid and refresh the sprite
+    if (oldClientId != item.clientID) {
+        // Find and update the row
+        for (int i = 0; i < m_itemGrid->GetNumberRows(); ++i) {
+            wxString idStr = m_itemGrid->GetCellValue(i, 1); // Server ID column
+            long id;
+            if (idStr.ToLong(&id) && id == m_currentItemId) {
+                m_itemGrid->SetCellValue(i, 2, wxString::Format("%d", item.clientID));
+                m_itemGrid->Refresh(); // Refresh the entire grid to update the sprite
+                break;
+            }
+        }
+    }
 }
 
 void ItemEditorWindow::ApplyChangesToItem(ItemType* item)
@@ -1076,4 +1115,40 @@ bool ItemEditorWindow::GenerateMissingItems()
 int ItemEditorWindow::ShowModal()
 {
 	return wxDialog::ShowModal();
+} 
+
+void ItemEditorWindow::OnSpinCtrlChanged(wxSpinEvent& event)
+{
+    if (event.GetId() == m_clientIdCtrl->GetId()) {
+        m_pendingClientId = event.GetValue();
+        // Restart the timer - this gives a small delay before refresh
+        m_refreshTimer.Start(100, true); // 100ms, oneShot=true
+    }
+    event.Skip();
+}
+
+void ItemEditorWindow::OnRefreshTimer(wxTimerEvent& event)
+{
+    if (m_currentItemId == 0 || !g_items.typeExists(m_currentItemId)) {
+        return;
+    }
+    
+    ItemType& item = g_items.getItemType(m_currentItemId);
+    uint16_t oldClientId = item.clientID;
+    
+    if (oldClientId != m_pendingClientId) {
+        item.clientID = m_pendingClientId;
+        m_itemsModified = true;
+        
+        // Find and update the row
+        for (int i = 0; i < m_itemGrid->GetNumberRows(); ++i) {
+            wxString idStr = m_itemGrid->GetCellValue(i, 1); // Server ID column
+            long id;
+            if (idStr.ToLong(&id) && id == m_currentItemId) {
+                m_itemGrid->SetCellValue(i, 2, wxString::Format("%d", item.clientID));
+                m_itemGrid->Refresh(); // Refresh the entire grid to update the sprite
+                break;
+            }
+        }
+    }
 } 

@@ -14,6 +14,7 @@
 #include <wx/button.h>
 #include <wx/splitter.h>
 #include <wx/scrolwin.h>
+#include <wx/timer.h>
 
 class ItemType;
 
@@ -119,6 +120,11 @@ private:
     // Current state
     uint16_t m_currentItemId;
     bool m_itemsModified;
+    
+    wxTimer m_refreshTimer;
+    uint16_t m_pendingClientId;
+    void OnSpinCtrlChanged(wxSpinEvent& event);
+    void OnRefreshTimer(wxTimerEvent& event);
     
     DECLARE_EVENT_TABLE()
 };
