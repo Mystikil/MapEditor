@@ -277,5 +277,7 @@
 		<item name="Reset House IDs" hotkey="" action="RESET_HOUSE_IDS" help="Reset house IDs to fill gaps and create continuous numbering"/>
 		<item name="Reset Town IDs" hotkey="" action="RESET_TOWN_IDS" help="Reset town IDs to fill gaps and create continuous numbering"/>
 		<separator/>
+		<item name="Edit Items (OTB)..." action="EDIT_ITEMS_OTB" help="Edit items.otb file - modify item flags, properties, and generate missing items."/>
+		<separator/>
 	</menu>
 </menubar>

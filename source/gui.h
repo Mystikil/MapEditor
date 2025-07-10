@@ -415,7 +415,7 @@ protected:
 	ClientVersion* getLoadedVersion() const {
 		return loaded_version == CLIENT_VERSION_NONE ? nullptr : ClientVersion::get(loaded_version);
 	}
-
+	friend class ItemEditorWindow; // Grants access to protected/private members
 	// Method to clean up brush pointers
 	void CleanupBrushes();
 

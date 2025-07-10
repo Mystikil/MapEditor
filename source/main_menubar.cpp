@@ -74,6 +74,7 @@
 #include "notes_window.h"
 #include "add_creature_dialog.h"
 #include "doodads_filling_dialog.h"
+#include "item_editor_window.h"
 
 #include <wx/chartype.h>
 
@@ -292,6 +293,7 @@ MainMenuBar::MainMenuBar(MainFrame* frame) :
 	MAKE_ACTION(RESET_HOUSE_IDS, wxITEM_NORMAL, OnResetHouseIDs);
 	MAKE_ACTION(RESET_TOWN_IDS, wxITEM_NORMAL, OnResetTownIDs);
 	MAKE_ACTION(DOODADS_FILLING_TOOL, wxITEM_NORMAL, OnDoodadsFillingTool);
+	MAKE_ACTION(EDIT_ITEMS_OTB, wxITEM_NORMAL, OnEditItemsOTB);
 
 	// A deleter, this way the frame does not need
 	// to bother deleting us.
@@ -4387,5 +4389,18 @@ void MainMenuBar::OnDoodadsFillingTool(wxCommandEvent& WXUNUSED(event)) {
             g_gui.PopupDialog("Error", "An unknown error occurred during doodads placement!", wxOK | wxICON_ERROR);
         }
     }
+}
+
+void MainMenuBar::OnEditItemsOTB(wxCommandEvent& WXUNUSED(event)) {
+	// Check if items are loaded
+	if (!g_gui.IsVersionLoaded()) {
+		wxMessageBox("Please load a client version first.", "No Version Loaded", wxOK | wxICON_WARNING, frame);
+		return;
+	}
+
+	// Create and show the item editor window
+	ItemEditorWindow* itemEditor = new ItemEditorWindow(frame);
+	itemEditor->ShowModal();
+	itemEditor->Destroy();
 }
 

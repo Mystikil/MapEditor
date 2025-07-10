@@ -189,6 +189,7 @@ namespace MenuBar {
 		RESET_HOUSE_IDS,
 	RESET_TOWN_IDS,
 	DOODADS_FILLING_TOOL,
+	EDIT_ITEMS_OTB,
 	};
 }
 
@@ -297,6 +298,7 @@ public:
 	void OnResetHouseIDs(wxCommandEvent& event);
 	void OnResetTownIDs(wxCommandEvent& event);
 	void OnDoodadsFillingTool(wxCommandEvent& event);
+	void OnEditItemsOTB(wxCommandEvent& event);
 
 	// View Menu
 	void OnToolbars(wxCommandEvent& event);
