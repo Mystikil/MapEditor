@@ -2,7 +2,8 @@
  
 RME-Visual Idler Project
 
-is the 6.6.6 version or some shit idk bruh
+Version 7 is what we will keep it at there will be no enumerations anymore.
+Why 7? It is my favourite number it is the numbre of the days in a week and most of all it is the number that represents Sunday a day of a significant importance of things being over the way they are. If your week was chaotic then sunday is the day you rest. If your week was full of hard work then Sunday is the day on which you deserve a break. If your week was smooth as always then Sunday is the day when you can enjoy the moment to remember it.
 
 
 https://discord.gg/FD2cYKBq5E
