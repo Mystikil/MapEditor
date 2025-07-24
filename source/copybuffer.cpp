@@ -195,6 +195,13 @@ void CopyBuffer::cut(Editor& editor, int floor) {
 	}
 
 	PositionList tilestoborder;
+	std::set<Position> selection_positions;
+	for (TileSet::iterator it = editor.selection.begin(); it != editor.selection.end(); ++it) {
+		Tile* tile = *it;
+		if (tile) {
+			selection_positions.insert(tile->getPosition());
+		}
+	}
 
 	for (TileSet::iterator it = editor.selection.begin(); it != editor.selection.end(); ++it) {
 		tile_count++;
@@ -256,10 +263,19 @@ void CopyBuffer::cut(Editor& editor, int floor) {
 		}
 
 		if (g_settings.getInteger(Config::USE_AUTOMAGIC)) {
-			for (int y = -1; y <= 1; y++) {
-				for (int x = -1; x <= 1; x++) {
-					tilestoborder.push_back(Position(tile->getX() + x, tile->getY() + y, tile->getZ()));
+			// Only add to tilestoborder if this tile is on the perimeter (adjacent to a non-selected tile)
+			bool is_perimeter = false;
+			for (int y = -1; y <= 1 && !is_perimeter; ++y) {
+				for (int x = -1; x <= 1 && !is_perimeter; ++x) {
+					if (x == 0 && y == 0) continue;
+					Position neighbor(tile->getX() + x, tile->getY() + y, tile->getZ());
+					if (selection_positions.find(neighbor) == selection_positions.end()) {
+						is_perimeter = true;
+					}
 				}
+			}
+			if (is_perimeter) {
+				tilestoborder.push_back(tile->getPosition());
 			}
 		}
 		action->addChange(newd Change(newtile));
