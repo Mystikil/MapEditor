@@ -632,6 +632,10 @@ void Tile::update() {
 }
 
 void Tile::borderize(BaseMap* parent) {
+	if (!ground) {
+		OutputDebugStringA("DEBUG DRAG: borderize called on tile with no ground, skipping\n");
+		return;
+	}
 	// Add debugging output for borderize operation
 	char debug_msg[512];
 	sprintf(debug_msg, "DEBUG DRAG: borderize called on tile at pos=(%d,%d,%d), SAME_GROUND_TYPE_BORDER=%d\n", 

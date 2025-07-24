@@ -685,10 +685,10 @@ void GroundBrush::doBorders(BaseMap* map, Tile* tile) {
 	}
 	processing_tiles.insert(tile->getPosition());
 	
-	if (!tile) {
-		OutputDebugStringA("DEBUG DRAG: ERROR! Tile is null in doBorders\n");
-			return;
-		}
+	if (!tile || !tile->ground) {
+		OutputDebugStringA("DEBUG DRAG: doBorders called on tile with no ground, skipping\n");
+		return;
+	}
 		
 	// Check if custom border is enabled and apply it
 	if (g_settings.getBoolean(Config::CUSTOM_BORDER_ENABLED)) {
@@ -1402,6 +1402,11 @@ void GroundBrush::doBorders(BaseMap* map, Tile* tile) {
 
 // Add a custom method to reset borderize for the auto-magic behavior
 void GroundBrush::reborderizeTile(BaseMap* map, Tile* tile) {
+	if (!tile || !tile->ground) {
+		OutputDebugStringA("DEBUG DRAG: reborderizeTile called on tile with no ground, skipping\n");
+		return;
+	}
+
 	// First, clean any existing borders on the tile
 	if (g_settings.getBoolean(Config::SAME_GROUND_TYPE_BORDER)) {
 		// When Same Ground Type Border is enabled, we need to identify and remove
