@@ -1,5 +1,8 @@
 #include "main.h"
 #include "monster_attack_dialog.h"
+#include "graphics.h"
+#include "outfit.h"
+#include "gui.h"
 
 #include <wx/sizer.h>
 #include <wx/stattext.h>
@@ -7,6 +10,10 @@
 #include <wx/statbox.h>
 #include <wx/button.h>
 #include <random>
+#include <wx/dcclient.h>
+#include <wx/timer.h>
+#include <map>
+#include <cmath>
 
 wxBEGIN_EVENT_TABLE(MonsterAttackDialog, wxDialog)
     EVT_COMBOBOX(ID_ATTACK_NAME_COMBO, MonsterAttackDialog::OnAttackNameChanged)
@@ -46,8 +53,8 @@ MonsterAttackDialog::MonsterAttackDialog(wxWindow* parent, const AttackEntry* at
         m_speedChangeCtrl->SetValue(0);
         m_durationCtrl->SetValue(0);
     }
-    
     UpdateControlStates();
+    m_attackPreviewPanel->SetAttackEntry(GetAttackEntry());
 }
 
 MonsterAttackDialog::~MonsterAttackDialog() {
@@ -182,6 +189,10 @@ void MonsterAttackDialog::CreateUI() {
     
     visualSizer->Add(visualGridSizer, 0, wxEXPAND | wxALL, 5);
     mainSizer->Add(visualSizer, 0, wxEXPAND | wxALL, 5);
+
+    // --- Attack Preview Panel ---
+    m_attackPreviewPanel = new AttackPreviewPanel(this);
+    mainSizer->Add(m_attackPreviewPanel, 0, wxALIGN_CENTER | wxALL, 10);
     
     // Condition section
     wxStaticBoxSizer* conditionSizer = new wxStaticBoxSizer(wxVERTICAL, this, "Condition");
@@ -313,6 +324,7 @@ void MonsterAttackDialog::UpdateControlStates() {
     m_areaEffectCombo->Enable(m_enableVisualEffects->GetValue());
     
     m_conditionCombo->Enable(m_enableCondition->GetValue());
+    m_attackPreviewPanel->SetAttackEntry(GetAttackEntry());
 }
 
 void MonsterAttackDialog::OnDiceRollAttack() {
@@ -507,6 +519,7 @@ void MonsterAttackDialog::SetAttackEntry(const AttackEntry& attack) {
     m_conditionCombo->SetValue(wxstr(attack.conditionType));
     
     UpdateControlStates();
+    m_attackPreviewPanel->SetAttackEntry(GetAttackEntry());
 }
 
 // Event handlers
@@ -532,17 +545,19 @@ void MonsterAttackDialog::OnAttackNameChanged(wxCommandEvent& event) {
     }
     
     UpdateControlStates();
+    m_attackPreviewPanel->SetAttackEntry(GetAttackEntry());
 }
 
-void MonsterAttackDialog::OnEnableRangeToggle(wxCommandEvent& event) { UpdateControlStates(); }
-void MonsterAttackDialog::OnEnableRadiusToggle(wxCommandEvent& event) { UpdateControlStates(); }
-void MonsterAttackDialog::OnEnableBeamToggle(wxCommandEvent& event) { UpdateControlStates(); }
-void MonsterAttackDialog::OnEnableStatusToggle(wxCommandEvent& event) { UpdateControlStates(); }
-void MonsterAttackDialog::OnEnableVisualToggle(wxCommandEvent& event) { UpdateControlStates(); }
-void MonsterAttackDialog::OnEnableConditionToggle(wxCommandEvent& event) { UpdateControlStates(); }
+void MonsterAttackDialog::OnEnableRangeToggle(wxCommandEvent& event) { UpdateControlStates(); m_attackPreviewPanel->SetAttackEntry(GetAttackEntry()); }
+void MonsterAttackDialog::OnEnableRadiusToggle(wxCommandEvent& event) { UpdateControlStates(); m_attackPreviewPanel->SetAttackEntry(GetAttackEntry()); }
+void MonsterAttackDialog::OnEnableBeamToggle(wxCommandEvent& event) { UpdateControlStates(); m_attackPreviewPanel->SetAttackEntry(GetAttackEntry()); }
+void MonsterAttackDialog::OnEnableStatusToggle(wxCommandEvent& event) { UpdateControlStates(); m_attackPreviewPanel->SetAttackEntry(GetAttackEntry()); }
+void MonsterAttackDialog::OnEnableVisualToggle(wxCommandEvent& event) { UpdateControlStates(); m_attackPreviewPanel->SetAttackEntry(GetAttackEntry()); }
+void MonsterAttackDialog::OnEnableConditionToggle(wxCommandEvent& event) { UpdateControlStates(); m_attackPreviewPanel->SetAttackEntry(GetAttackEntry()); }
 
 void MonsterAttackDialog::OnDiceRoll(wxCommandEvent& event) {
     OnDiceRollAttack();
+    m_attackPreviewPanel->SetAttackEntry(GetAttackEntry());
 }
 
 void MonsterAttackDialog::OnOK(wxCommandEvent& event) {
@@ -556,4 +571,297 @@ void MonsterAttackDialog::OnOK(wxCommandEvent& event) {
 
 void MonsterAttackDialog::OnCancel(wxCommandEvent& event) {
     EndModal(wxID_CANCEL);
-} 
+}
+
+// --- AttackPreviewPanel Implementation ---
+
+wxBEGIN_EVENT_TABLE(AttackPreviewPanel, wxPanel)
+    EVT_PAINT(AttackPreviewPanel::OnPaint)
+    EVT_TIMER(wxID_ANY, AttackPreviewPanel::OnTimer)
+wxEND_EVENT_TABLE()
+
+AttackPreviewPanel::AttackPreviewPanel(wxWindow* parent)
+    : wxPanel(parent, wxID_ANY, wxDefaultPosition, wxSize(256, 256)), m_timer(nullptr), m_frame(0)
+{
+    SetBackgroundStyle(wxBG_STYLE_PAINT);
+    m_timer = new wxTimer(this);
+    m_attack = AttackEntry();
+    StartPreview();
+}
+
+AttackPreviewPanel::~AttackPreviewPanel() {
+    StopPreview();
+    delete m_timer;
+}
+
+void AttackPreviewPanel::SetAttackEntry(const AttackEntry& attack) {
+    m_attack = attack;
+    m_frame = 0;
+    Refresh();
+}
+
+void AttackPreviewPanel::StartPreview() {
+    if (m_timer && !m_timer->IsRunning()) {
+        m_timer->Start(100); // 10 FPS
+    }
+}
+
+void AttackPreviewPanel::StopPreview() {
+    if (m_timer && m_timer->IsRunning()) {
+        m_timer->Stop();
+    }
+}
+
+void AttackPreviewPanel::OnPaint(wxPaintEvent& event) {
+    wxAutoBufferedPaintDC dc(this);
+    dc.Clear();
+    DrawGrid(dc);
+    DrawEffects(dc);
+}
+
+void AttackPreviewPanel::OnTimer(wxTimerEvent& event) {
+    m_frame = (m_frame + 1) % 16; // Loop 16 frames for now
+    Refresh();
+}
+
+void AttackPreviewPanel::DrawGrid(wxDC& dc) {
+    int tileSize = 32;
+    int gridSize = 8;
+    wxPen gridPen(wxColour(180, 180, 180));
+    dc.SetPen(gridPen);
+    for (int i = 0; i <= gridSize; ++i) {
+        dc.DrawLine(i * tileSize, 0, i * tileSize, gridSize * tileSize);
+        dc.DrawLine(0, i * tileSize, gridSize * tileSize, i * tileSize);
+    }
+}
+
+void AttackPreviewPanel::DrawEffects(wxDC& dc) {
+    // Draw creature sprites first (player and target)
+    DrawCreatureSprites(dc);
+    
+    // Draw projectile trajectory if it's a ranged attack
+    if (m_attack.range > 0 && !m_attack.shootEffect.empty()) {
+        DrawProjectileTrajectory(dc);
+    }
+    
+    // Draw AoE pattern and effects
+    DrawAoEPattern(dc);
+}
+
+void AttackPreviewPanel::DrawCreatureSprites(wxDC& dc) {
+    int tileSize = 32;
+    int gridSize = 8;
+    int centerX = gridSize / 2;
+    int centerY = gridSize / 2;
+    
+    // Draw player sprite (lookType 75) at center position
+    GameSprite* playerSprite = g_gui.gfx.getCreatureSprite(75);
+    if (playerSprite) {
+        Outfit playerOutfit;
+        playerOutfit.lookType = 75;
+        playerOutfit.lookHead = 0;
+        playerOutfit.lookBody = 0;
+        playerOutfit.lookLegs = 0;
+        playerOutfit.lookFeet = 0;
+        
+        int x = centerX * tileSize;
+        int y = centerY * tileSize;
+        playerSprite->DrawOutfit(&dc, SPRITE_SIZE_32x32, x, y, playerOutfit);
+    }
+    
+    // Draw target sprite (lookType 5) for targeted spells
+    if (m_attack.range > 0 && (m_attack.radius > 0 || !m_attack.shootEffect.empty())) {
+        std::pair<int, int> targetPos = GetTargetPosition(centerX, centerY);
+        
+        GameSprite* targetSprite = g_gui.gfx.getCreatureSprite(5);
+        if (targetSprite) {
+            Outfit targetOutfit;
+            targetOutfit.lookType = 5;
+            targetOutfit.lookHead = 0;
+            targetOutfit.lookBody = 0;
+            targetOutfit.lookLegs = 0;
+            targetOutfit.lookFeet = 0;
+            
+            int x = targetPos.first * tileSize;
+            int y = targetPos.second * tileSize;
+            targetSprite->DrawOutfit(&dc, SPRITE_SIZE_32x32, x, y, targetOutfit);
+        }
+    }
+}
+
+void AttackPreviewPanel::DrawProjectileTrajectory(wxDC& dc) {
+    int tileSize = 32;
+    int gridSize = 8;
+    int centerX = gridSize / 2;
+    int centerY = gridSize / 2;
+    
+    std::pair<int, int> targetPos = GetTargetPosition(centerX, centerY);
+    
+    // Draw trajectory line
+    wxPen trajectoryPen(wxColour(255, 255, 0, 150), 2, wxPENSTYLE_DOT);
+    dc.SetPen(trajectoryPen);
+    
+    int startX = centerX * tileSize + tileSize / 2;
+    int startY = centerY * tileSize + tileSize / 2;
+    int endX = targetPos.first * tileSize + tileSize / 2;
+    int endY = targetPos.second * tileSize + tileSize / 2;
+    
+    dc.DrawLine(startX, startY, endX, endY);
+    
+    // Draw projectile sprite along trajectory (animated)
+    int effectId = GetEffectSpriteId(m_attack.shootEffect);
+    if (effectId > 0) {
+        Sprite* projectileSprite = g_gui.gfx.getSprite(effectId);
+        if (projectileSprite) {
+            // Animate projectile position along trajectory
+            float progress = (m_frame % 16) / 16.0f;
+            int projX = startX + (endX - startX) * progress - tileSize / 2;
+            int projY = startY + (endY - startY) * progress - tileSize / 2;
+            
+            projectileSprite->DrawTo(&dc, SPRITE_SIZE_32x32, projX, projY, tileSize, tileSize);
+        }
+    }
+}
+
+void AttackPreviewPanel::DrawAoEPattern(wxDC& dc) {
+    int tileSize = 32;
+    int gridSize = 8;
+    int centerX = gridSize / 2;
+    int centerY = gridSize / 2;
+    
+    std::vector<std::pair<int, int>> affectedTiles;
+    
+    // Calculate affected tiles based on attack type
+    if (m_attack.radius > 0) {
+        // Radius-based AoE
+        std::pair<int, int> targetPos = GetTargetPosition(centerX, centerY);
+        affectedTiles = CalculateRadiusPattern(targetPos.first, targetPos.second, m_attack.radius);
+    } else if (m_attack.length > 0) {
+        // Beam-based attack
+        std::pair<int, int> targetPos = GetTargetPosition(centerX, centerY);
+        affectedTiles = CalculateBeamPattern(centerX, centerY, targetPos.first, targetPos.second, m_attack.length, m_attack.spread);
+    } else if (!m_attack.areaEffect.empty()) {
+        // Single target effect
+        if (m_attack.range > 0) {
+            std::pair<int, int> targetPos = GetTargetPosition(centerX, centerY);
+            affectedTiles.push_back(targetPos);
+        } else {
+            affectedTiles.push_back({centerX, centerY});
+        }
+    }
+    
+    // Draw area effect on all affected tiles
+    int effectId = GetEffectSpriteId(m_attack.areaEffect);
+    for (const auto& tile : affectedTiles) {
+        int x = tile.first * tileSize;
+        int y = tile.second * tileSize;
+        
+        if (effectId > 0) {
+            Sprite* effectSprite = g_gui.gfx.getSprite(effectId);
+            if (effectSprite) {
+                effectSprite->DrawTo(&dc, SPRITE_SIZE_32x32, x, y, tileSize, tileSize);
+            }
+        } else {
+            // Fallback: Draw animated circle
+            int animRadius = 8 + (m_frame % 8) * 2;
+            wxBrush effectBrush(wxColour(255, 100, 100, 180));
+            dc.SetBrush(effectBrush);
+            dc.SetPen(*wxTRANSPARENT_PEN);
+            dc.DrawCircle(x + tileSize / 2, y + tileSize / 2, animRadius);
+        }
+    }
+}
+
+std::vector<std::pair<int, int>> AttackPreviewPanel::CalculateRadiusPattern(int centerX, int centerY, int radius) {
+    std::vector<std::pair<int, int>> tiles;
+    
+    for (int x = centerX - radius; x <= centerX + radius; x++) {
+        for (int y = centerY - radius; y <= centerY + radius; y++) {
+            // Check if tile is within grid bounds
+            if (x >= 0 && x < 8 && y >= 0 && y < 8) {
+                // Calculate distance from center
+                int dx = x - centerX;
+                int dy = y - centerY;
+                double distance = sqrt(dx * dx + dy * dy);
+                
+                // Include tile if within radius
+                if (distance <= radius) {
+                    tiles.push_back({x, y});
+                }
+            }
+        }
+    }
+    
+    return tiles;
+}
+
+std::vector<std::pair<int, int>> AttackPreviewPanel::CalculateBeamPattern(int centerX, int centerY, int targetX, int targetY, int length, int spread) {
+    std::vector<std::pair<int, int>> tiles;
+    
+    // Calculate direction vector
+    int dx = targetX - centerX;
+    int dy = targetY - centerY;
+    
+    // Normalize direction
+    double distance = sqrt(dx * dx + dy * dy);
+    if (distance == 0) return tiles;
+    
+    double dirX = dx / distance;
+    double dirY = dy / distance;
+    
+    // Calculate perpendicular vector for spread
+    double perpX = -dirY;
+    double perpY = dirX;
+    
+    // Generate beam tiles
+    for (int i = 0; i <= length; i++) {
+        for (int s = -spread; s <= spread; s++) {
+            int x = centerX + (int)(dirX * i + perpX * s);
+            int y = centerY + (int)(dirY * i + perpY * s);
+            
+            // Check bounds
+            if (x >= 0 && x < 8 && y >= 0 && y < 8) {
+                tiles.push_back({x, y});
+            }
+        }
+    }
+    
+    return tiles;
+}
+
+std::pair<int, int> AttackPreviewPanel::GetTargetPosition(int centerX, int centerY) {
+    // For preview purposes, place target at a reasonable distance based on range
+    int targetX = centerX;
+    int targetY = centerY;
+    
+    if (m_attack.range > 0) {
+        // Place target south of center (default direction)
+        targetY = std::min(7, centerY + std::min(m_attack.range, 3));
+    }
+    
+    return {targetX, targetY};
+}
+
+int AttackPreviewPanel::GetEffectSpriteId(const std::string& effectName) {
+    // Enhanced effect name to ID mapping
+    static const std::map<std::string, int> effectNameToId = {
+        // Projectile effects
+        {"fire", 1}, {"energy", 2}, {"earth", 3}, {"ice", 4}, {"holy", 5}, {"death", 6},
+        {"smallearth", 7}, {"largerock", 8}, {"spear", 9}, {"bolt", 10}, {"arrow", 11},
+        {"poisonarrow", 12}, {"burstarrow", 13}, {"throwingstar", 14}, {"throwingknife", 15},
+        {"smallstone", 16}, {"suddendeath", 17}, {"largeholy", 18}, {"icicle", 19},
+        
+        // Area effects
+        {"firearea", 20}, {"energyarea", 21}, {"poisonarea", 22}, {"icearea", 23},
+        {"holyarea", 24}, {"deatharea", 25}, {"blueshimmer", 26}, {"redshimmer", 27},
+        {"greenshimmer", 28}, {"blackspark", 29}, {"teleport", 30}, {"purpleenergy", 31},
+        {"yellowenergy", 32}, {"greenspark", 33}, {"mortarea", 34}, {"poff", 35}, {"blockhit", 36},
+        
+        // Additional common effects
+        {"explosion", 37}, {"smoke", 38}, {"poison", 39}, {"heal", 40}, {"magic", 41},
+        {"spark", 42}, {"flash", 43}, {"bubble", 44}, {"wave", 45}, {"beam", 46}
+    };
+    
+    auto it = effectNameToId.find(effectName);
+    return (it != effectNameToId.end()) ? it->second : 0;
+}

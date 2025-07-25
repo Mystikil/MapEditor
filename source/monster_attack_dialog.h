@@ -9,6 +9,9 @@
 #include <wx/spinctrl.h>
 #include <wx/combobox.h>
 #include <wx/checkbox.h>
+#include <wx/panel.h>
+
+class AttackPreviewPanel; // Forward declaration
 
 class MonsterAttackDialog : public wxDialog {
 public:
@@ -76,7 +79,41 @@ private:
     // Dice roll button
     wxButton* m_diceRollBtn;
     
+    AttackPreviewPanel* m_attackPreviewPanel;
+    
     DECLARE_EVENT_TABLE()
+};
+
+class AttackPreviewPanel : public wxPanel {
+public:
+    AttackPreviewPanel(wxWindow* parent);
+    ~AttackPreviewPanel() override;
+
+    void SetAttackEntry(const AttackEntry& attack);
+    void StartPreview();
+    void StopPreview();
+
+protected:
+    void OnPaint(wxPaintEvent& event);
+    void OnTimer(wxTimerEvent& event);
+
+    void DrawGrid(wxDC& dc);
+    void DrawEffects(wxDC& dc);
+    void DrawCreatureSprites(wxDC& dc);
+    void DrawProjectileTrajectory(wxDC& dc);
+    void DrawAoEPattern(wxDC& dc);
+    
+    // Helper methods for pattern calculation
+    std::vector<std::pair<int, int>> CalculateRadiusPattern(int centerX, int centerY, int radius);
+    std::vector<std::pair<int, int>> CalculateBeamPattern(int centerX, int centerY, int targetX, int targetY, int length, int spread);
+    std::pair<int, int> GetTargetPosition(int centerX, int centerY);
+    int GetEffectSpriteId(const std::string& effectName);
+
+    wxTimer* m_timer;
+    int m_frame;
+    AttackEntry m_attack;
+
+    DECLARE_EVENT_TABLE();
 };
 
 enum {
