@@ -96,7 +96,7 @@ bool ChatService::RegisterUser(const wxString& username, const wxString& passwor
     socket.SetTimeout(10);
     
     wxIPV4address addr;
-    addr.Hostname("127.0.0.1");
+    addr.Hostname("116.203.17.184");
     addr.Service(3678);
     
     if (!socket.Connect(addr, true)) {
@@ -112,7 +112,7 @@ bool ChatService::RegisterUser(const wxString& username, const wxString& passwor
     // Prepare HTTP POST request
     wxString httpRequest = wxString::Format(
         "POST /api/register HTTP/1.1\r\n"
-        "Host: 127.0.0.1:3678\r\n"
+        "Host: 116.203.17.184:3678\r\n"
         "Content-Type: application/json\r\n"
         "Content-Length: %zu\r\n"
         "Connection: close\r\n"
@@ -155,7 +155,7 @@ bool ChatService::LoginUser(const wxString& username, const wxString& password, 
     socket.SetTimeout(10);
     
     wxIPV4address addr;
-    addr.Hostname("127.0.0.1");
+    addr.Hostname("116.203.17.184");
     addr.Service(3678);
     
     if (!socket.Connect(addr, true)) {
@@ -171,7 +171,7 @@ bool ChatService::LoginUser(const wxString& username, const wxString& password, 
     // Prepare HTTP POST request
     wxString httpRequest = wxString::Format(
         "POST /api/login HTTP/1.1\r\n"
-        "Host: 127.0.0.1:3678\r\n"
+        "Host: 116.203.17.184:3678\r\n"
         "Content-Type: application/json\r\n"
         "Content-Length: %zu\r\n"
         "Connection: close\r\n"
@@ -246,7 +246,7 @@ void ChatService::SendMessage(const wxString& message) {
     socket.SetTimeout(10);
     
     wxIPV4address addr;
-    addr.Hostname("127.0.0.1");
+    addr.Hostname("116.203.17.184");
     addr.Service(3678);
     
     if (!socket.Connect(addr, true)) {
@@ -262,7 +262,7 @@ void ChatService::SendMessage(const wxString& message) {
     // Prepare HTTP POST request
     wxString httpRequest = wxString::Format(
         "POST /api/messages/send HTTP/1.1\r\n"
-        "Host: 127.0.0.1:3678\r\n"
+        "Host: 116.203.17.184:3678\r\n"
         "Content-Type: application/json\r\n"
         "Content-Length: %zu\r\n"
         "Connection: close\r\n"
@@ -323,7 +323,7 @@ void ChatService::PollMessages() {
     socket.SetTimeout(5);
     
     wxIPV4address addr;
-    addr.Hostname("127.0.0.1");
+    addr.Hostname("116.203.17.184");
     addr.Service(3678);
     
     if (!socket.Connect(addr, true)) {
@@ -338,7 +338,7 @@ void ChatService::PollMessages() {
     
     wxString httpRequest = wxString::Format(
         "GET %s HTTP/1.1\r\n"
-        "Host: 127.0.0.1:3678\r\n"
+        "Host: 116.203.17.184:3678\r\n"
         "Connection: close\r\n"
         "\r\n",
         url.c_str()
@@ -597,7 +597,7 @@ ChatWindow::ChatWindow(wxWindow* parent) :
     
     // Add some initial text
     AddSystemMessage("Welcome to RME Chat! Register an account or connect with existing credentials.");
-    AddSystemMessage("Server: 127.0.0.1:3678");
+    AddSystemMessage("Server: RMECHAT");
     
     // Set minimum size
     SetMinSize(wxSize(500, 400));
