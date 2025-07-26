@@ -34,12 +34,7 @@
 		<item name="Open..." hotkey="Ctrl+O" action="OPEN" help="Open another map."/>
 		<item name="Save" hotkey="Ctrl+S" action="SAVE" help="Save the current map."/>
 		<item name="Save As..." hotkey="Ctrl+Alt+S" action="SAVE_AS" help="Save the current map as a new file."/>
-		<separator/>
-		<menu name="Generate">
-			<item name="Procedural Map..." action="GENERATE_PROCEDURAL_MAP" help="Generate a procedural map with terrain layers."/>
-			<item name="Island Map..." action="GENERATE_ISLAND_MAP" help="Generate an island map."/>
-			<item name="Dungeon Map..." action="GENERATE_DUNGEON_MAP" help="Generate a dungeon map."/>
-		</menu>
+	
 		<item name="Close" hotkey="Ctrl+Q" action="CLOSE" help="Closes the currently open map."/>
 		<separator/>
 		<menu name="Import">
@@ -91,7 +86,6 @@
 	</menu>
 	<menu name="Editor">
 		<item name="New View" hotkey="Ctrl+Shift+N" action="NEW_VIEW" help="Creates a new view of the current map."/>
-		<item name="New Detached View" hotkey="Ctrl+Shift+D" action="NEW_DETACHED_VIEW" help="Creates a new detached view of the current map that can be moved to another monitor."/>
 		<item name="Enter Fullscreen" hotkey="F11" action="TOGGLE_FULLSCREEN" help="Changes between fullscreen mode and windowed mode."/>
 		<item name="Take Screenshot" hotkey="F10" action="TAKE_SCREENSHOT" help="Saves the current view to the disk."/>
 		<separator/>
@@ -264,8 +258,8 @@
 		<item name="Replace Items..." hotkey="" action="REPLACE_ITEMS" help="Replaces all occurrences of one item with another."/>
 		<item name="Refresh Items" action="REFRESH_ITEMS" help="Refresh items to fix flags"/>
 		<!-- clickable buttons that toggle some settings such as select right click RAw toggle button and toggle button to disable map display right click context menu then.-->
-			<item name="Generate Procedural Map..." action="GENERATE_PROCEDURAL_MAP" help="Generate a procedural map using OTMapGen"/>
-		<separator/>
+				<separator/>
+	
 <item name="Notes..." hotkey="Ctrl+N" action="MAP_NOTES" help="Create or edit notes for this map."/>
 	<item name="Recent Brushes" hotkey="Shift+ALT+R" action="WIN_RECENT_BRUSHES" help="Shows recently used brushes for quick access."/>
 	<separator/>
@@ -279,5 +273,14 @@
 		<separator/>
 		<item name="Edit Items (OTB)..." action="EDIT_ITEMS_OTB" help="Edit items.otb file - modify item flags, properties, and generate missing items."/>
 		<separator/>
+			<menu name="Generate">
+			<item name="Procedural Map..." action="GENERATE_PROCEDURAL_MAP" help="Generate a procedural map with terrain layers."/>
+			<item name="Island Map..." action="GENERATE_ISLAND_MAP" help="Generate an island map."/>
+			<item name="Dungeon Map..." action="GENERATE_DUNGEON_MAP" help="Generate a dungeon map."/>
+		</menu>
+		<separator/>
+		<item name="New Detached View" hotkey="Ctrl+Shift+D" action="NEW_DETACHED_VIEW" help="Creates a new detached view of the current map that can be moved to another monitor."/>
+		<separator/>
+		
 	</menu>
 </menubar>

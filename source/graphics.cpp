@@ -519,6 +519,7 @@ bool GraphicManager::loadSpriteMetadata(const FileName& datafile, wxString& erro
 
 	uint32_t minID = 100; // items start with id 100
 	// We don't load distance/effects, if we would, just add effect_count & distance_count here
+	//we load effects now
 	uint32_t maxID = item_count + creature_count + effect_count + distance_count;
 
 	dat_format = client_version->getDatFormatForSignature(datSignature);
