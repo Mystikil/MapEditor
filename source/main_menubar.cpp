@@ -84,6 +84,7 @@
 #include "live_server.h"
 #include "string_utils.h"
 #include "hotkey_manager.h"
+#include "chat_window.h"
 #include "creature_brush.h"
 #include "brush.h"
 #include "tileset.h"
@@ -289,6 +290,9 @@ MainMenuBar::MainMenuBar(MainFrame* frame) :
 	// 669
 	MAKE_ACTION(FIND_CREATURE, wxITEM_NORMAL, OnSearchForCreature);
 	MAKE_ACTION(MAP_CREATE_BORDER, wxITEM_NORMAL, OnCreateBorder);
+	// Chat actions
+	MAKE_ACTION(CHAT_REGISTER, wxITEM_NORMAL, OnChatRegister);
+	MAKE_ACTION(CHAT_CONNECT, wxITEM_NORMAL, OnChatConnect);
 	MAKE_ACTION(MAP_SUMMARIZE, wxITEM_NORMAL, OnMapSummarize);
 	MAKE_ACTION(RESET_HOUSE_IDS, wxITEM_NORMAL, OnResetHouseIDs);
 	MAKE_ACTION(RESET_TOWN_IDS, wxITEM_NORMAL, OnResetTownIDs);
@@ -3449,6 +3453,14 @@ void MainMenuBar::OnRefreshVisibleArea(wxCommandEvent& WXUNUSED(event)) {
 	} else {
 		g_gui.SetStatusText("Refresh only available in multiplayer mode.");
 	}
+}
+
+void MainMenuBar::OnChatRegister(wxCommandEvent& WXUNUSED(event)) {
+    ChatManager::ShowRegisterDialog();
+}
+
+void MainMenuBar::OnChatConnect(wxCommandEvent& WXUNUSED(event)) {
+    ChatManager::ShowChatWindow();
 }
 
 void MainMenuBar::onServerHost(wxCommandEvent& event) {

@@ -236,6 +236,10 @@
 		<item name="About..." hotkey="F1" action="ABOUT" help=""/>
 		
 	</menu>
+	<menu name="Chat">
+		<item name="Register" action="CHAT_REGISTER" help="Register a new chat account" />
+		<item name="Connect" action="CHAT_CONNECT" help="Connect to the chat server" />
+	</menu>
 	<menu name="Server">
 		<item name="Host Server" action="ID_MENU_SERVER_HOST" help="Host a new server for collaborative mapping"/>
 		<item name="Connect to Server" action="ID_MENU_SERVER_CONNECT" help="Connect to an existing map server"/>

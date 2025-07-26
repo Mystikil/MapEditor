@@ -183,6 +183,9 @@ namespace MenuBar {
 		MAP_MENU_GENERATE_ISLAND,
 		MAP_VALIDATE_GROUND,
 		MAP_CREATE_BORDER,
+		// Chat actions
+		CHAT_REGISTER,
+		CHAT_CONNECT,
 		MAP_SUMMARIZE,
 		MAP_NOTES,
 		MENU_REFRESH_VISIBLE_AREA,
@@ -346,8 +349,13 @@ public:
 	// Add to class MainMenuBar private section:
 	void OnRefreshItems(wxCommandEvent& event);
 	void OnCreateBorder(wxCommandEvent& event);
+	// Chat handlers
+	void OnChatRegister(wxCommandEvent& event);
+	void OnChatConnect(wxCommandEvent& event);
+
 	void OnMapSummarize(wxCommandEvent& event);
 	void OnRefreshVisibleArea(wxCommandEvent& event);
+
 
 protected:
 	// Load and returns a menu item, also sets accelerator
