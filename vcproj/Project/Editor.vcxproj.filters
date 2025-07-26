@@ -390,7 +390,6 @@
     <ClInclude Include="..\..\source\borderize_window.h" />
     <ClInclude Include="..\..\source\automagic_settings.h" />
     <ClInclude Include="..\..\source\live_action_packets.h" />
-    <ClInclude Include="..\..\source\island_generator_dialog.h" />
     <ClInclude Include="..\..\source\ground_validation_dialog.h" />
     <ClInclude Include="..\..\source\dark_mode_manager.h" />
     <ClInclude Include="..\..\source\border_editor_window.h" />
@@ -399,6 +398,25 @@
     <ClInclude Include="..\..\source\color_utils.h" />
     <ClInclude Include="..\..\source\add_creature_dialog.h" />
     <ClInclude Include="..\..\source\chat_window.h" />
+
+    <ClInclude Include="..\..\source\map_summary_window.h" />
+    <ClInclude Include="..\..\source\otmapgen_dialog.h" />
+    <ClInclude Include="..\..\source\otmapgen.h" />
+    <ClInclude Include="..\..\source\revscript_manager.h" />
+    <ClInclude Include="..\..\source\wallize_window.h" />
+    <ClInclude Include="..\..\source\notes_window.h" />
+    <ClInclude Include="..\..\source\recent_brushes_window.h" />
+    <ClInclude Include="..\..\source\monster_maker_window.h" />
+    <ClInclude Include="..\..\source\monster_manager.h" />
+    <ClInclude Include="..\..\source\color_palette_ctrl.h">
+      <Filter>gui\controls</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\source\monster_loot_dialog.h" />
+    <ClInclude Include="..\..\source\monster_attack_dialog.h" />
+    <ClInclude Include="..\..\source\monster_defense_dialog.h" />
+    <ClInclude Include="..\..\source\npc_manager.h" />
+    <ClInclude Include="..\..\source\doodads_filling_dialog.h" />
+    <ClInclude Include="..\..\source\item_editor_window.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\source\json\json_spirit_reader.cpp">
@@ -698,14 +716,32 @@
     <ClCompile Include="..\..\source\hotkey_manager.cpp" />
     <ClCompile Include="..\..\source\borderize_window.cpp" />
     <ClCompile Include="..\..\source\automagic_settings.cpp" />
-    <ClCompile Include="..\..\source\island_generator_dialog.cpp" />
     <ClCompile Include="..\..\source\ground_validation_dialog.cpp" />
     <ClCompile Include="..\..\source\dark_mode_manager.cpp" />
     <ClCompile Include="..\..\source\border_editor_window.cpp" />
     <ClCompile Include="..\..\source\creature_sprite_manager.cpp" />
     <ClCompile Include="..\..\source\find_creature_window.cpp" />
     <ClCompile Include="..\..\source\add_creature_dialog.cpp" />
+
     <ClCompile Include="..\..\source\chat_window.cpp" />
+    <ClCompile Include="..\..\source\map_summary_window.cpp" />
+    <ClCompile Include="..\..\source\otmapgen.cpp" />
+    <ClCompile Include="..\..\source\otmapgen_dialog.cpp" />
+    <ClCompile Include="..\..\source\revscript_manager.cpp" />
+    <ClCompile Include="..\..\source\wallize_window.cpp" />
+    <ClCompile Include="..\..\source\notes_window.cpp" />
+    <ClCompile Include="..\..\source\recent_brushes_window.cpp" />
+    <ClCompile Include="..\..\source\monster_maker_window.cpp" />
+    <ClCompile Include="..\..\source\monster_manager.cpp" />
+    <ClCompile Include="..\..\source\color_palette_ctrl.cpp">
+      <Filter>gui\controls</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\source\monster_attack_dialog.cpp" />
+    <ClCompile Include="..\..\source\monster_loot_dialog.cpp" />
+    <ClCompile Include="..\..\source\monster_defense_dialog.cpp" />
+    <ClCompile Include="..\..\source\npc_manager.cpp" />
+    <ClCompile Include="..\..\source\doodads_filling_dialog.cpp" />
+    <ClCompile Include="..\..\source\item_editor_window.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="Editor.rc">

@@ -288,11 +288,16 @@ void WallBrush::draw(BaseMap* map, Tile* tile, void* parameter) {
 					BorderType alignment = item->getWallAlignment();
 					uint16_t id = 0;
 					WallBrush* try_brush = this;
+					
+					// Add protection against infinite redirect loops
+					int redirect_count = 0;
+					const int max_redirects = 20; // Reasonable limit for redirect chains
+					
 					while (true) {
 						if (id != 0) {
 							break;
 						}
-						if (try_brush == nullptr) {
+						if (try_brush == nullptr || redirect_count >= max_redirects) {
 							return;
 						}
 
@@ -317,6 +322,7 @@ void WallBrush::draw(BaseMap* map, Tile* tile, void* parameter) {
 						}
 
 						try_brush = try_brush->redirect_to;
+						redirect_count++;
 						if (try_brush == this) {
 							break;
 						}
@@ -336,11 +342,15 @@ void WallBrush::draw(BaseMap* map, Tile* tile, void* parameter) {
 	uint16_t id = 0;
 	WallBrush* try_brush = this;
 
+	// Add protection against infinite redirect loops
+	int redirect_count = 0;
+	const int max_redirects = 20; // Reasonable limit for redirect chains
+
 	while (true) {
 		if (id != 0) {
 			break;
 		}
-		if (try_brush == nullptr) {
+		if (try_brush == nullptr || redirect_count >= max_redirects) {
 			return;
 		}
 
@@ -362,6 +372,7 @@ void WallBrush::draw(BaseMap* map, Tile* tile, void* parameter) {
 		}
 
 		try_brush = try_brush->redirect_to;
+		redirect_count++;
 		if (try_brush == this) {
 			break;
 		}
@@ -411,7 +422,13 @@ void WallBrush::doWalls(BaseMap* map, Tile* tile) {
 
 	ItemVector items_to_add;
 
-	while (it != tile->items.end()) {
+	// Add iteration guard to prevent infinite loops
+	int max_iterations = tile->items.size() * 2 + 100; // Reasonable upper bound
+	int iteration_count = 0;
+
+	while (it != tile->items.end() && iteration_count < max_iterations) {
+		++iteration_count;
+		
 		Item* wall = *it;
 		if (!wall->isWall()) {
 			++it;
@@ -464,10 +481,7 @@ void WallBrush::doWalls(BaseMap* map, Tile* tile) {
 		}
 
 		bool exit = false;
-		for (int i = 0; i < 2; ++i) { // Repeat twice
-			if (exit) {
-				break;
-			}
+		for (int i = 0; i < 2 && !exit; ++i) { // Repeat twice, but exit early if needed
 			::BorderType bt;
 			if (i == 0) {
 				bt = ::BorderType(full_border_types[tiledata]);
@@ -486,13 +500,19 @@ void WallBrush::doWalls(BaseMap* map, Tile* tile) {
 				it = tile->items.erase(it);
 				exit = true;
 
-				while (it != tile->items.end()) {
+				// Add guard for decoration processing loop
+				int decoration_count = 0;
+				int max_decorations = 10; // Reasonable limit for decorations per wall
+				
+				while (it != tile->items.end() && decoration_count < max_decorations) {
 					// If we have a decoration ontop of us, we need to change it's alignment aswell!
 
 					Item* wall_decoration = *it;
 					ASSERT(wall_decoration);
 					WallBrush* brush = wall_decoration->getWallBrush();
 					if (brush && brush->isWallDecoration()) {
+						decoration_count++;
+						
 						// We don't know if we have changed alignment
 						if (wall_decoration->getWallAlignment() == bt) {
 							// Same, no need to change...
@@ -538,8 +558,12 @@ void WallBrush::doWalls(BaseMap* map, Tile* tile) {
 				uint16_t id = 0;
 				WallBrush* try_brush = wall_brush;
 
+				// Add protection against infinite redirect loops
+				int redirect_count = 0;
+				const int max_redirects = 20; // Reasonable limit for redirect chains
+
 				while (true) {
-					if (try_brush == nullptr) {
+					if (try_brush == nullptr || redirect_count >= max_redirects) {
 						break;
 					}
 					if (id != 0) {
@@ -550,6 +574,7 @@ void WallBrush::doWalls(BaseMap* map, Tile* tile) {
 					if (wn.total_chance <= 0) {
 						if (wn.items.size() == 0) {
 							try_brush = try_brush->redirect_to;
+							redirect_count++;
 							if (try_brush == wall_brush) {
 								break; // To prevent infinite loop
 							}
@@ -570,11 +595,12 @@ void WallBrush::doWalls(BaseMap* map, Tile* tile) {
 					}
 					// Propagate down the chain
 					try_brush = try_brush->redirect_to;
+					redirect_count++;
 					if (try_brush == wall_brush) {
 						break; // To prevent infinite loop
 					}
 				}
-				if (try_brush == nullptr && id == 0) {
+				if ((try_brush == nullptr || redirect_count >= max_redirects) && id == 0) {
 					if (i == 1) {
 						++it;
 					}
@@ -590,12 +616,18 @@ void WallBrush::doWalls(BaseMap* map, Tile* tile) {
 					++it;
 				}
 
+				// Add guard for decoration processing loop here too
+				int decoration_count = 0;
+				int max_decorations = 10; // Reasonable limit for decorations per wall
+				
 				// Increment and check for end
-				while (it != tile->items.end()) {
+				while (it != tile->items.end() && decoration_count < max_decorations) {
 					// If we have a decoration ontop of us, we need to change it's alignment aswell!
 					Item* wall_decoration = *it;
 					WallBrush* brush = wall_decoration->getWallBrush();
 					if (brush && brush->isWallDecoration()) {
+						decoration_count++;
+						
 						// We know we have changed alignment, so no need to check for it again.
 						uint16_t id = 0;
 						WallNode& wn = brush->wall_items[int(bt)];
@@ -632,7 +664,13 @@ void WallBrush::doWalls(BaseMap* map, Tile* tile) {
 				}
 			}
 		}
+		
+		// Safety check: if we haven't moved the iterator at all, force advancement
+		if (!exit && it != tile->items.end()) {
+			++it;
+		}
 	}
+	
 	tile->cleanWalls();
 	for (ItemVector::const_iterator it = items_to_add.begin(); it != items_to_add.end(); ++it) {
 		tile->addWallItem(*it);
@@ -644,8 +682,12 @@ bool WallBrush::hasWall(Item* item) {
 	::BorderType bt = item->getWallAlignment();
 
 	WallBrush* test_wall = this;
+	
+	// Add protection against infinite redirect loops
+	int redirect_count = 0;
+	const int max_redirects = 20; // Reasonable limit for redirect chains
 
-	while (test_wall != nullptr) {
+	while (test_wall != nullptr && redirect_count < max_redirects) {
 		for (std::vector<WallType>::const_iterator it = test_wall->wall_items[int(bt)].items.begin(); it != test_wall->wall_items[int(bt)].items.end(); ++it) {
 			if (it->id == item->getID()) {
 				return true;
@@ -658,6 +700,7 @@ bool WallBrush::hasWall(Item* item) {
 		}
 
 		test_wall = test_wall->redirect_to;
+		redirect_count++;
 		if (test_wall == this) {
 			return false; // Prevent infinite loop
 		}

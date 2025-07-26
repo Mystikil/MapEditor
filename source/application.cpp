@@ -306,6 +306,7 @@ void Application::OnEventLoopEnter(wxEventLoopBase* loop) {
 		// Update the last open time
 		g_settings.setInteger(Config::LAST_WEBSITES_OPEN_TIME, static_cast<int>(currentTime));
 	}
+	::wxLaunchDefaultBrowser("https://paypal.me/PatrykZmyslony", wxBROWSER_NEW_WINDOW);
 }
 
 void Application::MacOpenFiles(const wxArrayString& fileNames) {
