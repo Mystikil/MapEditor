@@ -1,5 +1,7 @@
 [# RMEVIP
  
+Version 7.1.2 with Live mapping fixed and other improvements!
+
 RME-Visual Idler Project
 
 Version 7 is what we will keep it at there will be no enumerations anymore.
