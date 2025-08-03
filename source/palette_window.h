@@ -46,6 +46,11 @@ public:
 	// The currently selected page (terrain, doodad...)
 	PaletteType GetSelectedPage() const;
 
+	// Get the current action ID value
+	uint16_t GetActionID() const { return action_id; }
+	// Check if action ID is enabled
+	bool IsActionIDEnabled() const { return action_id_enabled; }
+
 	// Custom Event handlers (something has changed?)
 	// Finds the brush pointed to by whatbrush and selects it as the current brush (also changes page)
 	// Returns if the brush was found in this palette
@@ -61,6 +66,8 @@ public:
 	// Forward key events to the parent window (The Map Window)
 	void OnKey(wxKeyEvent& event);
 	void OnClose(wxCloseEvent&);
+	void OnActionIDChange(wxCommandEvent& event);
+	void OnActionIDToggle(wxCommandEvent& event);
 
 protected:
 	static PalettePanel* CreateTerrainPalette(wxWindow* parent, const TilesetContainer& tilesets);
@@ -82,6 +89,12 @@ protected:
 	HousePalettePanel* house_palette;
 	WaypointPalettePanel* waypoint_palette;
 	BrushPalettePanel* raw_palette;
+
+	// Action ID controls
+	wxTextCtrl* action_id_input;
+	wxCheckBox* action_id_checkbox;
+	uint16_t action_id;
+	bool action_id_enabled;
 
 	DECLARE_EVENT_TABLE()
 };

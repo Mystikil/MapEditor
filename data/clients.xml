@@ -227,6 +227,12 @@
 			<extensions from="8.20 - 8.31" to="9.60"/>
 			<data format="9.6" dat="0x4FFA74CC" spr="0x4FFA74F9"/>
 		</client>
+		
+		<client name="9.64" otb="9.61" visible="true" data_directory="964">
+			<otbm version="3"/>
+			<extensions from="8.20 - 8.31" to="9.60"/>
+			<data format="9.6" dat="0x582FB329" spr="0x582FB329"/>
+		</client>
 
 		<client name="9.70" otb="9.70" visible="true" data_directory="970">
 			<otbm version="3"/>

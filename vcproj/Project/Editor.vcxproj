@@ -22,7 +22,7 @@
     <ProjectGuid>{7AA6C5AC-C8C4-40EF-A0B3-3569B9819163}</ProjectGuid>
     <RootNamespace>Editor</RootNamespace>
     <Keyword>Win32Proj</Keyword>
-    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+    <WindowsTargetPlatformVersion>10.0.26100.0</WindowsTargetPlatformVersion>
     <ProjectName>Editor</ProjectName>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
@@ -212,34 +212,73 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="..\..\source\add_creature_dialog.cpp" />
     <ClCompile Include="..\..\source\add_item_window.cpp" />
     <ClCompile Include="..\..\source\add_tileset_window.cpp" />
     <ClCompile Include="..\..\source\artprovider.cpp" />
     <ClCompile Include="..\..\source\automagic_settings.cpp" />
     <ClCompile Include="..\..\source\borderize_window.cpp" />
+    <ClCompile Include="..\..\source\border_editor_window.cpp" />
     <ClCompile Include="..\..\source\brush_tables.cpp" />
+    <ClCompile Include="..\..\source\chat_window.cpp" />
     <ClCompile Include="..\..\source\container_properties_window.cpp" />
+    <ClCompile Include="..\..\source\creature_sprite_manager.cpp" />
     <ClCompile Include="..\..\source\dark_mode_manager.cpp" />
+    <ClCompile Include="..\..\source\doodads_filling_dialog.cpp" />
+    <ClCompile Include="..\..\source\find_creature_window.cpp" />
     <ClCompile Include="..\..\source\find_item_window.cpp" />
     <ClCompile Include="..\..\source\ground_validation_dialog.cpp" />
     <ClCompile Include="..\..\source\hotkey_manager.cpp" />
-    <ClCompile Include="..\..\source\island_generator_dialog.cpp" />
+    <ClCompile Include="..\..\source\item_editor_window.cpp" />
     <ClCompile Include="..\..\source\light_drawer.cpp" />
+    <ClCompile Include="..\..\source\map_summary_window.cpp" />
+    <ClCompile Include="..\..\source\monster_attack_dialog.cpp" />
+    <ClCompile Include="..\..\source\monster_defense_dialog.cpp" />
+    <ClCompile Include="..\..\source\monster_loot_dialog.cpp" />
+    <ClCompile Include="..\..\source\monster_maker_window.cpp" />
+    <ClCompile Include="..\..\source\monster_manager.cpp" />
+    <ClCompile Include="..\..\source\color_palette_ctrl.cpp" />
+    <ClCompile Include="..\..\source\notes_window.cpp" />
+    <ClCompile Include="..\..\source\npc_manager.cpp" />
+    <ClCompile Include="..\..\source\otmapgen.cpp" />
+    <ClCompile Include="..\..\source\otmapgen_dialog.cpp" />
+    <ClCompile Include="..\..\source\recent_brushes_window.cpp" />
     <ClCompile Include="..\..\source\replace_items_window.cpp" />
+    <ClCompile Include="..\..\source\revscript_manager.cpp" />
     <ClCompile Include="..\..\source\string_utils.cpp" />
     <ClCompile Include="..\..\source\tileset_window.cpp" />
+    <ClCompile Include="..\..\source\wallize_window.cpp" />
     <ClCompile Include="..\..\source\welcome_dialog.cpp" />
+    <ClInclude Include="..\..\source\add_creature_dialog.h" />
     <ClInclude Include="..\..\source\add_item_window.h" />
     <ClInclude Include="..\..\source\add_tileset_window.h" />
     <ClInclude Include="..\..\source\artprovider.h" />
     <ClInclude Include="..\..\source\automagic_settings.h" />
     <ClInclude Include="..\..\source\borderize_window.h" />
+    <ClInclude Include="..\..\source\border_editor_window.h" />
+    <ClInclude Include="..\..\source\chat_window.h" />
+    <ClInclude Include="..\..\source\color_utils.h" />
+    <ClInclude Include="..\..\source\creature_sprite_manager.h" />
+    <ClInclude Include="..\..\source\dark_mode_manager.h" />
+    <ClInclude Include="..\..\source\doodads_filling_dialog.h" />
+    <ClInclude Include="..\..\source\find_creature_window.h" />
     <ClInclude Include="..\..\source\ground_validation_dialog.h" />
     <ClInclude Include="..\..\source\hotkey_manager.h" />
-    <ClInclude Include="..\..\source\island_generator_dialog.h" />
+    <ClInclude Include="..\..\source\item_editor_window.h" />
     <ClInclude Include="..\..\source\light_drawer.h" />
     <ClInclude Include="..\..\source\live_action_packets.h" />
     <ClInclude Include="..\..\source\main_toolbar.h" />
+    <ClInclude Include="..\..\source\map_summary_window.h" />
+    <ClInclude Include="..\..\source\monster_attack_dialog.h" />
+    <ClInclude Include="..\..\source\monster_defense_dialog.h" />
+    <ClInclude Include="..\..\source\monster_loot_dialog.h" />
+    <ClInclude Include="..\..\source\monster_maker_window.h" />
+    <ClInclude Include="..\..\source\monster_manager.h" />
+    <ClInclude Include="..\..\source\color_palette_ctrl.h" />
+    <ClInclude Include="..\..\source\notes_window.h" />
+    <ClInclude Include="..\..\source\npc_manager.h" />
+    <ClInclude Include="..\..\source\otmapgen.h" />
+    <ClInclude Include="..\..\source\otmapgen_dialog.h" />
     <ClInclude Include="..\..\source\otml.h" />
     <ClInclude Include="..\..\source\browse_tile_window.h" />
     <ClCompile Include="..\..\source\browse_tile_window.cpp" />
@@ -251,7 +290,6 @@
     <ClInclude Include="..\..\source\common.h" />
     <ClCompile Include="..\..\source\common.cpp" />
     <ClInclude Include="..\..\source\container_properties_window.h" />
-    <ClInclude Include="..\..\source\dark_mode_manager.h" />
     <ClInclude Include="..\..\source\con_vector.h" />
     <ClInclude Include="..\..\source\creature_brush.h" />
     <ClCompile Include="..\..\source\creature_brush.cpp" />
@@ -299,7 +337,9 @@
     <ClCompile Include="..\..\source\numbertextctrl.cpp" />
     <ClCompile Include="..\..\source\properties_window.cpp" />
     <ClCompile Include="..\..\source\raw_brush.cpp" />
+    <ClInclude Include="..\..\source\recent_brushes_window.h" />
     <ClInclude Include="..\..\source\replace_items_window.h" />
+    <ClInclude Include="..\..\source\revscript_manager.h" />
     <ClInclude Include="..\..\source\rme_forward_declarations.h" />
     <ClInclude Include="..\..\source\rme_net.h" />
     <ClCompile Include="..\..\source\rme_net.cpp" />
@@ -411,6 +451,7 @@
     <ClCompile Include="..\..\source\tile.cpp" />
     <ClInclude Include="..\..\source\town.h" />
     <ClCompile Include="..\..\source\town.cpp" />
+    <ClInclude Include="..\..\source\wallize_window.h" />
     <ClInclude Include="..\..\source\wall_brush.h" />
     <ClCompile Include="..\..\source\wall_brush.cpp" />
     <ClInclude Include="..\..\source\waypoints.h" />
@@ -432,6 +473,7 @@
     <ClInclude Include="..\..\source\main.h" />
     <ClInclude Include="..\..\source\waypoint_brush.h" />
     <ClCompile Include="..\..\source\waypoint_brush.cpp" />
+    <ClInclude Include="..\..\source\find_item_window.h" />
     <ClInclude Include="..\..\source\welcome_dialog.h" />
   </ItemGroup>
   <ItemGroup>

@@ -4,6 +4,7 @@ ${CMAKE_CURRENT_LIST_DIR}/action.h
 ${CMAKE_CURRENT_LIST_DIR}/application.h
 ${CMAKE_CURRENT_LIST_DIR}/artprovider.h
 ${CMAKE_CURRENT_LIST_DIR}/basemap.h
+${CMAKE_CURRENT_LIST_DIR}/border_editor_window.h
 ${CMAKE_CURRENT_LIST_DIR}/browse_tile_window.h
 ${CMAKE_CURRENT_LIST_DIR}/brush.h
 ${CMAKE_CURRENT_LIST_DIR}/brush_enums.h
@@ -18,6 +19,7 @@ ${CMAKE_CURRENT_LIST_DIR}/copybuffer.h
 ${CMAKE_CURRENT_LIST_DIR}/creature.h
 ${CMAKE_CURRENT_LIST_DIR}/creature_brush.h
 ${CMAKE_CURRENT_LIST_DIR}/creatures.h
+${CMAKE_CURRENT_LIST_DIR}/creature_sprite_manager.h
 ${CMAKE_CURRENT_LIST_DIR}/dat_debug_view.h
 ${CMAKE_CURRENT_LIST_DIR}/dcbutton.h
 ${CMAKE_CURRENT_LIST_DIR}/definitions.h
@@ -54,6 +56,8 @@ ${CMAKE_CURRENT_LIST_DIR}/main.h
 ${CMAKE_CURRENT_LIST_DIR}/main_menubar.h
 ${CMAKE_CURRENT_LIST_DIR}/main_toolbar.h
 ${CMAKE_CURRENT_LIST_DIR}/map.h
+${CMAKE_CURRENT_LIST_DIR}/monster_manager.h
+${CMAKE_CURRENT_LIST_DIR}/monster_maker_window.h
 ${CMAKE_CURRENT_LIST_DIR}/map_allocator.h
 ${CMAKE_CURRENT_LIST_DIR}/map_display.h
 ${CMAKE_CURRENT_LIST_DIR}/map_drawer.h
@@ -64,6 +68,7 @@ ${CMAKE_CURRENT_LIST_DIR}/materials.h
 ${CMAKE_CURRENT_LIST_DIR}/minimap_window.h
 ${CMAKE_CURRENT_LIST_DIR}/mt_rand.h
 ${CMAKE_CURRENT_LIST_DIR}/net_connection.h
+${CMAKE_CURRENT_LIST_DIR}/notes_window.h
 ${CMAKE_CURRENT_LIST_DIR}/numbertextctrl.h
 ${CMAKE_CURRENT_LIST_DIR}/old_properties_window.h
 ${CMAKE_CURRENT_LIST_DIR}/otml.h
@@ -83,6 +88,7 @@ ${CMAKE_CURRENT_LIST_DIR}/properties_window.h
 ${CMAKE_CURRENT_LIST_DIR}/raw_brush.h
 ${CMAKE_CURRENT_LIST_DIR}/replace_items_window.h
 ${CMAKE_CURRENT_LIST_DIR}/result_window.h
+${CMAKE_CURRENT_LIST_DIR}/revscript_manager.h
 ${CMAKE_CURRENT_LIST_DIR}/rme_forward_declarations.h
 ${CMAKE_CURRENT_LIST_DIR}/rme_net.h
 ${CMAKE_CURRENT_LIST_DIR}/selection.h
@@ -109,6 +115,7 @@ ${CMAKE_CURRENT_LIST_DIR}/action.cpp
 ${CMAKE_CURRENT_LIST_DIR}/application.cpp
 ${CMAKE_CURRENT_LIST_DIR}/artprovider.cpp
 ${CMAKE_CURRENT_LIST_DIR}/basemap.cpp
+${CMAKE_CURRENT_LIST_DIR}/border_editor_window.cpp
 ${CMAKE_CURRENT_LIST_DIR}/brush.cpp
 ${CMAKE_CURRENT_LIST_DIR}/brush_tables.cpp
 ${CMAKE_CURRENT_LIST_DIR}/browse_tile_window.cpp
@@ -123,6 +130,7 @@ ${CMAKE_CURRENT_LIST_DIR}/copybuffer.cpp
 ${CMAKE_CURRENT_LIST_DIR}/creature_brush.cpp
 ${CMAKE_CURRENT_LIST_DIR}/creature.cpp
 ${CMAKE_CURRENT_LIST_DIR}/creatures.cpp
+${CMAKE_CURRENT_LIST_DIR}/creature_sprite_manager.cpp
 ${CMAKE_CURRENT_LIST_DIR}/dat_debug_view.cpp
 ${CMAKE_CURRENT_LIST_DIR}/dcbutton.cpp
 ${CMAKE_CURRENT_LIST_DIR}/doodad_brush.cpp
@@ -162,9 +170,12 @@ ${CMAKE_CURRENT_LIST_DIR}/map_tab.cpp
 ${CMAKE_CURRENT_LIST_DIR}/map_window.cpp
 ${CMAKE_CURRENT_LIST_DIR}/materials.cpp
 ${CMAKE_CURRENT_LIST_DIR}/minimap_window.cpp
+${CMAKE_CURRENT_LIST_DIR}/monster_manager.cpp
+${CMAKE_CURRENT_LIST_DIR}/monster_maker_window.cpp
 ${CMAKE_CURRENT_LIST_DIR}/mkpch.cpp
 ${CMAKE_CURRENT_LIST_DIR}/mt_rand.cpp
 ${CMAKE_CURRENT_LIST_DIR}/net_connection.cpp
+${CMAKE_CURRENT_LIST_DIR}/notes_window.cpp
 ${CMAKE_CURRENT_LIST_DIR}/numbertextctrl.cpp
 ${CMAKE_CURRENT_LIST_DIR}/old_properties_window.cpp
 ${CMAKE_CURRENT_LIST_DIR}/palette_brushlist.cpp
@@ -180,6 +191,7 @@ ${CMAKE_CURRENT_LIST_DIR}/properties_window.cpp
 ${CMAKE_CURRENT_LIST_DIR}/raw_brush.cpp
 ${CMAKE_CURRENT_LIST_DIR}/replace_items_window.cpp
 ${CMAKE_CURRENT_LIST_DIR}/result_window.cpp
+${CMAKE_CURRENT_LIST_DIR}/revscript_manager.cpp
 ${CMAKE_CURRENT_LIST_DIR}/rme_net.cpp
 ${CMAKE_CURRENT_LIST_DIR}/selection.cpp
 ${CMAKE_CURRENT_LIST_DIR}/settings.cpp

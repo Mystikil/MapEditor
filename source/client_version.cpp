@@ -486,25 +486,164 @@ bool ClientVersion::hasValidPaths() {
 }
 
 bool ClientVersion::loadValidPaths() {
+	// Try to automatically find the path before asking the user
+	if (!hasValidPaths()) {
+		// Get data directory paths
+		wxString dataDir = g_gui.GetDataDirectory();
+		if (!wxFileName(dataDir).DirExists()) {
+			dataDir = g_gui.getFoundDataDirectory();
+		}
+		
+		// Convert version string to potential directory format
+		std::string versionStr = name;
+		
+		// Try different potential directory formats
+		std::vector<wxString> potentialPaths;
+		
+		// Try original version string (e.g., "10.98")
+		potentialPaths.push_back(dataDir + wxFileName::GetPathSeparator() + wxString(versionStr));
+		
+		// Remove dots (e.g., "1098")
+		std::string noDots = versionStr;
+		noDots.erase(std::remove(noDots.begin(), noDots.end(), '.'), noDots.end());
+		potentialPaths.push_back(dataDir + wxFileName::GetPathSeparator() + wxString(noDots));
+		
+		// Special case for 2-digit versions (add 0)
+		if (noDots.length() == 2) {
+			potentialPaths.push_back(dataDir + wxFileName::GetPathSeparator() + wxString(noDots + "0"));
+		}
+		
+		// Special case for 10.10 -> 10100
+		if (versionStr == "10.10") {
+			potentialPaths.push_back(dataDir + wxFileName::GetPathSeparator() + "10100");
+		}
+		
+		// Special case for other versions with specific directory names
+		std::map<std::string, std::string> specialCases = {
+			{"7.4", "740"},
+			{"7.6", "760"},
+			{"7.7", "770"},
+			{"8.0", "800"},
+			{"8.1", "810"},
+			{"8.6", "860"},
+			{"9.6", "960"},
+			{"10.50", "1050"},
+			{"10.57", "1057"}
+		};
+		
+		if (specialCases.find(versionStr) != specialCases.end()) {
+			potentialPaths.push_back(dataDir + wxFileName::GetPathSeparator() + wxString(specialCases[versionStr]));
+		}
+		
+		// Try all potential paths
+		for (const wxString& path : potentialPaths) {
+			// Try with exact path
+			client_path.Assign(path + wxFileName::GetPathSeparator());
+			if (hasValidPaths()) {
+				ClientVersion::saveVersions();
+				return true;
+			}
+			
+			// Also try with /assets/ subfolder which is common in newer clients
+			wxString assetsPath = path + wxFileName::GetPathSeparator() + "assets" + wxFileName::GetPathSeparator();
+			if (wxDir::Exists(assetsPath)) {
+				client_path.Assign(assetsPath);
+				if (hasValidPaths()) {
+					ClientVersion::saveVersions();
+					return true;
+				}
+			}
+		}
+	} else {
+		// Already has valid paths
+		return true;
+	}
+
+	// If we get here, we couldn't find valid paths automatically
+	// Now prompt the user as before
 	while (!hasValidPaths()) {
 		wxString message = "Could not locate metadata and/or sprite files, please navigate to your client assets %s installation folder.\n";
 		message << "Attempted metadata file: %s\n";
 		message << "Attempted sprites file: %s\n";
 
+		// Create a custom dialog with version selection
+		wxDialog* dialog = new wxDialog(nullptr, wxID_ANY, "Select Client Version", wxDefaultPosition, wxSize(400, 200));
+		wxBoxSizer* mainSizer = new wxBoxSizer(wxVERTICAL);
+		
+		// Add version selection dropdown
+		wxStaticText* versionLabel = new wxStaticText(dialog, wxID_ANY, "Select Client Version:");
+		wxChoice* versionChoice = new wxChoice(dialog, wxID_ANY);
+		
+		// Add all visible versions to the dropdown
+		ClientVersionList versions = ClientVersion::getAllVisible();
+		for (const auto& version : versions) {
+			versionChoice->Append(wxstr(version->getName()));
+		}
+		
+		// Set current version as default selection
+		versionChoice->SetStringSelection(wxstr(name));
+		
+		// Add force load checkbox
+		wxCheckBox* forceLoadCheckbox = new wxCheckBox(dialog, wxID_ANY, "Force load version");
+		
+		// Add directory selection
+		wxString dirHelpText("Select assets directory.");
+		wxDirPickerCtrl* dirPicker = new wxDirPickerCtrl(dialog, wxID_ANY, "", dirHelpText, wxDefaultPosition, wxDefaultSize, wxDIRP_USE_TEXTCTRL | wxDIRP_DIR_MUST_EXIST);
+		
+		// Add buttons
+		wxBoxSizer* buttonSizer = new wxBoxSizer(wxHORIZONTAL);
+		wxButton* okButton = new wxButton(dialog, wxID_OK, "OK");
+		wxButton* cancelButton = new wxButton(dialog, wxID_CANCEL, "Cancel");
+		buttonSizer->Add(okButton, 0, wxALL, 5);
+		buttonSizer->Add(cancelButton, 0, wxALL, 5);
+		
+		// Add all elements to main sizer
+		mainSizer->Add(versionLabel, 0, wxALL, 5);
+		mainSizer->Add(versionChoice, 0, wxEXPAND | wxALL, 5);
+		mainSizer->Add(forceLoadCheckbox, 0, wxALL, 5);
+		mainSizer->Add(dirPicker, 0, wxEXPAND | wxALL, 5);
+		mainSizer->Add(buttonSizer, 0, wxALIGN_CENTER | wxALL, 5);
+		
+		dialog->SetSizer(mainSizer);
+		
+		// Show error message first
 		g_gui.PopupDialog("Error", wxString::Format(message, name, metadata_path.GetFullPath(), sprites_path.GetFullPath()), wxOK);
 
-		wxString dirHelpText("Select assets directory.");
-		wxDirDialog file_dlg(nullptr, dirHelpText, "", wxDD_DIR_MUST_EXIST);
-		int ok = file_dlg.ShowModal();
-		if (ok == wxID_CANCEL) {
+		// Show the dialog
+		int result = dialog->ShowModal();
+		if (result == wxID_CANCEL) {
+			dialog->Destroy();
 			return false;
 		}
 
-		client_path.Assign(file_dlg.GetPath() + FileName::GetPathSeparator());
+		// Get selected version
+		wxString selectedVersion = versionChoice->GetStringSelection();
+		bool forceLoad = forceLoadCheckbox->GetValue();
+		
+		// If force load is checked, update the version
+		if (forceLoad) {
+			ClientVersion* newVersion = ClientVersion::get(nstr(selectedVersion));
+			if (newVersion) {
+				// Copy individual members instead of using assignment operator
+				otb = newVersion->otb;
+				name = newVersion->name;
+				visible = newVersion->visible;
+				preferred_map_version = newVersion->preferred_map_version;
+				data_path = newVersion->data_path;
+				data_versions = newVersion->data_versions;
+				map_versions_supported = newVersion->map_versions_supported;
+				extension_versions = newVersion->extension_versions;
+				usesFuckedUpCharges = newVersion->usesFuckedUpCharges;
+			}
+		}
+		
+		// Update client path
+		client_path.Assign(dirPicker->GetPath() + FileName::GetPathSeparator());
+		
+		dialog->Destroy();
 	}
 
 	ClientVersion::saveVersions();
-
 	return true;
 }
 

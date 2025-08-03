@@ -42,6 +42,7 @@ EVT_CHOICE(PALETTE_HOUSE_TOWN_CHOICE, HousePalettePanel::OnTownChange)
 
 EVT_LISTBOX(PALETTE_HOUSE_LISTBOX, HousePalettePanel::OnListBoxChange)
 EVT_LISTBOX_DCLICK(PALETTE_HOUSE_LISTBOX, HousePalettePanel::OnListBoxDoubleClick)
+EVT_CONTEXT_MENU(HousePalettePanel::OnListBoxContextMenu)
 
 EVT_BUTTON(PALETTE_HOUSE_ADD_HOUSE, HousePalettePanel::OnClickAddHouse)
 EVT_BUTTON(PALETTE_HOUSE_EDIT_HOUSE, HousePalettePanel::OnClickEditHouse)
@@ -49,6 +50,8 @@ EVT_BUTTON(PALETTE_HOUSE_REMOVE_HOUSE, HousePalettePanel::OnClickRemoveHouse)
 
 EVT_TOGGLEBUTTON(PALETTE_HOUSE_BRUSH_BUTTON, HousePalettePanel::OnClickHouseBrushButton)
 EVT_TOGGLEBUTTON(PALETTE_HOUSE_SELECT_EXIT_BUTTON, HousePalettePanel::OnClickSelectExitButton)
+
+EVT_MENU(PALETTE_HOUSE_CONTEXT_MOVE_TO_TOWN, HousePalettePanel::OnMoveHouseToTown)
 END_EVENT_TABLE()
 
 HousePalettePanel::HousePalettePanel(wxWindow* parent, wxWindowID id) :
@@ -63,11 +66,13 @@ HousePalettePanel::HousePalettePanel(wxWindow* parent, wxWindowID id) :
 	town_choice = newd wxChoice(this, PALETTE_HOUSE_TOWN_CHOICE, wxDefaultPosition, wxDefaultSize, (int)0, (const wxString*)nullptr);
 	sidesizer->Add(town_choice, 0, wxEXPAND);
 
-	house_list = newd SortableListBox(this, PALETTE_HOUSE_LISTBOX);
+	house_list = newd SortableListBox(this, PALETTE_HOUSE_LISTBOX, wxDefaultPosition, wxDefaultSize, 0, nullptr, wxLB_EXTENDED);
 #ifdef __APPLE__
 	// Used for detecting a deselect
 	house_list->Bind(wxEVT_LEFT_UP, &HousePalettePanel::OnListBoxClick, this);
 #endif
+	// Bind context menu event to the list box
+	house_list->Bind(wxEVT_CONTEXT_MENU, &HousePalettePanel::OnListBoxContextMenu, this);
 	sidesizer->Add(house_list, 1, wxEXPAND);
 
 	tmpsizer = newd wxBoxSizer(wxHORIZONTAL);
@@ -97,6 +102,10 @@ HousePalettePanel::HousePalettePanel(wxWindow* parent, wxWindowID id) :
 	topsizer->Add(sidesizer, 0, wxEXPAND);
 
 	SetSizerAndFit(topsizer);
+
+	// Create context menu
+	context_menu = newd wxMenu();
+	context_menu->Append(PALETTE_HOUSE_CONTEXT_MOVE_TO_TOWN, "Move to Town...");
 }
 
 HousePalettePanel::~HousePalettePanel() {
@@ -229,6 +238,12 @@ void HousePalettePanel::SelectHouse(size_t index) {
 		remove_house_button->Enable(true);
 		select_position_button->Enable(true);
 		house_brush_button->Enable(true);
+		
+		// Clear any existing selections first
+		for (unsigned int i = 0; i < house_list->GetCount(); ++i) {
+			house_list->Deselect(i);
+		}
+		
 		// Select the house
 		house_list->SetSelection(index);
 		SelectHouseBrush();
@@ -245,9 +260,10 @@ void HousePalettePanel::SelectHouse(size_t index) {
 }
 
 House* HousePalettePanel::GetCurrentlySelectedHouse() const {
-	int selection = house_list->GetSelection();
-	if (house_list->GetCount() > 0 && selection != wxNOT_FOUND) {
-		return reinterpret_cast<House*>(house_list->GetClientData(selection));
+	wxArrayInt selections;
+	if (house_list->GetCount() > 0 && house_list->GetSelections(selections) > 0) {
+		// Return the first selected house (for brush operations)
+		return reinterpret_cast<House*>(house_list->GetClientData(selections[0]));
 	}
 	return nullptr;
 }
@@ -314,15 +330,189 @@ void HousePalettePanel::OnTownChange(wxCommandEvent& event) {
 }
 
 void HousePalettePanel::OnListBoxChange(wxCommandEvent& event) {
-	SelectHouse(event.GetSelection());
-	g_gui.SelectBrush();
+	// Check if there are multiple selections
+	wxArrayInt selections;
+	int count = house_list->GetSelections(selections);
+	
+	if (count == 1) {
+		// Only one selection - handle it
+		SelectHouse(event.GetSelection());
+		g_gui.SelectBrush();
+	} else if (count > 1) {
+		// Multiple selections - enable/disable buttons appropriately
+		edit_house_button->Enable(false); // Can only edit one house at a time
+		remove_house_button->Enable(true);
+		house_brush_button->Enable(true);
+		select_position_button->Enable(true);
+	}
+}
+// Goto house stolen from rme
+void HousePalettePanel::OnListBoxDoubleClick(wxCommandEvent& event) {
+	if (House* house = reinterpret_cast<House*>(event.GetClientData())) {
+		const Position& position = house->getExit();
+		if (!position.isValid()) {
+			// find a valid tile position
+			for (const Position& tilePosition : house->getTiles()) {
+				if (tilePosition.isValid()) {
+					g_gui.SetScreenCenterPosition(tilePosition);
+					break;
+				}
+			}
+		} else {
+			g_gui.SetScreenCenterPosition(position);
+	
+		}
+	}
 }
 
-void HousePalettePanel::OnListBoxDoubleClick(wxCommandEvent& event) {
-	House* house = reinterpret_cast<House*>(event.GetClientData());
-	// I find it extremly unlikely that one actually wants the exit at 0,0,0, so just treat it as the null value
-	if (house && house->getExit() != Position(0, 0, 0)) {
-		g_gui.SetScreenCenterPosition(house->getExit());
+void HousePalettePanel::OnListBoxContextMenu(wxContextMenuEvent& event) {
+	if (map == nullptr || house_list->GetCount() == 0) {
+		return;
+	}
+
+	// Only enable the menu if at least one house is selected
+	wxArrayInt selections;
+	if (house_list->GetSelections(selections) > 0) {
+		// Get mouse position in screen coordinates
+		wxPoint position = event.GetPosition();
+		// If position is (-1, -1), this means the event was generated from the keyboard (e.g., Shift+F10)
+		// In this case, get the position of the first selected item
+		if (position == wxPoint(-1, -1)) {
+			// Get the client rect of the first selected item
+			wxRect rect;
+			house_list->GetItemRect(selections[0], rect);
+			// Convert to screen coordinates
+			position = house_list->ClientToScreen(rect.GetPosition());
+		}
+		// Show context menu at the proper position
+		PopupMenu(context_menu, house_list->ScreenToClient(position));
+	}
+}
+
+void HousePalettePanel::OnMoveHouseToTown(wxCommandEvent& event) {
+	if (map == nullptr || map->towns.count() == 0) {
+		return;
+	}
+
+	// Get all selected houses
+	wxArrayInt selections;
+	int count = house_list->GetSelections(selections);
+	
+	if (count == 0) {
+		return;
+	}
+	
+	// Create a more informative title based on number of selected houses
+	wxString title = count == 1 ? "Move House to Town" : wxString::Format("Move %d Houses to Town", count);
+
+	// Create dialog to select town
+	wxDialog* dialog = newd wxDialog(this, wxID_ANY, title, wxDefaultPosition, wxSize(220, 150));
+	wxSizer* sizer = newd wxBoxSizer(wxVERTICAL);
+	
+	// Create choice control with towns
+	wxChoice* town_list = newd wxChoice(dialog, wxID_ANY);
+	for (TownMap::const_iterator town_iter = map->towns.begin(); town_iter != map->towns.end(); ++town_iter) {
+		town_list->Append(wxstr(town_iter->second->getName()), town_iter->second);
+	}
+	
+	if (town_list->GetCount() > 0) {
+		town_list->SetSelection(0);
+	}
+	
+	sizer->Add(newd wxStaticText(dialog, wxID_ANY, "Select destination town:"), 0, wxEXPAND | wxALL, 5);
+	sizer->Add(town_list, 0, wxEXPAND | wxALL, 5);
+	
+	// Add OK/Cancel buttons
+	wxSizer* button_sizer = newd wxBoxSizer(wxHORIZONTAL);
+	button_sizer->Add(newd wxButton(dialog, wxID_OK, "OK"), wxSizerFlags(1).Center());
+	button_sizer->Add(newd wxButton(dialog, wxID_CANCEL, "Cancel"), wxSizerFlags(1).Center());
+	sizer->Add(button_sizer, 0, wxALIGN_CENTER | wxALL, 5);
+	
+	dialog->SetSizer(sizer);
+	
+	// Show dialog
+	if (dialog->ShowModal() == wxID_OK) {
+		if (town_list->GetSelection() != wxNOT_FOUND) {
+			Town* town = reinterpret_cast<Town*>(town_list->GetClientData(town_list->GetSelection()));
+			if (town) {
+				// Change town for each selected house
+				for (size_t i = 0; i < selections.GetCount(); ++i) {
+					House* house = reinterpret_cast<House*>(house_list->GetClientData(selections[i]));
+					if (house) {
+						house->townid = town->getID();
+					}
+				}
+				
+				// Refresh the house list
+				RefreshHouseList();
+				
+				// Refresh the map
+				g_gui.RefreshView();
+			}
+		}
+	}
+	
+	dialog->Destroy();
+}
+
+void HousePalettePanel::RefreshHouseList() {
+	// Preserve current selections
+	wxArrayInt selections;
+	house_list->GetSelections(selections);
+	std::vector<uint32_t> selected_house_ids;
+	
+	// Store IDs of all selected houses
+	for (size_t i = 0; i < selections.GetCount(); ++i) {
+		House* house = reinterpret_cast<House*>(house_list->GetClientData(selections[i]));
+		if (house) {
+			selected_house_ids.push_back(house->getID());
+		}
+	}
+	
+	// Reload the house list
+	Town* what_town = reinterpret_cast<Town*>(town_choice->GetClientData(town_choice->GetSelection()));
+	
+	// Clear the old houselist
+	house_list->Clear();
+	
+	for (HouseMap::iterator house_iter = map->houses.begin(); house_iter != map->houses.end(); ++house_iter) {
+		if (what_town) {
+			if (house_iter->second->townid == what_town->getID()) {
+				house_list->Append(wxstr(house_iter->second->getDescription()), house_iter->second);
+			}
+		} else {
+			// "No Town" selected!
+			if (map->towns.getTown(house_iter->second->townid) == nullptr) {
+				// The town doesn't exist
+				house_list->Append(wxstr(house_iter->second->getDescription()), house_iter->second);
+			}
+		}
+	}
+	house_list->Sort();
+	
+	// Try to restore previous selections
+	bool foundAny = false;
+	for (unsigned int i = 0; i < house_list->GetCount(); ++i) {
+		House* house = reinterpret_cast<House*>(house_list->GetClientData(i));
+		if (house) {
+			for (uint32_t selected_id : selected_house_ids) {
+				if (house->getID() == selected_id) {
+					house_list->SetSelection(i);
+					foundAny = true;
+					break;
+				}
+			}
+		}
+	}
+	
+	// If no selections could be restored, ensure buttons are in correct state
+	if (!foundAny && house_list->GetCount() > 0) {
+		SelectHouse(0);
+	} else if (!foundAny) {
+		edit_house_button->Enable(false);
+		remove_house_button->Enable(false);
+		select_position_button->Enable(false);
+		house_brush_button->Enable(false);
 	}
 }
 
@@ -366,7 +556,15 @@ void HousePalettePanel::OnClickEditHouse(wxCommandEvent& event) {
 	if (map == nullptr) {
 		return;
 	}
-	int selection = house_list->GetSelection();
+	
+	// Only edit if a single house is selected
+	wxArrayInt selections;
+	if (house_list->GetSelections(selections) != 1) {
+		wxMessageBox("Please select only one house to edit.", "Edit House", wxOK | wxICON_INFORMATION);
+		return;
+	}
+	
+	int selection = selections[0];
 	House* house = reinterpret_cast<House*>(house_list->GetClientData(selection));
 	if (house) {
 		wxDialog* d = newd EditHouseDialog(g_gui.root, map, house);
@@ -385,29 +583,53 @@ void HousePalettePanel::OnClickEditHouse(wxCommandEvent& event) {
 }
 
 void HousePalettePanel::OnClickRemoveHouse(wxCommandEvent& event) {
-	int selection = house_list->GetSelection();
-	if (selection != wxNOT_FOUND) {
+	wxArrayInt selections;
+	int count = house_list->GetSelections(selections);
+	
+	if (count == 0) {
+		return;
+	}
+	
+	// Ask for confirmation when removing multiple houses
+	if (count > 1) {
+		wxString message = wxString::Format("Are you sure you want to remove %d houses?", count);
+		int response = wxMessageBox(message, "Confirm Removal", wxYES_NO | wxICON_QUESTION);
+		if (response != wxYES) {
+			return;
+		}
+	}
+	
+	// Sort selections in descending order to avoid index issues when deleting
+	std::sort(selections.begin(), selections.end(), std::greater<int>());
+	
+	// Remove all selected houses
+	for (size_t i = 0; i < selections.GetCount(); ++i) {
+		int selection = selections[i];
 		House* house = reinterpret_cast<House*>(house_list->GetClientData(selection));
 		map->houses.removeHouse(house);
 		house_list->Delete(selection);
-		refresh_timer.Start(300, true);
-
-		if (int(house_list->GetCount()) <= selection) {
-			selection -= 1;
-		}
-
-		if (selection >= 0 && house_list->GetCount()) {
-			house_list->SetSelection(selection);
-		} else {
-			select_position_button->Enable(false);
-			select_position_button->SetValue(false);
-			house_brush_button->Enable(false);
-			house_brush_button->SetValue(false);
-			edit_house_button->Enable(false);
-			remove_house_button->Enable(false);
-		}
-		g_gui.SelectBrush();
 	}
+	
+	refresh_timer.Start(300, true);
+	
+	// Select an appropriate remaining item if possible
+	if (house_list->GetCount() > 0) {
+		int new_selection = std::min(selections.back(), (int)house_list->GetCount() - 1);
+		house_list->SetSelection(new_selection);
+		edit_house_button->Enable(true);
+		remove_house_button->Enable(true);
+		select_position_button->Enable(true);
+		house_brush_button->Enable(true);
+	} else {
+		select_position_button->Enable(false);
+		select_position_button->SetValue(false);
+		house_brush_button->Enable(false);
+		house_brush_button->SetValue(false);
+		edit_house_button->Enable(false);
+		remove_house_button->Enable(false);
+	}
+	
+	g_gui.SelectBrush();
 	g_gui.RefreshView();
 }
 

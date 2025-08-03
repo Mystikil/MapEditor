@@ -57,6 +57,7 @@ protected:
 
 	void SelectHouseBrush();
 	void SelectExitBrush();
+	void RefreshHouseList();
 
 public:
 	// wxWidgets event handling
@@ -68,6 +69,8 @@ public:
 	void OnClickAddHouse(wxCommandEvent& event);
 	void OnClickEditHouse(wxCommandEvent& event);
 	void OnClickRemoveHouse(wxCommandEvent& event);
+	void OnListBoxContextMenu(wxContextMenuEvent& event);
+	void OnMoveHouseToTown(wxCommandEvent& event);
 
 #ifdef __APPLE__
 	// Used for detecting a deselect
@@ -83,6 +86,7 @@ protected:
 	wxButton* add_house_button;
 	wxButton* edit_house_button;
 	wxButton* remove_house_button;
+	wxMenu* context_menu;
 
 	// Used for ugly hack
 	bool do_resize_on_display;

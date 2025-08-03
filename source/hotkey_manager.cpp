@@ -269,7 +269,17 @@ void HotkeyManager::ShowHotkeyDialog(wxWindow* parent) {
         // Handle modifier keys
         if (keyCode == WXK_SHIFT || keyCode == WXK_CONTROL || keyCode == WXK_ALT) {
             currentModifiers.insert(keyCode);
-            UpdateHotkeyString(hotkeyEdit);
+            wxString currentValue = hotkeyEdit->GetValue();
+            // Only update if the modifier isn't already in the string
+            wxString modStr = ModifierKeyToString(keyCode);
+            if (!currentValue.Contains(modStr)) {
+                if (!currentValue.empty() && !currentValue.EndsWith("+")) {
+                    currentValue += "+";
+                }
+                currentValue += modStr;
+                hotkeyEdit->SetValue(currentValue);
+            }
+            event.Skip(false);
             return;
         }
         
@@ -291,15 +301,20 @@ void HotkeyManager::ShowHotkeyDialog(wxWindow* parent) {
                 finalKey = wxString(static_cast<wxChar>(keyCode));
             }
             
-            // Build the complete hotkey string
-            wxString hotkeyStr;
-            if (currentModifiers.count(WXK_CONTROL)) hotkeyStr += "Ctrl+";
-            if (currentModifiers.count(WXK_SHIFT)) hotkeyStr += "Shift+";
-            if (currentModifiers.count(WXK_ALT)) hotkeyStr += "Alt+";
-            hotkeyStr += finalKey;
+            // Build the complete hotkey string while preserving existing modifiers
+            wxString currentValue = hotkeyEdit->GetValue();
+            if (!currentValue.empty() && !currentValue.EndsWith("+")) {
+                // If we already have a key, replace it
+                size_t lastPlus = currentValue.find_last_of('+');
+                if (lastPlus != wxString::npos) {
+                    currentValue = currentValue.substr(0, lastPlus + 1);
+                } else {
+                    currentValue = "";
+                }
+            }
+            currentValue += finalKey;
             
-            hotkeyEdit->SetValue(hotkeyStr);
-            currentModifiers.clear();
+            hotkeyEdit->SetValue(currentValue);
             event.Skip(false);
             return;
         }
@@ -317,8 +332,9 @@ void HotkeyManager::ShowHotkeyDialog(wxWindow* parent) {
             hotkeyEdit->SetValue("");
             currentModifiers.clear();
         } else if (keyCode == WXK_SHIFT || keyCode == WXK_CONTROL || keyCode == WXK_ALT) {
-            currentModifiers.erase(keyCode);
-            UpdateHotkeyString(hotkeyEdit);
+            // Don't remove modifiers on key up - they should stay until a regular key is pressed
+            // or backspace is used
+            event.Skip(false);
         }
         event.Skip();
     });
@@ -366,9 +382,33 @@ void HotkeyManager::ShowHotkeyDialog(wxWindow* parent) {
         // Check for duplicates
         for (const auto& [existingAction, info] : hotkeys) {
             if (existingAction != action && info.key == newHotkey.ToStdString()) {
-                wxMessageBox("This hotkey is already assigned to: " + wxString(existingAction), 
-                           "Duplicate Hotkey", wxOK | wxICON_ERROR);
-                return;
+                wxMessageDialog* confirmDialog = new wxMessageDialog(
+                    dialog,
+                    "This hotkey is already assigned to: " + wxString(existingAction) + "\n\nDo you want to reassign it?",
+                    "Duplicate Hotkey",
+                    wxYES_NO | wxNO_DEFAULT | wxICON_QUESTION
+                );
+                
+                if (confirmDialog->ShowModal() == wxID_YES) {
+                    // Clear the old hotkey assignment
+                    hotkeys[existingAction].key = "";
+                    // Update the list view to show the cleared hotkey
+                    for (long i = 0; i < hotkeyList->GetItemCount(); i++) {
+                        wxListItem item;
+                        item.SetId(i);
+                        item.SetColumn(1);  // Action column
+                        item.SetMask(wxLIST_MASK_TEXT);
+                        hotkeyList->GetItem(item);
+                        if (item.GetText() == existingAction) {
+                            hotkeyList->SetItem(i, 2, "");  // Clear hotkey column
+                            break;
+                        }
+                    }
+                } else {
+                    return;
+                }
+                delete confirmDialog;
+                break;
             }
         }
         

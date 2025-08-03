@@ -28,6 +28,7 @@ enum SpriteSize {
 	SPRITE_SIZE_16x16,
 	// SPRITE_SIZE_24x24,
 	SPRITE_SIZE_32x32,
+	SPRITE_SIZE_64x64,
 	SPRITE_SIZE_COUNT
 };
 
@@ -65,7 +66,7 @@ private:
 
 class EditorSprite : public Sprite {
 public:
-	EditorSprite(wxBitmap* b16x16, wxBitmap* b32x32);
+	EditorSprite(wxBitmap* b16x16, wxBitmap* b32x32, wxBitmap* b64x64 = nullptr);
 	virtual ~EditorSprite();
 
 	virtual void DrawTo(wxDC* dc, SpriteSize sz, int start_x, int start_y, int width = -1, int height = -1);
@@ -84,6 +85,9 @@ public:
 	GLuint getHardwareID(int _x, int _y, int _layer, int _subtype, int _pattern_x, int _pattern_y, int _pattern_z, int _frame);
 	GLuint getHardwareID(int _x, int _y, int _dir, int _addon, int _pattern_z, const Outfit& _outfit, int _frame); // CreatureDatabase
 	virtual void DrawTo(wxDC* dc, SpriteSize sz, int start_x, int start_y, int width = -1, int height = -1);
+
+	// Method to draw creatures with outfit colors
+	virtual void DrawOutfit(wxDC* dc, SpriteSize sz, int start_x, int start_y, const Outfit& outfit);
 
 	virtual void unloadDC();
 

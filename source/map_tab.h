@@ -40,6 +40,9 @@ public:
 	wxString GetTitle() const;
 	Editor* GetEditor() const;
 	Map* GetMap() const;
+	
+	// Position methods
+	Position GetScreenCenterPosition() const;
 
 	void VisibilityCheck();
 

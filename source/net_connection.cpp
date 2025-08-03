@@ -17,9 +17,6 @@
 
 #include "main.h"
 #include "net_connection.h"
-#include <boost/asio.hpp>
-#include <boost/bind.hpp>
-#include <iostream>
 
 /*
 RME Server-Client Split Roadmap:
@@ -181,11 +178,21 @@ bool NetworkConnection::start() {
 	}
 
 	thread = std::thread([this]() -> void {
-		boost::asio::io_context& io_context = *service;
+		boost::asio::io_context& serviceRef = *service;
+		// Create a work guard to keep the context alive even when there are no pending handlers
+		boost::asio::executor_work_guard<boost::asio::io_context::executor_type> work = 
+			boost::asio::make_work_guard(serviceRef);
+		
 		try {
 			while (!stopped) {
-				io_context.run_one();
-				io_context.restart();
+				// Run one handler at a time
+				serviceRef.run_one();
+				
+				// Instead of reset, just check if we should continue
+				if (serviceRef.stopped() && !stopped) {
+					// If the service stopped but we didn't request it, restart it
+					serviceRef.restart();
+				}
 			}
 		} catch (std::exception& e) {
 			std::cout << e.what() << std::endl;
@@ -201,9 +208,7 @@ void NetworkConnection::stop() {
 
 	service->stop();
 	stopped = true;
-	if (thread.joinable()) {
-		thread.join();
-	}
+	thread.join();
 
 	delete service;
 	service = nullptr;

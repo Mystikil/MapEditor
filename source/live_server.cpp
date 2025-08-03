@@ -24,11 +24,36 @@
 
 #include "editor.h"
 
+#include <fstream>
+#include <wx/filename.h>
+
 LiveServer::LiveServer(Editor& editor) :
 	LiveSocket(),
 	clients(), acceptor(nullptr), socket(nullptr), editor(&editor),
-	clientIds(0), port(0), stopped(false) {
-	//
+	clientIds(0), port(0), stopped(false), drawingReady(false) {
+	// Initialize with a safe color
+	usedColor = wxColor(255, 0, 0); // Red for host
+	
+	// Log server initialization to file
+	std::ofstream logFile((GetAppDir() + wxFileName::GetPathSeparator() + "server_init.log").ToStdString(), std::ios::app);
+	if (logFile.is_open()) {
+		wxDateTime now = wxDateTime::Now();
+		logFile << now.FormatISOCombined() << ": LiveServer initialized\n";
+		logFile.close();
+	}
+	
+	// Set the drawing ready flag after a short delay to ensure all initialization is complete
+	wxTheApp->CallAfter([this]() {
+		drawingReady = true;
+		
+		// Log to file
+		std::ofstream logFile((GetAppDir() + wxFileName::GetPathSeparator() + "server_status.log").ToStdString(), std::ios::app);
+		if (logFile.is_open()) {
+			wxDateTime now = wxDateTime::Now();
+			logFile << now.FormatISOCombined() << ": Server drawing ready flag set\n";
+			logFile.close();
+		}
+	});
 }
 
 LiveServer::~LiveServer() {
@@ -54,25 +79,74 @@ bool LiveServer::bind() {
 	auto& service = connection.get_service();
 	acceptor = std::make_shared<boost::asio::ip::tcp::acceptor>(service);
 
-	boost::asio::ip::tcp::endpoint endpoint(boost::asio::ip::tcp::v4(), port);
-	acceptor->open(endpoint.protocol());
-
-	boost::system::error_code error;
-	boost::asio::ip::tcp::no_delay option(true);
-	acceptor->set_option(option, error);
-	if (error) {
-		setLastError("Error: " + error.message());
+	// Try to bind to the specified port, if that fails, try the next port
+	// This allows multiple instances to host simultaneously
+	uint16_t originalPort = port;
+	uint16_t maxPortRetries = 10; // Try up to 10 ports in sequence
+	boost::system::error_code bindError;
+	
+	for (uint16_t retry = 0; retry < maxPortRetries; ++retry) {
+		boost::asio::ip::tcp::endpoint endpoint(boost::asio::ip::tcp::v4(), port);
+		
+		// Close acceptor if it was previously opened
+		if (acceptor->is_open()) {
+			acceptor->close();
+		}
+		
+		// Try to open and bind
+		acceptor->open(endpoint.protocol());
+		
+		boost::system::error_code error;
+		acceptor->set_option(boost::asio::ip::tcp::no_delay(true), error);
+		if (error) {
+			logMessage(wxString::Format("Warning: Could not set no_delay option: %s", error.message()));
+		}
+		
+		// Try binding to endpoint
+		bindError.clear();
+		acceptor->bind(endpoint, bindError);
+		
+		if (!bindError) {
+			// Binding successful
+			if (port != originalPort) {
+				// Log that we're using a different port
+				logMessage(wxString::Format("Port %d was in use, using port %d instead", originalPort, port));
+			}
+			break;
+		}
+		
+		// If binding failed, try next port
+		port++;
+	}
+	
+	if (bindError) {
+		setLastError("Error binding socket: " + bindError.message() + 
+			"\nTried ports " + std::to_string(originalPort) + " to " + 
+			std::to_string(originalPort + maxPortRetries - 1));
 		return false;
 	}
 
-	acceptor->bind(endpoint);
 	acceptor->listen();
-
 	acceptClient();
 	return true;
 }
 
 void LiveServer::close() {
+	// Set stopped flag first to prevent any new operations
+	stopped = true;
+	
+	// Also disable drawing operations
+	drawingReady = false;
+	
+	// Log server shutdown to file
+	std::ofstream logFile((GetAppDir() + wxFileName::GetPathSeparator() + "server_status.log").ToStdString(), std::ios::app);
+	if (logFile.is_open()) {
+		wxDateTime now = wxDateTime::Now();
+		logFile << now.FormatISOCombined() << ": Server shutting down\n";
+		logFile.close();
+	}
+	
+	// Then proceed with normal shutdown
 	for (auto& clientEntry : clients) {
 		delete clientEntry.second;
 	}
@@ -84,7 +158,6 @@ void LiveServer::close() {
 		log = nullptr;
 	}
 
-	stopped = true;
 	if (acceptor) {
 		acceptor->close();
 	}
@@ -222,116 +295,192 @@ std::string LiveServer::getHostName() const {
 }
 
 void LiveServer::broadcastNodes(DirtyList& dirtyList) {
-	if (dirtyList.Empty() || !editor) {
+	// Skip if we're not ready for drawing operations
+	if (!drawingReady || stopped) {
+		// Log to file instead of UI
+		std::ofstream logFile((GetAppDir() + wxFileName::GetPathSeparator() + "server_status.log").ToStdString(), std::ios::app);
+		if (logFile.is_open()) {
+			wxDateTime now = wxDateTime::Now();
+			logFile << now.FormatISOCombined() << ": Skipped broadcast, drawing not ready\n";
+			logFile.close();
+		}
 		return;
 	}
 
-	// Make a deep copy of the dirty list data to ensure it persists through the async call
+	// If there are no clients or no changes, there's nothing to do
+	if (clients.empty() || dirtyList.Empty()) {
+		return;
+	}
+
+	// Log to file rather than UI
+	std::ofstream logFile((GetAppDir() + wxFileName::GetPathSeparator() + "server_ops.log").ToStdString(), std::ios::app);
+	if (logFile.is_open()) {
+		wxDateTime now = wxDateTime::Now();
+		logFile << now.FormatISOCombined() << ": Broadcasting changes to " << clients.size() << " clients\n";
+	}
+
+	// Extract the change information to a struct we can capture in our lambda
 	struct BroadcastData {
-		std::vector<DirtyList::ValueType> positions;
 		uint32_t owner;
-		std::vector<std::unique_ptr<Change>> changes;
+		std::vector<Change*> changes;  // Changed from ChangeList to std::vector<Change*>
+		std::vector<DirtyList::ValueType> positions;  // Use the existing type from DirtyList
 	};
 
-	auto broadcastData = std::make_shared<BroadcastData>();
-	broadcastData->positions.assign(dirtyList.GetPosList().begin(), dirtyList.GetPosList().end());
-	broadcastData->owner = dirtyList.owner;
+	std::shared_ptr<BroadcastData> broadcastData = std::make_shared<BroadcastData>();
+	broadcastData->owner = dirtyList.owner; // Set the correct owner
 	
-	// If this is from the host, copy the changes
-	if (dirtyList.owner == 0) {
-		auto& changes = dirtyList.GetChanges();
-		broadcastData->changes.reserve(changes.size());
-		for (Change* change : changes) {
-			if (change && change->getType() == CHANGE_TILE) {
-				Tile* tile = static_cast<Tile*>(change->getData());
-				if (tile) {
-					// Create a managed copy
-					broadcastData->changes.push_back(std::make_unique<Change>(tile->deepCopy(editor->map)));
+	try {
+		// Get the changes from the dirty list, converting them to a format we can save and broadcast
+		// Note: We need to create deep copies of the changes as the dirty list will be cleared
+		ChangeList& changeList = dirtyList.GetChanges();
+		broadcastData->changes.reserve(changeList.size());
+		
+		for (Change* change : changeList) {
+			if (!change) continue;
+			
+			// Store a pointer - no unique_ptr here
+			if (change->getType() == CHANGE_TILE) {
+				// Create a deep copy of the change
+				Tile* oldTile = static_cast<Tile*>(change->getData());
+				if (oldTile) {
+					Tile* newTile = oldTile->deepCopy(editor->map);
+					Change* newChange = new Change(newTile);
+					broadcastData->changes.push_back(newChange);
 				}
 			}
 		}
-	}
+		
+		// Get position list - need to copy the positions manually
+		DirtyList::SetType& positionList = dirtyList.GetPosList();
+		for (const auto& pos : positionList) {
+			broadcastData->positions.push_back(pos);
+		}
+		
+		// Safe logging of the node count
+		if (logFile.is_open()) {
+			logFile << "Changes: " << broadcastData->changes.size() << ", Positions: " << broadcastData->positions.size() << "\n";
+			logFile << "Change owner: " << broadcastData->owner << "\n";
+		}
+		
+		// Use a safer approach with CallAfter
+		wxTheApp->CallAfter([this, broadcastData]() {
+			try {
+				if (!editor || !drawingReady) return;
 
-	// Process everything on the main thread in a single CallAfter to maintain atomicity
-	wxTheApp->CallAfter([this, broadcastData]() {
-		try {
-			if (!editor) return;
+				// Apply changes to the host if the owner is not the host
+				if (broadcastData->owner != 0 && !broadcastData->changes.empty()) {
+					NetworkedAction* action = static_cast<NetworkedAction*>(editor->actionQueue->createAction(ACTION_REMOTE));
+					if (action) {
+						action->owner = broadcastData->owner;
+						
+						// Add the changes to the action - action takes ownership
+						for (Change* change : broadcastData->changes) {
+							if (change) {
+								action->addChange(change);
+							}
+						}
+						
+						// Add the action to the queue
+						editor->actionQueue->addAction(action, 0);
+					}
+				}
 
-			// Handle host changes first
-			if (broadcastData->owner == 0 && !broadcastData->changes.empty()) {
-				NetworkedAction* action = static_cast<NetworkedAction*>(editor->actionQueue->createAction(ACTION_REMOTE));
-				if (action) {
-					action->owner = broadcastData->owner;
+				// Now handle the network broadcasting
+				// Create a vector of all the work we need to do
+				struct BroadcastWork {
+					LivePeer* peer;
+					QTreeNode* node;
+					int32_t ndx;
+					int32_t ndy;
+					uint32_t floors;
+					uint32_t clientId;
+				};
+				
+				std::vector<BroadcastWork> workItems;
+
+				// First gather all the work without doing any actual sending
+				for (const auto& ind : broadcastData->positions) {
+					int32_t ndx = ind.pos >> 18;
+					int32_t ndy = (ind.pos >> 4) & 0x3FFF;
+					uint32_t floors = ind.floors;
+
+					QTreeNode* node = editor->map.getLeaf(ndx * 4, ndy * 4);
+					if (!node) continue;
+
+					for (auto& clientEntry : clients) {
+						LivePeer* peer = clientEntry.second;
+						if (!peer) continue;
+
+						const uint32_t clientId = peer->getClientId();
+						
+						// Skip sending changes back to the client that made them
+						if (broadcastData->owner != 0 && clientId == broadcastData->owner) {
+							continue;
+						}
+						
+						// Always broadcast to all clients, regardless of visibility
+						// This ensures all clients see all changes
+						workItems.push_back({peer, node, ndx, ndy, floors, clientId});
+						
+						// Mark the node as visible to this client to ensure future updates are sent
+						node->setVisible(clientId, true, true);
+						node->setVisible(clientId, false, true);
+					}
+				}
+
+				// If we have work to do, process it all in a single batch
+				if (!workItems.empty()) {
+					// Process work items in batches to avoid overwhelming the network
+					const size_t batchSize = 100; // Process 100 work items at a time
 					
-					// Add the changes to the action - action takes ownership
-					for (auto& change : broadcastData->changes) {
-						if (change) {
-							action->addChange(change.release());
+					for (size_t startIdx = 0; startIdx < workItems.size(); startIdx += batchSize) {
+						size_t endIdx = std::min(startIdx + batchSize, workItems.size());
+						
+						for (size_t i = startIdx; i < endIdx; ++i) {
+							const auto& work = workItems[i];
+							if (work.peer && work.node) {
+								sendNode(work.clientId, work.node, work.ndx, work.ndy, work.floors);
+							}
 						}
 					}
 					
-					// Add the action to the queue
-					editor->actionQueue->addAction(action, 0);
-				}
-			}
-
-			// Now handle the network broadcasting
-			// Create a vector of all the work we need to do
-			struct BroadcastWork {
-				LivePeer* peer;
-				QTreeNode* node;
-				int32_t ndx;
-				int32_t ndy;
-				uint32_t floors;
-				uint32_t clientId;
-			};
-			std::vector<BroadcastWork> workItems;
-
-			// First gather all the work without doing any actual sending
-			for (const auto& ind : broadcastData->positions) {
-				int32_t ndx = ind.pos >> 18;
-				int32_t ndy = (ind.pos >> 4) & 0x3FFF;
-				uint32_t floors = ind.floors;
-
-				QTreeNode* node = editor->map.getLeaf(ndx * 4, ndy * 4);
-				if (!node) continue;
-
-				for (auto& clientEntry : clients) {
-					LivePeer* peer = clientEntry.second;
-					if (!peer) continue;
-
-					const uint32_t clientId = peer->getClientId();
-					
-					if (node->isVisible(clientId, true) || node->isVisible(clientId, false)) {
-						workItems.push_back({peer, node, ndx, ndy, floors, clientId});
+					// Log completion to file
+					std::ofstream logFile((GetAppDir() + wxFileName::GetPathSeparator() + "server_ops.log").ToStdString(), std::ios::app);
+					if (logFile.is_open()) {
+						wxDateTime now = wxDateTime::Now();
+						logFile << now.FormatISOCombined() << ": Broadcast completed, sent " << workItems.size() << " node updates\n";
+						logFile.close();
 					}
 				}
-			}
-
-			// Now process all the work in a single batch
-			for (const auto& work : workItems) {
-				try {
-					if (work.node->isVisible(work.clientId, true)) {
-						work.peer->sendNode(work.clientId, work.node, work.ndx, work.ndy, work.floors & 0xFF00);
-					}
-
-					if (work.node->isVisible(work.clientId, false)) {
-						work.peer->sendNode(work.clientId, work.node, work.ndx, work.ndy, work.floors & 0x00FF);
-					}
-				} catch (std::exception& e) {
-					logMessage(wxString::Format("[Server]: Error sending node to client %s: %s", 
-						work.peer->getName(), e.what()));
+			} catch (std::exception& e) {
+				// Log error to file
+				std::ofstream logFile((GetAppDir() + wxFileName::GetPathSeparator() + "server_error.log").ToStdString(), std::ios::app);
+				if (logFile.is_open()) {
+					wxDateTime now = wxDateTime::Now();
+					logFile << now.FormatISOCombined() << ": Error broadcasting nodes: " << e.what() << "\n";
+					logFile.close();
 				}
 			}
-
-			// Update the UI once at the end
-			g_gui.RefreshView();
-			g_gui.UpdateMinimap();
-
-		} catch (std::exception& e) {
-			logMessage(wxString::Format("[Server]: Error in broadcast: %s", e.what()));
+		});
+		
+		if (logFile.is_open()) {
+			logFile << "Broadcast queued to main thread\n";
+			logFile.close();
 		}
-	});
+	} catch (std::exception& e) {
+		// Log error to file
+		if (logFile.is_open()) {
+			logFile << "Error preparing broadcast: " << e.what() << "\n";
+			logFile.close();
+		} else {
+			std::ofstream errorLog((GetAppDir() + wxFileName::GetPathSeparator() + "server_error.log").ToStdString(), std::ios::app);
+			if (errorLog.is_open()) {
+				wxDateTime now = wxDateTime::Now();
+				errorLog << now.FormatISOCombined() << ": Error preparing broadcast: " << e.what() << "\n";
+				errorLog.close();
+			}
+		}
+	}
 }
 
 void LiveServer::broadcastCursor(const LiveCursor& cursor) {
@@ -347,6 +496,7 @@ void LiveServer::broadcastCursor(const LiveCursor& cursor) {
 		return;
 	}
 
+	// Update the cursor in our storage without logging each movement
 	cursors[cursor.id] = cursor;
 
 	NetworkMessage message;

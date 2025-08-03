@@ -29,6 +29,9 @@ namespace MenuBar {
 		SAVE,
 		SAVE_AS,
 		GENERATE_MAP,
+		GENERATE_PROCEDURAL_MAP,
+		GENERATE_ISLAND_MAP,
+		GENERATE_DUNGEON_MAP,
 		CLOSE,
 		IMPORT_MAP,
 		IMPORT_MONSTERS,
@@ -36,12 +39,14 @@ namespace MenuBar {
 		EXPORT_MINIMAP,
 		EXPORT_TILESETS,
 		RELOAD_DATA,
+		RELOAD_REVSCRIPTS,
 		RECENT_FILES,
 		PREFERENCES,
 		EXIT,
 		UNDO,
 		REDO,
 		FIND_ITEM,
+		FIND_CREATURE,
 		REPLACE_ITEMS,
 		AUTOMAGIC,
 		SEARCH_ON_MAP_EVERYTHING,
@@ -66,6 +71,8 @@ namespace MenuBar {
 		// AUTOMAGIC removed - now controlled by 'A' hotkey
 		BORDERIZE_SELECTION,
 		BORDERIZE_MAP,
+		WALLIZE_SELECTION,
+		WALLIZE_MAP,
 		RANDOMIZE_SELECTION,
 		RANDOMIZE_MAP,
 		GOTO_PREVIOUS_POSITION,
@@ -92,6 +99,8 @@ namespace MenuBar {
 		VIEW_TOOLBARS_SIZES,
 		VIEW_TOOLBARS_STANDARD,
 		NEW_VIEW,
+		//idler
+		NEW_DETACHED_VIEW,
 		TOGGLE_FULLSCREEN,
 		ZOOM_IN,
 		ZOOM_OUT,
@@ -124,9 +133,11 @@ namespace MenuBar {
 		SHOW_TOWNS,
 		ALWAYS_SHOW_ZONES,
 		EXT_HOUSE_SHADER,
+		HOUSE_CUSTOM_COLORS,
 		REFRESH_ITEMS,
 
 		WIN_MINIMAP,
+		WIN_RECENT_BRUSHES,
 		NEW_PALETTE,
 		TAKE_SCREENSHOT,
 		LIVE_START,
@@ -166,9 +177,22 @@ namespace MenuBar {
 		EXPERIMENTAL_FOG,
 		MAP_REMOVE_DUPLICATES,
 		SHOW_HOTKEYS,
-		MAP_MENU_REPLACE_ITEMS,
+			SHOW_MONSTER_MAKER,
+	ADD_NEW_CREATURE,
+	MAP_MENU_REPLACE_ITEMS,
 		MAP_MENU_GENERATE_ISLAND,
 		MAP_VALIDATE_GROUND,
+		MAP_CREATE_BORDER,
+		// Chat actions
+		CHAT_REGISTER,
+		CHAT_CONNECT,
+		MAP_SUMMARIZE,
+		MAP_NOTES,
+		MENU_REFRESH_VISIBLE_AREA,
+		RESET_HOUSE_IDS,
+	RESET_TOWN_IDS,
+	DOODADS_FILLING_TOOL,
+	EDIT_ITEMS_OTB,
 	};
 }
 
@@ -201,6 +225,8 @@ public:
 	void OnNew(wxCommandEvent& event);
 	void OnOpen(wxCommandEvent& event);
 	void OnGenerateMap(wxCommandEvent& event);
+	void OnGenerateProceduralMap(wxCommandEvent& event);
+
 	void OnOpenRecent(wxCommandEvent& event);
 	void OnSave(wxCommandEvent& event);
 	void OnSaveAs(wxCommandEvent& event);
@@ -216,12 +242,15 @@ public:
 	void OnExportMinimap(wxCommandEvent& event);
 	void OnExportTilesets(wxCommandEvent& event);
 	void OnReloadDataFiles(wxCommandEvent& event);
+	void OnReloadRevScripts(wxCommandEvent& event);
 
 	// Edit Menu
 	void OnUndo(wxCommandEvent& event);
 	void OnRedo(wxCommandEvent& event);
 	void OnBorderizeSelection(wxCommandEvent& event);
 	void OnBorderizeMap(wxCommandEvent& event);
+	void OnWallizeSelection(wxCommandEvent& event);
+	void OnWallizeMap(wxCommandEvent& event);
 	void OnRandomizeSelection(wxCommandEvent& event);
 	void OnRandomizeMap(wxCommandEvent& event);
 	void OnJumpToBrush(wxCommandEvent& event);
@@ -238,6 +267,7 @@ public:
 	void OnCopy(wxCommandEvent& event);
 	void OnPaste(wxCommandEvent& event);
 	void OnSearchForItem(wxCommandEvent& event);
+	void OnSearchForCreature(wxCommandEvent& event);
 	void OnReplaceItems(wxCommandEvent& event);
 	void OnSearchForStuffOnMap(wxCommandEvent& event);
 	void OnSearchForZonesOnMap(wxCommandEvent& event);
@@ -267,10 +297,16 @@ public:
 	void OnMapStatistics(wxCommandEvent& event);
 	void OnMapRemoveDuplicates(wxCommandEvent& event);
 	void OnMapValidateGround(wxCommandEvent& event);
+	void OnMapNotes(wxCommandEvent& event);
+	void OnResetHouseIDs(wxCommandEvent& event);
+	void OnResetTownIDs(wxCommandEvent& event);
+	void OnDoodadsFillingTool(wxCommandEvent& event);
+	void OnEditItemsOTB(wxCommandEvent& event);
 
 	// View Menu
 	void OnToolbars(wxCommandEvent& event);
 	void OnNewView(wxCommandEvent& event);
+	void OnNewDetachedView(wxCommandEvent& event);
 	void OnToggleFullscreen(wxCommandEvent& event);
 	void OnZoomIn(wxCommandEvent& event);
 	void OnZoomOut(wxCommandEvent& event);
@@ -286,6 +322,7 @@ public:
 
 	// Window Menu
 	void OnMinimapWindow(wxCommandEvent& event);
+	void OnRecentBrushesWindow(wxCommandEvent& event);
 	void OnNewPalette(wxCommandEvent& event);
 	void OnTakeScreenshot(wxCommandEvent& event);
 	void OnSelectTerrainPalette(wxCommandEvent& event);
@@ -306,10 +343,19 @@ public:
 	void OnGotoWebsite(wxCommandEvent& event);
 	void OnAbout(wxCommandEvent& event);
 	void OnShowHotkeys(wxCommandEvent& event);
+	void OnShowMonsterMaker(wxCommandEvent& event);
+	void OnAddNewCreature(wxCommandEvent& event);
 
 	// Add to class MainMenuBar private section:
 	void OnRefreshItems(wxCommandEvent& event);
-	void OnGenerateIsland(wxCommandEvent& event);
+	void OnCreateBorder(wxCommandEvent& event);
+	// Chat handlers
+	void OnChatRegister(wxCommandEvent& event);
+	void OnChatConnect(wxCommandEvent& event);
+
+	void OnMapSummarize(wxCommandEvent& event);
+	void OnRefreshVisibleArea(wxCommandEvent& event);
+
 
 protected:
 	// Load and returns a menu item, also sets accelerator

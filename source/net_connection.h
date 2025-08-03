@@ -25,7 +25,6 @@
 #include <cstdint>
 #include <thread>
 #include <mutex>
-#include <boost/asio.hpp>
 
 struct NetworkMessage {
 	NetworkMessage();

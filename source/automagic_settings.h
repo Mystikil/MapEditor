@@ -7,6 +7,7 @@
 #include <wx/sizer.h>
 #include <wx/stattext.h>
 #include <wx/statbox.h>
+#include <wx/spinctrl.h>
 
 class AutomagicSettingsDialog : public wxDialog {
 public:
@@ -19,6 +20,9 @@ public:
     bool IsWallsRepelBordersEnabled() const;
     bool IsLayerCarpetsEnabled() const;
     bool IsBorderizeDeleteEnabled() const;
+    // New custom border methods
+    bool IsCustomBorderEnabled() const;
+    int GetCustomBorderId() const;
 
 protected:
     // Event handlers
@@ -27,6 +31,7 @@ protected:
     void OnAutomagicCheck(wxCommandEvent& event);
     void OnSameGroundTypeCheck(wxCommandEvent& event);
     void OnClose(wxCloseEvent& event);
+    void OnCustomBorderCheck(wxCommandEvent& event); // New event handler
 
     // UI elements
     wxCheckBox* automagic_enabled_checkbox;
@@ -34,6 +39,10 @@ protected:
     wxCheckBox* walls_repel_borders_checkbox;
     wxCheckBox* layer_carpets_checkbox;
     wxCheckBox* borderize_delete_checkbox;
+    // New UI elements for custom border
+    wxCheckBox* custom_border_checkbox;
+    wxSpinCtrl* custom_border_id_field;
+    wxStaticText* custom_border_id_label;
     wxStdDialogButtonSizer* buttons_sizer;
     wxButton* ok_button;
     wxButton* cancel_button;

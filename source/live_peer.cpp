@@ -182,21 +182,25 @@ void LivePeer::send(NetworkMessage& message) {
 	// Write size to the first 4 bytes (header)
 	memcpy(&message.buffer[0], &message.size, 4);
 	
-	// Log the message we're sending
-	logMessage(wxString::Format("[Server]: Sending packet to %s (size: %zu bytes)", 
-		getHostName(), message.size + 4));
+	// Only log non-cursor packets to reduce excessive logging
+	bool isCursorPacket = message.buffer.size() > 0 && message.buffer[4] == PACKET_CURSOR_UPDATE;
+	if (!isCursorPacket) {
+		logMessage(wxString::Format("[Server]: Sending packet to %s (size: %zu bytes, type: 0x%02X)", 
+			getHostName(), message.size + 4, message.buffer[4]));
+	}
 	
 	try {
 		boost::asio::async_write(socket, 
 			boost::asio::buffer(message.buffer, message.size + 4), 
-			[this, msgSize = message.size](const boost::system::error_code& error, size_t bytesTransferred) -> void {
+			[this, msgSize = message.size, isCursorPacket](const boost::system::error_code& error, size_t bytesTransferred) -> void {
 				if (error) {
 					logMessage(wxString::Format("[Server]: Error sending packet to %s: %s", 
 						getHostName(), error.message()));
 				} else if (bytesTransferred != msgSize + 4) {
 					logMessage(wxString::Format("[Server]: Incomplete packet sent to %s [sent: %zu, expected: %zu]", 
 						getHostName(), bytesTransferred, msgSize + 4));
-				} else {
+				} else if (!isCursorPacket) {
+					// Only log successful sends for non-cursor packets
 					logMessage(wxString::Format("[Server]: Successfully sent packet to %s (%zu bytes)", 
 						getHostName(), bytesTransferred));
 				}
@@ -273,6 +277,9 @@ void LivePeer::parseEditorPacket(NetworkMessage message) {
 				break;
 			case PACKET_CLIENT_COLOR_UPDATE:
 				parseClientColorUpdate(message);
+				break;
+			case PACKET_CLIENT_REQUEST_REFRESH:
+				parseClientRefreshRequest(message);
 				break;
 			default: {
 				log->Message("Invalid editor packet receieved, connection severed.");
@@ -422,82 +429,127 @@ void LivePeer::parseHello(NetworkMessage& message) {
 }
 
 void LivePeer::parseReady(NetworkMessage& message) {
+	// Safety check - client already connected
 	if (connected) {
+		logMessage("[Server]: Client already connected but sent READY packet again, disconnecting");
 		close();
 		return;
 	}
 
-	connected = true;
+	try {
+		// Mark client as connected
+		connected = true;
+		logMessage(wxString::Format("[Server]: Client %s entering READY state", getHostName()));
 
-	// Find free client id
-	clientId = server->getFreeClientId();
-	if (clientId == 0) {
-		NetworkMessage outMessage;
-		outMessage.write<uint8_t>(PACKET_KICK);
-		outMessage.write<std::string>("Server is full.");
+		// Find free client id
+		clientId = server->getFreeClientId();
+		if (clientId == 0) {
+			logMessage("[Server]: No free client IDs available, server is full");
+			NetworkMessage outMessage;
+			outMessage.write<uint8_t>(PACKET_KICK);
+			outMessage.write<std::string>("Server is full.");
 
-		send(outMessage);
-		close();
-		return;
-	}
-
-	// Assign a default color to the new client
-	color = wxColor(
-		128 + rand() % 127,  // R: 128-255
-		128 + rand() % 127,  // G: 128-255
-		128 + rand() % 127,  // B: 128-255
-		255                  // A: fully opaque
-	);
-
-	server->updateClientList();
-
-	// Let's reply
-	NetworkMessage outMessage;
-	outMessage.write<uint8_t>(PACKET_HELLO_FROM_SERVER);
-
-	Map& map = server->getEditor()->map;
-	outMessage.write<std::string>(map.getName());
-	outMessage.write<uint16_t>(map.getWidth());
-	outMessage.write<uint16_t>(map.getHeight());
-
-	send(outMessage);
-	
-	// Now send the host's cursor to the new client
-	LiveCursor hostCursor;
-	hostCursor.id = 0;
-	hostCursor.color = server->getUsedColor();
-	hostCursor.pos = Position(); // Default position
-	
-	NetworkMessage cursorMessage;
-	cursorMessage.write<uint8_t>(PACKET_CURSOR_UPDATE);
-	server->writeCursorToMessage(cursorMessage, hostCursor);
-	send(cursorMessage);
-	
-	// Also send the colors of all existing clients to the new client
-	for (const auto& clientPair : server->getClients()) {
-		LivePeer* peer = clientPair.second;
-		if (peer && peer->getClientId() != 0 && peer->getClientId() != clientId) {
-			// Send this client's color
-			NetworkMessage colorMessage;
-			colorMessage.write<uint8_t>(PACKET_COLOR_UPDATE);
-			colorMessage.write<uint32_t>(peer->getClientId());
-			colorMessage.write<uint8_t>(peer->getUsedColor().Red());
-			colorMessage.write<uint8_t>(peer->getUsedColor().Green());
-			colorMessage.write<uint8_t>(peer->getUsedColor().Blue());
-			colorMessage.write<uint8_t>(peer->getUsedColor().Alpha());
-			send(colorMessage);
-			
-			// Also send this client's cursor position
-			LiveCursor peerCursor;
-			peerCursor.id = peer->getClientId();
-			peerCursor.color = peer->getUsedColor();
-			peerCursor.pos = Position(); // Default position
-			
-			NetworkMessage peerCursorMessage;
-			peerCursorMessage.write<uint8_t>(PACKET_CURSOR_UPDATE);
-			server->writeCursorToMessage(peerCursorMessage, peerCursor);
-			send(peerCursorMessage);
+			send(outMessage);
+			close();
+			return;
 		}
+
+		// Assign a default color to the new client
+		color = wxColor(
+			128 + rand() % 127,  // R: 128-255
+			128 + rand() % 127,  // G: 128-255
+			128 + rand() % 127,  // B: 128-255
+			255                  // A: fully opaque
+		);
+
+		// Update the client list in the UI
+		server->updateClientList();
+		logMessage(wxString::Format("[Server]: Assigned client ID %u to %s", clientId, getHostName()));
+
+		// Send HELLO_FROM_SERVER packet with map information
+		try {
+			NetworkMessage outMessage;
+			outMessage.write<uint8_t>(PACKET_HELLO_FROM_SERVER);
+
+			Map& map = server->getEditor()->map;
+			outMessage.write<std::string>(map.getName());
+			outMessage.write<uint16_t>(map.getWidth());
+			outMessage.write<uint16_t>(map.getHeight());
+
+			send(outMessage);
+			logMessage("[Server]: Sent HELLO packet with map information to client");
+		} catch (std::exception& e) {
+			logMessage(wxString::Format("[Server]: Error sending HELLO packet: %s", e.what()));
+			close();
+			return;
+		}
+		
+		// Now send the host's cursor to the new client
+		try {
+			LiveCursor hostCursor;
+			hostCursor.id = 0;
+			hostCursor.color = server->getUsedColor();
+			hostCursor.pos = Position(); // Default position
+			
+			NetworkMessage cursorMessage;
+			cursorMessage.write<uint8_t>(PACKET_CURSOR_UPDATE);
+			server->writeCursorToMessage(cursorMessage, hostCursor);
+			send(cursorMessage);
+			logMessage("[Server]: Sent host cursor information to client");
+		} catch (std::exception& e) {
+			logMessage(wxString::Format("[Server]: Error sending cursor information: %s", e.what()));
+			// Non-fatal error, continue
+		}
+
+		// Send ACCEPTED_CLIENT packet to confirm client is ready for drawing operations
+		try {
+			NetworkMessage acceptedMessage;
+			acceptedMessage.write<uint8_t>(PACKET_ACCEPTED_CLIENT);
+			send(acceptedMessage);
+			logMessage(wxString::Format("[Server]: Client %s (ID: %u) is now fully connected and ready", 
+				name, clientId));
+		} catch (std::exception& e) {
+			logMessage(wxString::Format("[Server]: Error sending ACCEPTED packet: %s", e.what()));
+			close();
+			return;
+		}
+		
+		// Also send the colors of all existing clients to the new client
+		try {
+			for (const auto& clientPair : server->getClients()) {
+				LivePeer* peer = clientPair.second;
+				if (peer && peer->getClientId() != 0 && peer->getClientId() != clientId) {
+					// Send this client's color
+					NetworkMessage colorMessage;
+					colorMessage.write<uint8_t>(PACKET_COLOR_UPDATE);
+					colorMessage.write<uint32_t>(peer->getClientId());
+					colorMessage.write<uint8_t>(peer->getUsedColor().Red());
+					colorMessage.write<uint8_t>(peer->getUsedColor().Green());
+					colorMessage.write<uint8_t>(peer->getUsedColor().Blue());
+					colorMessage.write<uint8_t>(peer->getUsedColor().Alpha());
+					send(colorMessage);
+					
+					// Also send this client's cursor position
+					LiveCursor peerCursor;
+					peerCursor.id = peer->getClientId();
+					peerCursor.color = peer->getUsedColor();
+					peerCursor.pos = Position(); // Default position
+					
+					NetworkMessage peerCursorMessage;
+					peerCursorMessage.write<uint8_t>(PACKET_CURSOR_UPDATE);
+					server->writeCursorToMessage(peerCursorMessage, peerCursor);
+					send(peerCursorMessage);
+				}
+			}
+			logMessage("[Server]: Sent information about other clients to the new client");
+		} catch (std::exception& e) {
+			logMessage(wxString::Format("[Server]: Error sending client information: %s", e.what()));
+			// Non-fatal error, continue
+		}
+	} catch (std::exception& e) {
+		// Handle any other unexpected errors during client initialization
+		logMessage(wxString::Format("[Server]: Error initializing client: %s", e.what()));
+		close();
 	}
 }
 
@@ -526,55 +578,75 @@ void LivePeer::parseReceiveChanges(NetworkMessage& message) {
 		logMessage(wxString::Format("[Server]: Received changes from client %s (data size: %zu bytes)", 
 			name, data.size()));
 			
-		// Process the changes on the main thread
-		wxTheApp->CallAfter([this, data]() {
-			if (!server || !server->getEditor()) {
-				logMessage("[Server]: Error - cannot process changes, editor not available");
+		// Process the changes directly instead of using CallAfter to avoid threading issues
+		if (!server || !server->getEditor()) {
+			logMessage("[Server]: Error - cannot process changes, editor not available");
+			return;
+		}
+		
+		Editor& editor = *server->getEditor();
+		
+		try {
+			// Instead of creating a NetworkedAction, create a regular Action
+			// This avoids issues with NetworkedAction memory management
+			Action* action = editor.actionQueue->createAction(ACTION_REMOTE);
+			if (!action) {
+				logMessage("[Server]: Failed to create action for changes");
 				return;
 			}
 			
-			Editor& editor = *server->getEditor();
-			
-			try {
-				// Create the action to hold the changes
-				NetworkedAction* action = static_cast<NetworkedAction*>(editor.actionQueue->createAction(ACTION_REMOTE));
-				action->owner = clientId;
-				
-				// Parse the change data and create the tiles
-				mapReader.assign(reinterpret_cast<const uint8_t*>(data.c_str() - 1), data.size());
-				BinaryNode* rootNode = mapReader.getRootNode();
-				BinaryNode* tileNode = rootNode->getChild();
-				
-				bool anyChanges = false;
-				
-				if (tileNode) {
-					do {
-						Tile* tile = readTile(tileNode, editor, nullptr);
-						if (tile) {
-							action->addChange(newd Change(tile));
-							anyChanges = true;
-						}
-					} while (tileNode->advance());
-				}
-				mapReader.close();
-				
-				// Only add the action if we have changes
-				if (anyChanges) {
-					editor.actionQueue->addAction(action);
-					g_gui.RefreshView();
-					g_gui.UpdateMinimap();
-					
-					logMessage(wxString::Format("[Server]: Successfully processed changes from client %s", name));
-				} else {
-					// Instead of deleting, just add the action as-is
-					// An empty action won't do anything but will be safely managed by the queue
-					editor.actionQueue->addAction(action);
-					logMessage(wxString::Format("[Server]: No valid changes found in packet from client %s", name));
-				}
-			} catch (std::exception& e) {
-				logMessage(wxString::Format("[Server]: Error processing changes: %s", e.what()));
+			// Set owner ID
+			if (NetworkedAction* netAction = dynamic_cast<NetworkedAction*>(action)) {
+				netAction->owner = clientId;
 			}
-		});
+			
+			// Parse the change data and create the tiles
+			mapReader.assign(reinterpret_cast<const uint8_t*>(data.c_str() - 1), data.size());
+			BinaryNode* rootNode = mapReader.getRootNode();
+			if (!rootNode) {
+				logMessage("[Server]: Invalid root node in changes");
+				delete action;
+				return;
+			}
+			
+			BinaryNode* tileNode = rootNode->getChild();
+			bool anyChanges = false;
+			
+			if (tileNode) {
+				do {
+					Tile* tile = readTile(tileNode, editor, nullptr);
+					if (tile) {
+						action->addChange(newd Change(tile));
+						anyChanges = true;
+					}
+				} while (tileNode->advance());
+			}
+			mapReader.close();
+			
+			// Only process if we have changes
+			if (anyChanges) {
+				// Use the new commitChanges method to apply changes without adding to undo history
+				NetworkedActionQueue* netQueue = dynamic_cast<NetworkedActionQueue*>(editor.actionQueue);
+				if (netQueue) {
+					netQueue->commitChanges(action);
+				} else {
+					// Fallback if queue is not a NetworkedActionQueue
+					editor.actionQueue->addAction(action, 0);
+				}
+				
+				// Update the UI
+				g_gui.RefreshView();
+				g_gui.UpdateMinimap();
+				
+				logMessage(wxString::Format("[Server]: Successfully processed changes from client %s", name));
+			} else {
+				// No changes, just delete the action
+				delete action;
+				logMessage(wxString::Format("[Server]: No valid changes found in packet from client %s", name));
+			}
+		} catch (std::exception& e) {
+			logMessage(wxString::Format("[Server]: Error processing changes: %s", e.what()));
+		}
 	} catch (std::exception& e) {
 		logMessage(wxString::Format("[Server]: Error parsing changes packet: %s", e.what()));
 	}
@@ -593,9 +665,12 @@ void LivePeer::parseCursorUpdate(NetworkMessage& message) {
 	LiveCursor cursor = readCursor(message);
 	cursor.id = clientId;
 
+	// Only log and update client list if the color changes, not for movement
 	if (cursor.color != color) {
 		setUsedColor(cursor.color);
 		server->updateClientList();
+		// Only log color changes, not cursor movements
+		logMessage(wxString::Format("[Server]: Client %s changed cursor color", name));
 	}
 
 	server->broadcastCursor(cursor);
@@ -643,6 +718,62 @@ void LivePeer::parseClientColorUpdate(NetworkMessage& message) {
 	
 	// Update the client list to reflect the change in the UI
 	server->updateClientList();
+}
+
+void LivePeer::parseClientRefreshRequest(NetworkMessage& message) {
+	try {
+		// Read the visible area coordinates
+		int32_t startNodeX = message.read<int32_t>();
+		int32_t startNodeY = message.read<int32_t>();
+		int32_t endNodeX = message.read<int32_t>();
+		int32_t endNodeY = message.read<int32_t>();
+		uint8_t z = message.read<uint8_t>();
+		bool underground = message.read<bool>();
+		
+		logMessage(wxString::Format("[Server]: Received refresh request from %s for area (%d,%d) to (%d,%d) at z=%d", 
+			name, startNodeX, startNodeY, endNodeX, endNodeY, z));
+		
+		// Ensure the area isn't too large to prevent abuse
+		const int32_t MAX_REFRESH_AREA = 20; // Maximum 20x20 nodes (80x80 tiles)
+		if ((endNodeX - startNodeX) > MAX_REFRESH_AREA || (endNodeY - startNodeY) > MAX_REFRESH_AREA) {
+			logMessage(wxString::Format("[Server]: Refresh area too large from client %s, limiting to %dx%d nodes", 
+				name, MAX_REFRESH_AREA, MAX_REFRESH_AREA));
+			endNodeX = startNodeX + MAX_REFRESH_AREA;
+			endNodeY = startNodeY + MAX_REFRESH_AREA;
+		}
+		
+		// Process the refresh on the main thread
+		wxTheApp->CallAfter([this, startNodeX, startNodeY, endNodeX, endNodeY, z, underground]() {
+			if (!server || !server->getEditor()) {
+				logMessage("[Server]: Error - cannot process refresh, editor not available");
+				return;
+			}
+			
+			Map& map = server->getEditor()->map;
+			uint32_t floorMask = underground ? 0xFF00 : 0x00FF;
+			int refreshedNodes = 0;
+			
+			// Send each node in the visible area
+			for (int32_t nx = startNodeX; nx <= endNodeX; ++nx) {
+				for (int32_t ny = startNodeY; ny <= endNodeY; ++ny) {
+					QTreeNode* node = map.getLeaf(nx * 4, ny * 4);
+					if (node) {
+						// Mark the node as visible to this client
+						node->setVisible(clientId, underground, true);
+						
+						// Send the node data
+						sendNode(clientId, node, nx, ny, floorMask);
+						refreshedNodes++;
+					}
+				}
+			}
+			
+			logMessage(wxString::Format("[Server]: Refreshed %d nodes for client %s", 
+				refreshedNodes, name));
+		});
+	} catch (std::exception& e) {
+		logMessage(wxString::Format("[Server]: Error processing refresh request: %s", e.what()));
+	}
 }
 
 void LivePeer::sendChat(const wxString& chatMessage) {

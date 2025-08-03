@@ -20,6 +20,9 @@
 #include <wx/splitter.h>
 #include <wx/grid.h>
 #include <wx/colordlg.h>
+#include <fstream>
+#include <wx/filename.h>
+#include <wx/stdpaths.h>
 
 #include "live_tab.h"
 #include "live_socket.h"
@@ -143,8 +146,6 @@ void LiveLogTab::Disconnect() {
 	Refresh();
 }
 
-
-
 wxString format00(wxDateTime::wxDateTime_t t) {
 	wxString str;
 	if (t < 10) {
@@ -154,7 +155,29 @@ wxString format00(wxDateTime::wxDateTime_t t) {
 	return str;
 }
 
+wxString LiveLogTab::GetLogFilePath(const wxString& logType) {
+	// Create a logs directory in the user's documents folder
+	wxString docsDir = wxStandardPaths::Get().GetDocumentsDir();
+	wxString logsDir = docsDir + wxFileName::GetPathSeparator() + "RME_Logs";
+	
+	// Create the directory if it doesn't exist
+	if (!wxDirExists(logsDir)) {
+		wxMkdir(logsDir);
+	}
+	
+	// Create a unique filename based on session timestamp
+	static wxString sessionTimestamp;
+	if (sessionTimestamp.IsEmpty()) {
+		wxDateTime now = wxDateTime::Now();
+		sessionTimestamp = now.Format("%Y%m%d_%H%M%S");
+	}
+	
+	// Return the full path
+	return logsDir + wxFileName::GetPathSeparator() + "rmelog_" + logType + "_" + sessionTimestamp + ".txt";
+}
+
 void LiveLogTab::Message(const wxString& str) {
+	// Simply log to file - no UI interaction, no CallAfter
 	wxDateTime t = wxDateTime::Now();
 	wxString time, message;
 	time << format00(t.GetHour()) << ":"
@@ -164,14 +187,26 @@ void LiveLogTab::Message(const wxString& str) {
 	// Format the message with timestamp
 	message << time << " - " << str << "\n";
 	
-	// Add text to the debug log
-	debug_log->AppendText(message);
+	// Write to log file only
+	static wxString logFilePath;
+	if (logFilePath.IsEmpty()) {
+		logFilePath = GetLogFilePath("debug");
+	}
 	
-	// Auto-scroll to the bottom
-	debug_log->SetInsertionPointEnd();
+	try {
+		std::ofstream logFile(logFilePath.ToStdString(), std::ios::app);
+		if (logFile.is_open()) {
+			logFile << message;
+			logFile.close();
+		}
+	}
+	catch (...) {
+		// Silent failure - don't propagate exceptions
+	}
 }
 
 void LiveLogTab::Chat(const wxString& speaker, const wxString& str) {
+	// Format the chat message
 	wxDateTime t = wxDateTime::Now();
 	wxString time, message;
 	time << format00(t.GetHour()) << ":"
@@ -181,14 +216,29 @@ void LiveLogTab::Chat(const wxString& speaker, const wxString& str) {
 	// Format the chat message with timestamp and speaker
 	message << time << " [" << speaker << "]: " << str << "\n";
 	
-	// Add text to the chat log
-	chat_log->AppendText(message);
+	// Write to log file first - this is guaranteed not to crash
+	static wxString logFilePath;
+	if (logFilePath.IsEmpty()) {
+		logFilePath = GetLogFilePath("chat");
+	}
 	
-	// Auto-scroll to the bottom
-	chat_log->SetInsertionPointEnd();
-	
-	// Switch to the chat tab automatically when receiving messages
-	notebook->SetSelection(1); // 1 is the index of the chat tab
+	try {
+		// Log to file
+		std::ofstream logFile(logFilePath.ToStdString(), std::ios::app);
+		if (logFile.is_open()) {
+			logFile << message;
+			logFile.close();
+		}
+		
+		// Only try to update UI if we're the main thread to avoid CallAfter issues
+		if (wxThread::IsMain() && chat_log && chat_log->IsShownOnScreen()) {
+			// Direct update without CallAfter
+			chat_log->AppendText(message);
+		}
+	}
+	catch (...) {
+		// Silent failure - don't propagate exceptions
+	}
 }
 
 void LiveLogTab::OnChat(wxCommandEvent& evt) {
@@ -274,86 +324,102 @@ void LiveLogTab::OnCopySelectedLogText(wxCommandEvent& evt) {
 }
 
 void LiveLogTab::UpdateClientList(const std::unordered_map<uint32_t, LivePeer*>& updatedClients) {
-	// Delete old rows
-	if (user_list->GetNumberRows() > 0) {
-		user_list->DeleteRows(0, user_list->GetNumberRows());
-	}
-
-	clients = updatedClients;
+	// Skip during critical operations to prevent crashes
+	static bool insideOperation = false;
+	if (insideOperation) return;
 	
-	// For server, use the provided client list
-	if (socket && socket->IsServer()) {
-		// Make sure we have data to display
-		if (clients.empty()) {
-			// At least show the host
-			user_list->AppendRows(1);
-			user_list->SetCellBackgroundColour(0, 0, dynamic_cast<LiveServer*>(socket)->getUsedColor());
-			user_list->SetCellValue(0, 1, "Host");
-			user_list->SetCellValue(0, 2, "HOST");
-		} else {
-			user_list->AppendRows(clients.size());
-
-			int32_t i = 0;
-			for (auto& clientEntry : clients) {
-				LivePeer* peer = clientEntry.second;
-				if (peer) {
-					user_list->SetCellBackgroundColour(i, 0, peer->getUsedColor());
-					user_list->SetCellValue(i, 1, i2ws((peer->getClientId() >> 1) + 1));
-					user_list->SetCellValue(i, 2, peer->getName());
-					++i;
-				}
-			}
+	// Guard against reentrancy which might cause crashes
+	insideOperation = true;
+	
+	// Use CallAfter to ensure UI operations happen on the main thread
+	// This prevents crashes during critical drawing operations
+	wxTheApp->CallAfter([this, updatedClients]() {
+		// Only proceed if grid is properly initialized and visible
+		if (!user_list || !user_list->IsShownOnScreen()) {
+			insideOperation = false;
+			return;
 		}
-	} 
-	// For client, use cursor information
-	else if (socket && socket->IsClient()) {
-		// Get cursor list from the socket
-		std::vector<LiveCursor> cursors = socket->getCursorList();
 		
-		if (cursors.empty()) {
-			// If no cursors, at least show the host
-			user_list->AppendRows(1);
-			user_list->SetCellBackgroundColour(0, 0, wxColor(255, 0, 0)); // Default red for host
-			user_list->SetCellValue(0, 1, "Host");
-			user_list->SetCellValue(0, 2, "HOST");
-		} else {
-			// Add a row for each cursor
-			user_list->AppendRows(cursors.size());
+		try {
+			// Delete old rows
+			if (user_list->GetNumberRows() > 0) {
+				user_list->DeleteRows(0, user_list->GetNumberRows());
+			}
+
+			clients = updatedClients;
 			
-			int32_t i = 0;
-			for (const auto& cursor : cursors) {
-				user_list->SetCellBackgroundColour(i, 0, cursor.color);
-				
-				// In display, clientId 0 is the host, others are +1 and shifted
-				wxString displayId;
-				if (cursor.id == 0) {
-					displayId = "Host";
+			// For server, use the provided client list
+			if (socket && socket->IsServer()) {
+				// Make sure we have data to display
+				if (clients.empty()) {
+					// At least show the host
+					user_list->AppendRows(1);
+					user_list->SetCellBackgroundColour(0, 0, dynamic_cast<LiveServer*>(socket)->getUsedColor());
+					user_list->SetCellValue(0, 1, "Host");
+					user_list->SetCellValue(0, 2, "HOST");
 				} else {
-					displayId = i2ws((cursor.id >> 1) + 1);
+					user_list->AppendRows(clients.size());
+
+					int32_t i = 0;
+					for (auto& clientEntry : clients) {
+						LivePeer* peer = clientEntry.second;
+						if (peer) {
+							user_list->SetCellBackgroundColour(i, 0, peer->getUsedColor());
+							user_list->SetCellValue(i, 1, i2ws((peer->getClientId() >> 1) + 1));
+							user_list->SetCellValue(i, 2, peer->getName());
+							++i;
+						}
+					}
 				}
+			} 
+			// For client, use cursor information
+			else if (socket && socket->IsClient()) {
+				// Get cursor list from the socket
+				std::vector<LiveCursor> cursors = socket->getCursorList();
 				
-				user_list->SetCellValue(i, 1, displayId);
-				
-				// Name is not available in cursor, so we use the socket name for host
-				// and "Client X" for others
-				wxString name;
-				if (cursor.id == 0) {
-					name = "HOST";
+				if (cursors.empty()) {
+					// If no cursors, at least show the host
+					user_list->AppendRows(1);
+					user_list->SetCellBackgroundColour(0, 0, wxColor(255, 0, 0)); // Default red for host
+					user_list->SetCellValue(0, 1, "Host");
+					user_list->SetCellValue(0, 2, "HOST");
 				} else {
-					name = wxString::Format("Client %s", displayId);
+					// Add a row for each cursor
+					user_list->AppendRows(cursors.size());
+					
+					int32_t i = 0;
+					for (const auto& cursor : cursors) {
+						user_list->SetCellBackgroundColour(i, 0, cursor.color);
+						
+						// In display, clientId 0 is the host, others are +1 and shifted
+						wxString displayId;
+						wxString displayName;
+						
+						if (cursor.id == 0) {
+							displayId = "Host";
+							displayName = "HOST";
+						} else {
+							displayId = i2ws((cursor.id >> 1) + 1);
+							displayName = wxString::Format("Client %s", displayId);
+						}
+						
+						user_list->SetCellValue(i, 1, displayId);
+						user_list->SetCellValue(i, 2, displayName);
+						++i;
+					}
 				}
-				
-				user_list->SetCellValue(i, 2, name);
-				++i;
 			}
+			
+			// Refresh the grid after changes
+			user_list->AutoSize();
+			user_list->Refresh();
+		}
+		catch (const std::exception& e) {
+			wxLogError("Error updating client list: %s", e.what());
 		}
 		
-		// Debug message to verify cursor list content
-		Message(wxString::Format("Updated client list with %zu cursors", cursors.size()));
-	}
-	
-	// Refresh the grid
-	user_list->Refresh();
+		insideOperation = false;
+	});
 }
 
 void LiveLogTab::OnPageChanged(wxBookCtrlEvent& evt) {

@@ -1,128 +1,37 @@
-Idlers tavern : https://discord.gg/FD2cYKBq5E  << Join for latest updates OT modules services c++ codes lua scripts and engines.
-=============
-Prerequisites:
-
-https://www.techpowerup.com/download/visual-c-redistributable-runtime-package-all-in-one/
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[# RMEVIP
+ 
+Version 7.1.2 with Live mapping fixed and other improvements!
 
 
-https://clickertibia.xyz/
+<img width="1391" height="716" alt="image" src="https://github.com/user-attachments/assets/f43e25df-5963-4968-8af8-395b8c80246e" />
 
-![image](https://github.com/user-attachments/assets/03585200-0f3a-47ac-a673-248166d7287e)
-
-
-[Features]
-
-There is EXE FILE ALREADY IN REPOSITORY YOU DO NOT NEED TO DOWNLOAD ANY BUILD JUST OPEN VIA IdlerMapEditor.exe
-to use collections copy collections.xml from 10.98 folder to any other version you are using. ensure the correct menubar.xml file is used! i use the one in vcproj/x64/release/data
-
-Find Item Window
-[added various flags such as isHelmet hasLight]
-[search by Item range]
-[ignore range]
-
-Replace Items / Replace Selection
-Massive overhaul adding whole border and wall lists!
-Allow brush input
-
-Minimap 
-various performance optimizations
-LOD optimization ZOOM x8+ renders only ground floor
-Export optmization ignore empty tiles
-
-Collections
-copy selected part of map and add to doodads via right click allows for speedmapping corridors and islands borders etc
-
-Fill
-fill empty space
-fill connected borders ( empty borders that have no water tile under them or ground tile it will search all connected borders)
-
-Remove duplicates
-
-Browse field 
-added browsefield expansion allowing to move items on stackpos
-
-Remove unreachable Tiles
-expanded for custom clients
-
-Find Item Action / Unique Id 
-find range or specific item action unique ID
-
-goto position
-take various formats of the position xyz style
-
-Hotkey Configuration
-added hotkey config menu
-
-Right click select raw brush instantly
-option in preferences
-
-Borderize batching
-if u borderized large maps the editor would crash it now does it by batches of 500 tiles
-
-Town index
-change selected town index id
+<img width="1761" height="989" alt="image" src="https://github.com/user-attachments/assets/1fb3d044-4d46-4b3a-b737-05dfc98c3cba" />
 
 
-Automagic
-layer carpet brushes
-same ground type border
+<img width="425" height="1000" alt="image" src="https://github.com/user-attachments/assets/deaaddc6-f342-4aef-be26-2ed6d481ba54" />
+
+<img width="711" height="533" alt="image" src="https://github.com/user-attachments/assets/7f52efb3-728b-4c4f-b528-9440582cdbb4" />
+
+<img width="431" height="604" alt="image" src="https://github.com/user-attachments/assets/1cc82af9-d702-4b12-90b6-df5dd9d31d38" />
+
+RME-Visual Idler Project
+
+Version 7 is what we will keep it at there will be no enumerations anymore.
+Why 7? It is my favourite number it is the numbre of the days in a week and most of all it is the number that represents Sunday a day of a significant importance of things being over the way they are. If your week was chaotic then sunday is the day you rest. If your week was full of hard work then Sunday is the day on which you deserve a break. If your week was smooth as always then Sunday is the day when you can enjoy the moment to remember it.
 
 
-Dark mode
-& colored mode
+https://discord.gg/FD2cYKBq5E
+
+join idlers tavern for latest updates!
+](https://discord.com/invite/FD2cYKBq5E
+
+idlers tavern has all the information about updates"
 
 
-Live Server(Experimental only works in debug mode after ignoring first breakpoint 3-4times then u can draw fine
-lack of synchronization
-lack of map chunk batching
-
-Autosave option feature
-u can save map x seconds e.g 300 seconds in /data/autosave will save your backup maps!
+continuation of : 
+https://github.com/Wirless/OTARMEIE-OLD
 
 
-Validate grounds
-validate all ground tiles on map remove duplicates and wrongly stacked ground tiles
-
-
-version 6.0.0 - 6.1.0 [not public]
-Grid view final
-allows for displaying raw palette in grid style with resizable palette window
-Added a "Load NPCs Folder" button to the CreaturePalettePanel
-Added a Load Monsters Npc folder to Creaturepalette panel
-Generate House - Creates house
-Map properties fetch otbm verison based on client verison
-Detached view - ever wanted to edit 5 different parts of map on same time? 
-And many more.
-
-
-I often work till late I do not have the time to make commits im the guy that does the job since its open source you guys go fix commits atleast it will show anybody proofread it before running this spaghetti code that been fueled by pure hatred.
-
-
-![image](https://github.com/user-attachments/assets/fa261227-5d88-4d00-9c60-0f48e393adc5)
-
-
-![image](https://github.com/user-attachments/assets/44c2defe-7cb3-4998-b371-15b1387a4b7f)
-
-
-
-
-
-Rookgaard Independence
-https://discord.gg/CavZvnvRey
-
-TIBIA TRADE:
-https://discord.gg/BtrYU3tn7a
-
-ADVERTISE YOUR OT SERVER WITH Idler_pl ON DISCORD.
-
-This is a map editor for game servers that derivied from [OpenTibia](https://github.com/opentibia/server) server project.
-
-It is a fork of a [Map Editor](https://github.com/hampusborgos/rme) created by [Remere](https://github.com/hampusborgos).
-
-You can find an engine compatible with OTBM format at [OTAcademy](https://github.com/OTAcademy), [OTLand](https://github.com/OTLand), [OpenTibiaBR](https://github.com/OpenTibiaBR) or other OT communities.
-
-Visit [OTARMEIE discord](https://discord.gg/FD2cYKBq5E) if you are looking for support or updates.
 
 I want to contribute
 ====================
@@ -171,5 +80,18 @@ https://idler.live/
 download exe dll
 [Release (1).zip](https://github.com/user-attachments/files/19621775/Release.1.zip)
 
-and put in OTARMEIE FOLDER of this repo 
+![image](https://github.com/user-attachments/assets/395931d7-bb59-4206-b21b-1c841c9921f4)
 
+![image](https://github.com/user-attachments/assets/50bea42b-7000-4e35-a8d7-f1fa38c2e4a8)
+
+![image](https://github.com/user-attachments/assets/22168663-2c6a-4e07-a2ff-27744afa9d67)
+
+![image](https://github.com/user-attachments/assets/a6566a93-b095-4db0-bc04-89400b683544)
+
+
+https://gyazo.com/d337bdf345b86111d1ef52ea16fd1792
+
+![image](https://github.com/user-attachments/assets/00186e9b-4051-4dcf-b664-bc039cf8abb4)
+
+
+)

@@ -21,6 +21,8 @@
 #include "items.h"
 #include "basemap.h"
 
+static thread_local std::set<Position> processing_tiles;
+
 uint32_t GroundBrush::border_types[256];
 
 int AutoBorder::edgeNameToID(const std::string& edgename) {
@@ -570,26 +572,33 @@ void GroundBrush::draw(BaseMap* map, Tile* tile, void* parameter) {
 		id = border_items.front().id;
 	}
 
-	// For Same Ground Type Border enabled, special handling to ensure ground is on top
-	if (g_settings.getBoolean(Config::SAME_GROUND_TYPE_BORDER)) {
-		// Create the ground item
-		Item* groundItem = Item::Create(id);
-		
-		// If we already have a ground, remove it
-		Item* oldGround = tile->ground;
-		if (oldGround) {
-			tile->ground = nullptr;
-			delete oldGround;
-		}
-		
-		// For Same Ground Type Border enabled, add ground at the top of the stack
-		// This ensures it visually covers other items
-		tile->items.push_back(groundItem);
-		tile->ground = groundItem;
-	} else {
-		// Standard behavior - add to the bottom
-		tile->addItem(Item::Create(id));
+	// Create the ground item
+	Item* groundItem = Item::Create(id);
+	
+	// Always properly handle ground items
+	// First remove any existing ground
+	if (tile->ground) {
+		delete tile->ground;
+		tile->ground = nullptr;
 	}
+	
+	// Also remove any items that should be grounds but were placed incorrectly
+	ItemVector::iterator it = tile->items.begin();
+	while (it != tile->items.end()) {
+		Item* item = *it;
+		if (item && (item->isGroundTile() || item->getGroundEquivalent() != 0)) {
+#ifdef __WXDEBUG__
+			printf("DEBUG: Removing misplaced ground item with ID %d from tile items\n", item->getID());
+#endif
+			delete item;
+			it = tile->items.erase(it);
+		} else {
+			++it;
+		}
+	}
+	
+	// Then set the new ground
+	tile->ground = groundItem;
 }
 
 const GroundBrush::BorderBlock* GroundBrush::getBrushTo(GroundBrush* first, GroundBrush* second) {
@@ -660,12 +669,222 @@ const GroundBrush::BorderBlock* GroundBrush::getBrushTo(GroundBrush* first, Grou
 	return nullptr;
 }
 
-inline GroundBrush* extractGroundBrushFromTile(BaseMap* map, uint32_t x, uint32_t y, uint32_t z) {
-	Tile* t = map->getTile(x, y, z);
-	return t ? t->getGroundBrush() : nullptr;
-}
-
 void GroundBrush::doBorders(BaseMap* map, Tile* tile) {
+	// Add debugging output for border operation
+	char debug_msg[512];
+	sprintf(debug_msg, "DEBUG DRAG: GroundBrush::doBorders called on tile at pos=(%d,%d,%d)\n", 
+		tile->getPosition().x, tile->getPosition().y, tile->getPosition().z);
+	OutputDebugStringA(debug_msg);
+	
+	// Prevent infinite recursion
+	if (processing_tiles.count(tile->getPosition()) > 0) {
+		sprintf(debug_msg, "DEBUG DRAG: Preventing recursion for tile at pos=(%d,%d,%d)\n", 
+			tile->getPosition().x, tile->getPosition().y, tile->getPosition().z);
+		OutputDebugStringA(debug_msg);
+		return;
+	}
+	processing_tiles.insert(tile->getPosition());
+	
+	if (!tile || !tile->ground) {
+		OutputDebugStringA("DEBUG DRAG: doBorders called on tile with no ground, skipping\n");
+		return;
+	}
+		
+	// Check if custom border is enabled and apply it
+	if (g_settings.getBoolean(Config::CUSTOM_BORDER_ENABLED)) {
+		int customBorderId = g_settings.getInteger(Config::CUSTOM_BORDER_ID);
+		sprintf(debug_msg, "DEBUG DRAG: Using custom border ID: %d\n", customBorderId);
+		OutputDebugStringA(debug_msg);
+		
+		auto it = g_brushes.borders.find(customBorderId);
+		if (it == g_brushes.borders.end() || !it->second) {
+			sprintf(debug_msg, "DEBUG DRAG: Custom border ID %d not found\n", customBorderId);
+			OutputDebugStringA(debug_msg);
+			processing_tiles.erase(tile->getPosition());
+			return; // Border ID not found
+		}
+		
+		AutoBorder* customBorder = it->second;
+		
+		// Get neighboring tiles to determine border pattern
+		const Position& position = tile->getPosition();
+		uint32_t x = position.x;
+		uint32_t y = position.y;
+		uint32_t z = position.z;
+		
+		sprintf(debug_msg, "DEBUG DRAG: Processing neighbors for tile at (%u,%u,%u)\n", x, y, z);
+		OutputDebugStringA(debug_msg);
+		
+		// Check the 8 surrounding tiles for ground, to apply borders where there's no ground
+		// We mark each position as true if it needs a border (no ground or different ground)
+		bool borders[8] = {false, false, false, false, false, false, false, false};
+		
+		// NW, N, NE, W, E, SW, S, SE
+		static const std::pair<int, int> offsets[8] = {
+			{-1, -1}, {0, -1}, {1, -1},
+			{-1,  0},          {1,  0},
+			{-1,  1}, {0,  1}, {1,  1}
+		};
+		
+		uint32_t tiledata = 0;
+		
+		// Get the ground brush from the current tile
+		GroundBrush* tileBrush = nullptr;
+		if (tile->ground) {
+			tileBrush = tile->ground->getGroundBrush();
+		}
+		
+		// Check all 8 surrounding positions
+		for (int i = 0; i < 8; ++i) {
+			Tile* neighbor = map->getTile(x + offsets[i].first, y + offsets[i].second, z);
+			
+			// First check for walls if walls repel borders is enabled
+			if (g_settings.getBoolean(Config::WALLS_REPEL_BORDERS) && neighbor) {
+				bool hasWall = false;
+				for (Item* item : neighbor->items) {
+					if (item->isWall()) {
+						hasWall = true;
+						break;
+					}
+				}
+				if (hasWall) {
+					continue; // Skip this neighbor if it has a wall
+				}
+			}
+			
+			// Add border if:
+			// - The neighbor is missing, or
+			// - The neighbor has no ground, or
+			// - The neighbor has a different ground brush
+			if (!neighbor || !neighbor->ground) {
+				borders[i] = true;
+				tiledata |= (1 << i);
+			} else {
+				GroundBrush* neighborBrush = neighbor->ground->getGroundBrush();
+				if (tileBrush && neighborBrush && tileBrush->getID() != neighborBrush->getID()) {
+					borders[i] = true;
+					tiledata |= (1 << i);
+				}
+			}
+		}
+		
+		sprintf(debug_msg, "DEBUG DRAG: Calculated tiledata=%u (0x%X) for custom border\n", tiledata, tiledata);
+		OutputDebugStringA(debug_msg);
+		
+		// Check for potential division by zero in border_types lookup
+		if (tiledata >= 256) {
+			sprintf(debug_msg, "DEBUG DRAG: ERROR! tiledata %u >= 256, this could cause buffer overflow!\n", tiledata);
+			OutputDebugStringA(debug_msg);
+			processing_tiles.erase(tile->getPosition());
+			return;
+		}
+		
+		// Border to terrain conversion - this is the logic for determining which
+		// borders to draw based on the surrounding tiles
+		BorderType directions[4] = {
+			static_cast<BorderType>((border_types[tiledata] & 0x000000FF) >> 0),
+			static_cast<BorderType>((border_types[tiledata] & 0x0000FF00) >> 8),
+			static_cast<BorderType>((border_types[tiledata] & 0x00FF0000) >> 16),
+			static_cast<BorderType>((border_types[tiledata] & 0xFF000000) >> 24)
+		};
+		
+		sprintf(debug_msg, "DEBUG DRAG: Border directions: [%d,%d,%d,%d]\n", 
+			directions[0], directions[1], directions[2], directions[3]);
+		OutputDebugStringA(debug_msg);
+		
+		// Apply the appropriate borders
+		for (int i = 0; i < 4; ++i) {
+			BorderType direction = directions[i];
+			if (direction == BORDER_NONE) {
+				continue;
+			}
+			
+			if (customBorder->tiles[direction]) {
+				Item* borderItem = Item::Create(customBorder->tiles[direction]);
+				if (borderItem) {
+					tile->addBorderItem(borderItem);
+				}
+			} else {
+				// Handle diagonal cases by creating corner pieces from horizontal pieces
+				// Only if we have the required horizontal pieces
+				bool addedDiagonal = false;
+				
+				if (direction == NORTHWEST_DIAGONAL && 
+					customBorder->tiles[WEST_HORIZONTAL] && customBorder->tiles[NORTH_HORIZONTAL]) {
+					Item* borderItem1 = Item::Create(customBorder->tiles[WEST_HORIZONTAL]);
+					Item* borderItem2 = Item::Create(customBorder->tiles[NORTH_HORIZONTAL]);
+					if (borderItem1 && borderItem2) {
+						tile->addBorderItem(borderItem1);
+						tile->addBorderItem(borderItem2);
+						addedDiagonal = true;
+					} else {
+						// Clean up if one failed
+						delete borderItem1;
+						delete borderItem2;
+					}
+				} else if (direction == NORTHEAST_DIAGONAL && 
+					customBorder->tiles[EAST_HORIZONTAL] && customBorder->tiles[NORTH_HORIZONTAL]) {
+					Item* borderItem1 = Item::Create(customBorder->tiles[EAST_HORIZONTAL]);
+					Item* borderItem2 = Item::Create(customBorder->tiles[NORTH_HORIZONTAL]);
+					if (borderItem1 && borderItem2) {
+						tile->addBorderItem(borderItem1);
+						tile->addBorderItem(borderItem2);
+						addedDiagonal = true;
+					} else {
+						// Clean up if one failed
+						delete borderItem1;
+						delete borderItem2;
+					}
+				} else if (direction == SOUTHWEST_DIAGONAL && 
+					customBorder->tiles[SOUTH_HORIZONTAL] && customBorder->tiles[WEST_HORIZONTAL]) {
+					Item* borderItem1 = Item::Create(customBorder->tiles[SOUTH_HORIZONTAL]);
+					Item* borderItem2 = Item::Create(customBorder->tiles[WEST_HORIZONTAL]);
+					if (borderItem1 && borderItem2) {
+						tile->addBorderItem(borderItem1);
+						tile->addBorderItem(borderItem2);
+						addedDiagonal = true;
+					} else {
+						// Clean up if one failed
+						delete borderItem1;
+						delete borderItem2;
+					}
+				} else if (direction == SOUTHEAST_DIAGONAL && 
+					customBorder->tiles[SOUTH_HORIZONTAL] && customBorder->tiles[EAST_HORIZONTAL]) {
+					Item* borderItem1 = Item::Create(customBorder->tiles[SOUTH_HORIZONTAL]);
+					Item* borderItem2 = Item::Create(customBorder->tiles[EAST_HORIZONTAL]);
+					if (borderItem1 && borderItem2) {
+						tile->addBorderItem(borderItem1);
+						tile->addBorderItem(borderItem2);
+						addedDiagonal = true;
+					} else {
+						// Clean up if one failed
+						delete borderItem1;
+						delete borderItem2;
+					}
+				}
+				
+				// If we couldn't create the diagonal from horizontals, try to use another border piece
+				if (!addedDiagonal) {
+					// Try to use any available border piece as a fallback
+					for (int j = 1; j <= 8; j++) { // Skip BORDER_NONE (0) and diagonals (9-12)
+						if (customBorder->tiles[j]) {
+							Item* borderItem = Item::Create(customBorder->tiles[j]);
+							if (borderItem) {
+								tile->addBorderItem(borderItem);
+								break;
+							}
+						}
+					}
+				}
+			}
+		}
+		
+		// Early return, don't proceed with normal border handling
+		processing_tiles.erase(tile->getPosition());
+		return;
+	}
+	
+	// Normal border handling below
 	static const auto extractGroundBrushFromTile = [](BaseMap* map, uint32_t x, uint32_t y, uint32_t z) -> GroundBrush* {
 		Tile* tile = map->getTile(x, y, z);
 		if (tile) {
@@ -803,15 +1022,10 @@ void GroundBrush::doBorders(BaseMap* map, Tile* tile) {
 			continue;
 		}
 
-		// printf("Checking neighbour #%d\n", i);
-		// printf("\tNeighbour not checked before\n");
-
 		GroundBrush* other = neighbourPair.second;
 		if (borderBrush) {
 			if (other) {
-				// printf("\tNeighbour has brush\n");
 				if (other->getID() == borderBrush->getID()) {
-					// printf("\tNeighbour has same brush as we\n");
 					continue;
 				}
 
@@ -1111,15 +1325,6 @@ void GroundBrush::doBorders(BaseMap* map, Tile* tile) {
 
 	for (const BorderBlock* borderBlock : specificList) {
 		for (const SpecificCaseBlock* specificCaseBlock : borderBlock->specific_cases) {
-			/*
-			printf("New round\n");
-			if(specificCaseBlock->to_replace_id == 0) {
-				continue;
-			}
-			if(specificCaseBlock->with_id == 0) {
-				continue;
-			}
-			*/
 			uint32_t matches = 0;
 			for (Item* item : tile->items) {
 				if (!item->isBorder()) {
@@ -1152,9 +1357,16 @@ void GroundBrush::doBorders(BaseMap* map, Tile* tile) {
 				// if delete_all mode, consider the border replaced
 				bool replaced = specificCaseBlock->delete_all;
 
-				while (it != tileItems.end()) {
+				// Add iteration guard to prevent infinite loops
+				int item_iterations = 0;
+				const int max_item_iterations = tileItems.size() * 2 + 20; // Safety limit
+
+				while (it != tileItems.end() && item_iterations < max_item_iterations) {
+					++item_iterations;
+					
 					Item* item = *it;
 					if (!item->isBorder()) {
+						++it;
 						continue;
 					}
 
@@ -1183,10 +1395,18 @@ void GroundBrush::doBorders(BaseMap* map, Tile* tile) {
 			}
 		}
 	}
+
+	// Remove tile from processing set when done
+	processing_tiles.erase(tile->getPosition());
 }
 
 // Add a custom method to reset borderize for the auto-magic behavior
 void GroundBrush::reborderizeTile(BaseMap* map, Tile* tile) {
+	if (!tile || !tile->ground) {
+		OutputDebugStringA("DEBUG DRAG: reborderizeTile called on tile with no ground, skipping\n");
+		return;
+	}
+
 	// First, clean any existing borders on the tile
 	if (g_settings.getBoolean(Config::SAME_GROUND_TYPE_BORDER)) {
 		// When Same Ground Type Border is enabled, we need to identify and remove

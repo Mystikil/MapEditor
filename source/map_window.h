@@ -20,7 +20,7 @@
 
 #include "position.h"
 #include "replace_items_window.h"
-#include "island_generator_dialog.h"
+
 #include "ground_validation_dialog.h"
 
 class MapCanvas;
@@ -67,7 +67,7 @@ public:
 	void FitToMap();
 
 	// Screen position.
-	Position GetScreenCenterPosition();
+	Position GetScreenCenterPosition() const;
 	void SetScreenCenterPosition(const Position& position);
 	void GoToPreviousCenterPosition();
 
@@ -83,6 +83,10 @@ public:
 	void ShowIslandGeneratorDialog();
 	void CloseIslandGeneratorDialog();
 	void OnIslandGeneratorDialogClose(wxCloseEvent& event);
+
+	void ShowDungeonGeneratorDialog();
+	void CloseDungeonGeneratorDialog();
+	void OnDungeonGeneratorDialogClose(wxCloseEvent& event);
 
 	void ShowGroundValidationDialog();
 	void CloseGroundValidationDialog();
@@ -103,7 +107,7 @@ protected:
 
 private:
 	ReplaceItemsDialog* replaceItemsDialog;
-	IslandGeneratorDialog* islandGeneratorDialog;
+
 	GroundValidationDialog* groundValidationDialog;
 	Position previous_position;
 

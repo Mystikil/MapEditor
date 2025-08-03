@@ -81,6 +81,8 @@ namespace Config {
 		SAME_GROUND_TYPE_BORDER,
 		WALLS_REPEL_BORDERS,
 		LAYER_CARPETS,
+		CUSTOM_BORDER_ENABLED,
+		CUSTOM_BORDER_ID,
 		HOUSE_BRUSH_REMOVE_ITEMS,
 		AUTO_ASSIGN_DOORID,
 		ERASER_LEAVE_UNIQUE,
@@ -109,6 +111,7 @@ namespace Config {
 		ASSETS_DATA_DIRS,
 		DEFAULT_CLIENT_VERSION,
 		CHECK_SIGNATURES,
+		FORCE_CLIENT_ITEMS_OTB,
 
 		CURSOR_RED,
 		CURSOR_GREEN,
@@ -157,6 +160,8 @@ namespace Config {
 		RECENT_EDITED_MAP_PATH,
 		RECENT_EDITED_MAP_POSITION,
 
+		OTS_DATA_DIRECTORY,
+
 		FIND_ITEM_MODE,
 		JUMP_TO_ITEM_MODE,
 
@@ -188,6 +193,7 @@ namespace Config {
 		AUTO_SELECT_RAW_ON_RIGHTCLICK,
 		AUTO_SAVE_ENABLED,
 		AUTO_SAVE_INTERVAL,
+		SUPPRESS_MAP_WARNINGS,
 
 		// Network/Live settings
 		LIVE_HOST,
@@ -206,8 +212,64 @@ namespace Config {
 		HOUSE_FLOOR_SCAN,
 		AUTO_DETECT_HOUSE_EXIT,
 
-		// Discord settings
-		DISCORD_DIALOG_SHOWN,
+		// LOD (Level of Detail) settings
+		TOOLTIP_MAX_ZOOM,
+		GROUND_ONLY_ZOOM_THRESHOLD,
+		ITEM_DISPLAY_ZOOM_THRESHOLD,
+		SPECIAL_FEATURES_ZOOM_THRESHOLD,
+		ANIMATION_ZOOM_THRESHOLD,
+		EFFECTS_ZOOM_THRESHOLD,
+		LIGHT_ZOOM_THRESHOLD,
+		SHADE_ZOOM_THRESHOLD,
+		TOWN_ZONE_ZOOM_THRESHOLD,
+		GRID_ZOOM_THRESHOLD,
+
+		// Palette grid settings
+		GRID_CHUNK_SIZE,
+		GRID_VISIBLE_ROWS_MARGIN,
+
+		// Website link control setting
+		LAST_WEBSITES_OPEN_TIME,
+
+		TOOLTIP_IGNORE_IDS,         // string: e.g. "658-660,6891,136"
+		TOOLTIP_SHOW,               // bool: master switch
+		TOOLTIP_SHOW_HASSCRIPT,     // bool: show hasScript
+		TOOLTIP_SHOW_TEXT,          // bool: show text
+		TOOLTIP_SHOW_ITEMID,         // bool: show item ID in tooltips
+		TOOLTIP_SHOW_AID,             // bool: show action ID in tooltips
+		TOOLTIP_SHOW_UID,             // bool: show unique ID in tooltips
+		TOOLTIP_SHOW_DOORID,          // bool: show door ID in tooltips
+		TOOLTIP_SHOW_DESTINATION,     // bool: show teleport destination in tooltips
+		TOOLTIP_SHOW_HOUSEID,         // bool: show house ID in tooltips
+		HOUSE_CUSTOM_COLORS,          // bool: use house ID colors to color house tiles
+		
+		REFRESH_RADIUS,               // int: radius for visible area refresh in multiplayer
+
+		// Invisible Items Color Settings
+		INVISIBLE_ITEMS_ENABLE_CUSTOM,    // bool: enable custom invisible item colors
+		INVISIBLE_INVALID_RED,            // int: red component for invalid items (id=0)
+		INVISIBLE_INVALID_GREEN,          // int: green component for invalid items (id=0)
+		INVISIBLE_INVALID_BLUE,           // int: blue component for invalid items (id=0)
+		INVISIBLE_STAIRS_RED,             // int: red component for invisible stairs (469)
+		INVISIBLE_STAIRS_GREEN,           // int: green component for invisible stairs (469)
+		INVISIBLE_STAIRS_BLUE,            // int: blue component for invisible stairs (469)
+		INVISIBLE_WALKABLE_RED,           // int: red component for invisible walkable tiles
+		INVISIBLE_WALKABLE_GREEN,         // int: green component for invisible walkable tiles
+		INVISIBLE_WALKABLE_BLUE,          // int: blue component for invisible walkable tiles
+		INVISIBLE_WALL_RED,               // int: red component for invisible walls (2187)
+		INVISIBLE_WALL_GREEN,             // int: green component for invisible walls (2187)
+		INVISIBLE_WALL_BLUE,              // int: blue component for invisible walls (2187)
+		INVISIBLE_CUSTOM_IDS,             // string: custom invisible item IDs (e.g. "1234:255,0,0;5678:0,255,0")
+
+		// Client Box Settings
+		INGAME_BOX_CUSTOM_SIZE_ENABLED,   // bool: enable custom client box size
+		INGAME_BOX_WIDTH,                 // int: custom client box width (default 17)
+		INGAME_BOX_HEIGHT,                // int: custom client box height (default 13)
+		INGAME_BOX_OFFSET_X,              // int: custom X border offset (default 0)
+		INGAME_BOX_OFFSET_Y,              // int: custom Y border offset (default 2)
+
+		// Depot auto-assignment settings
+		AUTO_ASSIGN_DEPOT_TO_CLOSEST_TEMPLE,  // bool: auto-assign depot town ID to closest temple
 
 		LAST,
 	};

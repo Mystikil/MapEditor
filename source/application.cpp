@@ -36,6 +36,13 @@
 #include "complexitem.h"
 #include "creature.h"
 
+// Add exception handling includes
+#include <exception>
+#include <fstream>
+#include <wx/datetime.h>
+#include <wx/filename.h>
+#include <wx/stdpaths.h>
+
 #include <wx/snglinst.h>
 
 #if defined(__LINUX__) || defined(__WINDOWS__)
@@ -43,6 +50,7 @@
 #endif
 
 #include "../brushes/icon/editor_icon.xpm"
+#include "color_utils.h"
 
 BEGIN_EVENT_TABLE(MainFrame, wxFrame)
 EVT_CLOSE(MainFrame::OnExit)
@@ -104,12 +112,17 @@ bool Application::OnInit() {
 	mt_seed(time(nullptr));
 	srand(time(nullptr));
 
+	// Set up global exception handling
+#ifndef __DEBUG_MODE__
+	wxHandleFatalExceptions(true);
+#endif
+
 	// Discover data directory
 	g_gui.discoverDataDirectory("clients.xml");
 
 	// Tell that we are the real thing
 	wxAppConsole::SetInstance(this);
-	wxArtProvider::Push(new ArtProvider());
+	wxArtProvider::Push(newd ArtProvider());
 
 #if defined(__LINUX__) || defined(__WINDOWS__)
 	int argc = 1;
@@ -128,14 +141,18 @@ bool Application::OnInit() {
 
 #ifdef _USE_PROCESS_COM
 	m_single_instance_checker = newd wxSingleInstanceChecker; // Instance checker has to stay alive throughout the applications lifetime
+	
+	// Parse command line arguments first to allow overriding single instance setting
+	m_file_to_open = wxEmptyString;
+	ParseCommandLineMap(m_file_to_open);
+	
 	if (g_settings.getInteger(Config::ONLY_ONE_INSTANCE) && m_single_instance_checker->IsAnotherRunning()) {
 		RMEProcessClient client;
 		wxConnectionBase* connection = client.MakeConnection("localhost", "rme_host", "rme_talk");
 		if (connection) {
-			wxString fileName;
-			if (ParseCommandLineMap(fileName)) {
+			if (m_file_to_open != wxEmptyString) {
 				wxLogNull nolog; // We might get a timeout message if the file fails to open on the running instance. Let's not show that message.
-				connection->Execute(fileName);
+				connection->Execute(m_file_to_open);
 			}
 			connection->Disconnect();
 			wxDELETE(connection);
@@ -159,14 +176,17 @@ bool Application::OnInit() {
 	g_gui.gfx.loadEditorSprites();
 
 #ifndef __DEBUG_MODE__
-	// wxHandleFatalExceptions(true);
+	// Enable fatal exception handler
+	wxHandleFatalExceptions(true);
 #endif
 	// Load all the dependency files
 	std::string error;
 	StringVector warnings;
 
-	m_file_to_open = wxEmptyString;
-	ParseCommandLineMap(m_file_to_open);
+	// Don't parse command line map again since we already did it above
+	if (m_file_to_open == wxEmptyString) {
+		ParseCommandLineMap(m_file_to_open);
+	}
 
 	g_gui.root = newd MainFrame(__W_RME_APPLICATION_NAME__, wxDefaultPosition, wxSize(700, 500));
 	SetTopWindow(g_gui.root);
@@ -177,30 +197,41 @@ bool Application::OnInit() {
 	// Load palette
 	g_gui.LoadPerspective();
 
-	wxIcon icon(editor_icon);
+	// Create icon and apply color shift
+	wxBitmap iconBitmap(editor_icon);
+	wxImage iconImage = iconBitmap.ConvertToImage();
+	ColorUtils::ShiftHue(iconImage, ColorUtils::GetRandomHueShift());
+	iconBitmap = wxBitmap(iconImage);
+	
+	// Convert to icon for the window and set both
+	wxIcon icon;
+	icon.CopyFromBitmap(iconBitmap);
 	g_gui.root->SetIcon(icon);
 
-	if (g_settings.getInteger(Config::WELCOME_DIALOG) == 1 && m_file_to_open == wxEmptyString) {
-		g_gui.ShowWelcomeDialog(icon);
-	} else {
-		g_gui.root->Show();
+	// Create a unique log directory for this session
+	wxDateTime now = wxDateTime::Now();
+	wxString logDir = wxStandardPaths::Get().GetUserDataDir() + wxFileName::GetPathSeparator() + 
+		"logs" + wxFileName::GetPathSeparator() + now.Format("%Y%m%d_%H%M%S");
+	
+	// Make sure it exists
+	wxFileName dirPath(logDir);
+	if (!dirPath.DirExists()) {
+		dirPath.Mkdir(wxS_DIR_DEFAULT, wxPATH_MKDIR_FULL);
 	}
 
-	// Show Discord invitation dialog (only if not already shown before)
-	if (g_settings.getInteger(Config::DISCORD_DIALOG_SHOWN) != 1) {
-		wxMessageDialog discordDialog(nullptr, 
-			"Join the Idlers Tavern Discord community!\n\nConnect with other map editors and get support.",
-			"Join Our Community", 
-			wxOK | wxCANCEL | wxICON_INFORMATION);
-		
-		discordDialog.SetOKCancelLabels("Join Discord", "Maybe Later");
-		int result = discordDialog.ShowModal();
-		
-		// Open Discord link regardless of which button was pressed
-		::wxLaunchDefaultBrowser("https://discord.gg/BtHj5YqsSz", wxBROWSER_NEW_WINDOW);
-		
-		// Remember that we've shown the dialog
-		g_settings.setInteger(Config::DISCORD_DIALOG_SHOWN, 1);
+	// Let them know about this session
+	std::ofstream sessionLog((logDir + wxFileName::GetPathSeparator() + "session.log").ToStdString());
+	if (sessionLog.is_open()) {
+		sessionLog << "RME Session started at " << now.FormatISOCombined() << std::endl;
+		sessionLog << "Version: " << __W_RME_VERSION__ << std::endl;
+		sessionLog.close();
+	}
+
+	// Show welcome dialog with color-shifted bitmap
+	if (g_settings.getInteger(Config::WELCOME_DIALOG) == 1 && m_file_to_open == wxEmptyString) {
+		g_gui.ShowWelcomeDialog(iconBitmap);
+	} else {
+		g_gui.root->Show();
 	}
 
 	// Set idle event handling mode
@@ -234,55 +265,6 @@ bool Application::OnInit() {
 	}
 #endif
 
-	FileName save_failed_file = GUI::GetLocalDataDirectory();
-	save_failed_file.SetName(".saving.txt");
-	if (save_failed_file.FileExists()) {
-		std::ifstream f(nstr(save_failed_file.GetFullPath()).c_str(), std::ios::in);
-
-		std::string backup_otbm, backup_house, backup_spawn;
-
-		getline(f, backup_otbm);
-		getline(f, backup_house);
-		getline(f, backup_spawn);
-
-		// Remove the file
-		f.close();
-		std::remove(nstr(save_failed_file.GetFullPath()).c_str());
-
-		// Query file retrieval if possible
-		if (!backup_otbm.empty()) {
-			long ret = g_gui.PopupDialog(
-				"Editor Crashed",
-				wxString(
-					"IMPORTANT! THE EDITOR CRASHED WHILE SAVING!\n\n"
-					"Do you want to recover the lost map? (it will be opened immediately):\n"
-				) << wxstr(backup_otbm)
-				  << "\n"
-				  << wxstr(backup_house) << "\n"
-				  << wxstr(backup_spawn) << "\n",
-				wxYES | wxNO
-			);
-
-			if (ret == wxID_YES) {
-				// Recover if the user so wishes
-				std::remove(backup_otbm.substr(0, backup_otbm.size() - 1).c_str());
-				std::rename(backup_otbm.c_str(), backup_otbm.substr(0, backup_otbm.size() - 1).c_str());
-
-				if (!backup_house.empty()) {
-					std::remove(backup_house.substr(0, backup_house.size() - 1).c_str());
-					std::rename(backup_house.c_str(), backup_house.substr(0, backup_house.size() - 1).c_str());
-				}
-				if (!backup_spawn.empty()) {
-					std::remove(backup_spawn.substr(0, backup_spawn.size() - 1).c_str());
-					std::rename(backup_spawn.c_str(), backup_spawn.substr(0, backup_spawn.size() - 1).c_str());
-				}
-
-				// Load the map
-				g_gui.LoadMap(wxstr(backup_otbm.substr(0, backup_otbm.size() - 1)));
-				return true;
-			}
-		}
-	}
 	// Keep track of first event loop entry
 	m_startup = true;
 	return true;
@@ -308,6 +290,24 @@ void Application::OnEventLoopEnter(wxEventLoopBase* loop) {
 		// You generally don't want to save this map...
 		g_gui.GetCurrentEditor()->map.clearChanges();
 	}
+
+	// Check when the URLs were last opened
+	time_t currentTime = time(nullptr);
+	time_t lastOpenTime = static_cast<time_t>(g_settings.getInteger(Config::LAST_WEBSITES_OPEN_TIME));
+	
+	// Calculate difference in days
+	const time_t secondsPerDay = 60 * 60 * 24;
+	const int daysToWait = 3;
+	
+	// If last open time is 0 (never opened) or if 7+ days have passed
+	if (lastOpenTime == 0 || difftime(currentTime, lastOpenTime) > daysToWait * secondsPerDay) {
+		// Open Discord and Idler.live URLs in the default browser
+		::wxLaunchDefaultBrowser("https://discord.gg/FD2cYKBq5E", wxBROWSER_NEW_WINDOW);
+		::wxLaunchDefaultBrowser("https://paypal.me/PatrykZmyslony", wxBROWSER_NEW_WINDOW);
+		// Update the last open time
+		g_settings.setInteger(Config::LAST_WEBSITES_OPEN_TIME, static_cast<int>(currentTime));
+	}
+	
 }
 
 void Application::MacOpenFiles(const wxArrayString& fileNames) {
@@ -360,16 +360,50 @@ int Application::OnExit() {
 }
 
 void Application::OnFatalException() {
-	////
+	// Log the fatal exception to a file
+	wxDateTime now = wxDateTime::Now();
+	wxString logFileName = wxStandardPaths::Get().GetUserDataDir() + wxFileName::GetPathSeparator() + "fatal_error_" + 
+		now.Format("%Y%m%d_%H%M%S") + ".log";
+	
+	// Create log directory if it doesn't exist
+	wxFileName logDir(wxStandardPaths::Get().GetUserDataDir());
+	if (!logDir.DirExists()) {
+		wxMkdir(logDir.GetPath());
+	}
+	
+	// Log details to a file
+	std::ofstream logFile(logFileName.ToStdString(), std::ios::app);
+	if (logFile.is_open()) {
+		logFile << "Fatal exception occurred at " << now.FormatISOCombined() << std::endl;
+		logFile << "RME version: " << __W_RME_VERSION__ << std::endl;
+		logFile << "Please report this crash to the developers." << std::endl;
+		logFile.close();
+	}
+	
+	// Create and show a simple crash dialog
+	wxString msg = "A fatal error has occurred in " + wxString(__W_RME_APPLICATION_NAME__) + ".\n\n";
+	msg += "The application will now close. A log file has been created at:\n";
+	msg += logFileName + "\n\n";
+	msg += "Please report this error to the developers.";
+	
+	wxMessageBox(msg, "Fatal Error", wxICON_ERROR | wxOK);
 }
 
 bool Application::ParseCommandLineMap(wxString& fileName) {
 	if (argc == 2) {
+		// Check if it's a special command to force multiple instances
+		if (wxString(argv[1]) == "-force-multi-instance") {
+			g_settings.setInteger(Config::ONLY_ONE_INSTANCE, 0);
+			return false;
+		}
 		fileName = wxString(argv[1]);
 		return true;
 	} else if (argc == 3) {
 		if (argv[1] == "-ws") {
 			g_settings.setInteger(Config::WELCOME_DIALOG, argv[2] == "1" ? 1 : 0);
+		} else if (argv[1] == "-multi-instance") {
+			// Allow forcing multiple instances via command line
+			g_settings.setInteger(Config::ONLY_ONE_INSTANCE, argv[2] == "1" ? 0 : 1);
 		}
 	}
 	return false;
@@ -542,12 +576,31 @@ bool MainFrame::DoQuerySave(bool doclose) {
 		return true;
 	}
 
+	Editor* editor = g_gui.GetCurrentEditor();
+	if (g_gui.HasDetachedViews(editor)) {
+		wxString message = "This map has one or more detached views open.\n";
+		message += "You must close all detached views before closing the map.";
+		
+		int choice = wxMessageBox(
+			message,
+			"Detached Views Open",
+			wxOK | wxCANCEL | wxICON_EXCLAMATION
+		);
+		
+		if (choice == wxOK) {
+			// User chose to close detached views
+			g_gui.CloseDetachedViews(editor);
+		} else {
+			// User canceled operation
+			return false;
+		}
+	}
+
 	if (!DoQuerySaveTileset()) {
 		return false;
 	}
 
-	Editor& editor = *g_gui.GetCurrentEditor();
-	if (editor.IsLiveClient()) {
+	if (editor->IsLiveClient()) {
 		long ret = g_gui.PopupDialog(
 			"Disconnect",
 			"Do you want to disconnect?",
@@ -558,9 +611,9 @@ bool MainFrame::DoQuerySave(bool doclose) {
 			return false;
 		}
 
-		editor.CloseLiveServer();
+		editor->CloseLiveServer();
 		return DoQuerySave(doclose);
-	} else if (editor.IsLiveServer()) {
+	} else if (editor->IsLiveServer()) {
 		long ret = g_gui.PopupDialog(
 			"Shutdown",
 			"Do you want to shut down the server? (any clients will be disconnected)",
@@ -571,7 +624,7 @@ bool MainFrame::DoQuerySave(bool doclose) {
 			return false;
 		}
 
-		editor.CloseLiveServer();
+		editor->CloseLiveServer();
 		return DoQuerySave(doclose);
 	} else if (g_gui.ShouldSave()) {
 		long ret = g_gui.PopupDialog(
@@ -686,4 +739,75 @@ void MainFrame::PrepareDC(wxDC& dc) {
 	dc.SetAxisOrientation(1, 0);
 	dc.SetUserScale(1.0, 1.0);
 	dc.SetMapMode(wxMM_TEXT);
+}
+
+// Add this method to handle exceptions in the main event loop
+bool Application::OnExceptionInMainLoop() {
+	try {
+		throw; // Rethrow the exception to catch it
+	} catch (const std::exception& e) {
+		// Log the exception
+		wxDateTime now = wxDateTime::Now();
+		wxString logFileName = wxStandardPaths::Get().GetUserDataDir() + wxFileName::GetPathSeparator() + 
+			"exception_" + now.Format("%Y%m%d_%H%M%S") + ".log";
+		
+		// Create log directory
+		wxFileName logDir(wxStandardPaths::Get().GetUserDataDir());
+		if (!logDir.DirExists()) {
+			wxMkdir(logDir.GetPath());
+		}
+		
+		// Log details
+		std::ofstream logFile(logFileName.ToStdString(), std::ios::app);
+		if (logFile.is_open()) {
+			logFile << "Exception in main loop at " << now.FormatISOCombined() << std::endl;
+			logFile << "Exception: " << e.what() << std::endl;
+			logFile << "RME version: " << __W_RME_VERSION__ << std::endl;
+			logFile.close();
+		}
+		
+		// Only show dialog during drawing operations for serious errors
+		if (g_gui.IsEditorOpen()) {
+			// Silently continue for editor operations to prevent UI freezes
+			return true; // Continue execution
+		} else {
+			wxString msg = "An error occurred in " + wxString(__W_RME_APPLICATION_NAME__) + ".\n\n";
+			msg += "Error details: " + wxString(e.what()) + "\n\n";
+			msg += "The application will try to continue. If problems persist, please restart.";
+			wxMessageBox(msg, "Error", wxICON_WARNING | wxOK);
+			return true; // Continue execution
+		}
+	} catch (...) {
+		// Unknown exception - more serious
+		wxDateTime now = wxDateTime::Now();
+		wxString logFileName = wxStandardPaths::Get().GetUserDataDir() + wxFileName::GetPathSeparator() + 
+			"unknown_exception_" + now.Format("%Y%m%d_%H%M%S") + ".log";
+		
+		// Create log directory
+		wxFileName logDir(wxStandardPaths::Get().GetUserDataDir());
+		if (!logDir.DirExists()) {
+			wxMkdir(logDir.GetPath());
+		}
+		
+		// Log whatever we can
+		std::ofstream logFile(logFileName.ToStdString(), std::ios::app);
+		if (logFile.is_open()) {
+			logFile << "Unknown exception in main loop at " << now.FormatISOCombined() << std::endl;
+			logFile << "RME version: " << __W_RME_VERSION__ << std::endl;
+			logFile.close();
+		}
+		
+		// Only show dialog during drawing operations for serious errors
+		if (g_gui.IsEditorOpen()) {
+			// Silently continue for editor operations
+			return true; // Continue execution
+		} else {
+			wxString msg = "An unknown error occurred in " + wxString(__W_RME_APPLICATION_NAME__) + ".\n\n";
+			msg += "The application will try to continue. If problems persist, please restart.";
+			wxMessageBox(msg, "Error", wxICON_WARNING | wxOK);
+			return true; // Continue execution
+		}
+	}
+	
+	return false; // If all else fails, let the default handler take over
 }

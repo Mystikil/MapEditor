@@ -296,80 +296,99 @@ bool GraphicManager::loadEditorSprites() {
 	// Unused graphics MIGHT be loaded here, but it's a neglectable loss
 	sprite_space[EDITOR_SPRITE_SELECTION_MARKER] = newd EditorSprite(
 		newd wxBitmap(selection_marker_xpm16x16),
-		newd wxBitmap(selection_marker_xpm32x32)
+		newd wxBitmap(selection_marker_xpm32x32),
+		nullptr
 	);
 	sprite_space[EDITOR_SPRITE_BRUSH_CD_1x1] = newd EditorSprite(
 		loadPNGFile(circular_1_small_png),
-		loadPNGFile(circular_1_png)
+		loadPNGFile(circular_1_png),
+		nullptr
 	);
 	sprite_space[EDITOR_SPRITE_BRUSH_CD_3x3] = newd EditorSprite(
 		loadPNGFile(circular_2_small_png),
-		loadPNGFile(circular_2_png)
+		loadPNGFile(circular_2_png),
+		nullptr
 	);
 	sprite_space[EDITOR_SPRITE_BRUSH_CD_5x5] = newd EditorSprite(
 		loadPNGFile(circular_3_small_png),
-		loadPNGFile(circular_3_png)
+		loadPNGFile(circular_3_png),
+		nullptr
 	);
 	sprite_space[EDITOR_SPRITE_BRUSH_CD_7x7] = newd EditorSprite(
 		loadPNGFile(circular_4_small_png),
-		loadPNGFile(circular_4_png)
+		loadPNGFile(circular_4_png),
+		nullptr
 	);
 	sprite_space[EDITOR_SPRITE_BRUSH_CD_9x9] = newd EditorSprite(
 		loadPNGFile(circular_5_small_png),
-		loadPNGFile(circular_5_png)
+		loadPNGFile(circular_5_png),
+		nullptr
 	);
 	sprite_space[EDITOR_SPRITE_BRUSH_CD_15x15] = newd EditorSprite(
 		loadPNGFile(circular_6_small_png),
-		loadPNGFile(circular_6_png)
+		loadPNGFile(circular_6_png),
+		nullptr
 	);
 	sprite_space[EDITOR_SPRITE_BRUSH_CD_19x19] = newd EditorSprite(
 		loadPNGFile(circular_7_small_png),
-		loadPNGFile(circular_7_png)
+		loadPNGFile(circular_7_png),
+		nullptr
 	);
 	sprite_space[EDITOR_SPRITE_BRUSH_SD_1x1] = newd EditorSprite(
 		loadPNGFile(rectangular_1_small_png),
-		loadPNGFile(rectangular_1_png)
+		loadPNGFile(rectangular_1_png),
+		nullptr
 	);
 	sprite_space[EDITOR_SPRITE_BRUSH_SD_3x3] = newd EditorSprite(
 		loadPNGFile(rectangular_2_small_png),
-		loadPNGFile(rectangular_2_png)
+		loadPNGFile(rectangular_2_png),
+		nullptr
 	);
 	sprite_space[EDITOR_SPRITE_BRUSH_SD_5x5] = newd EditorSprite(
 		loadPNGFile(rectangular_3_small_png),
-		loadPNGFile(rectangular_3_png)
+		loadPNGFile(rectangular_3_png),
+		nullptr
 	);
 	sprite_space[EDITOR_SPRITE_BRUSH_SD_7x7] = newd EditorSprite(
 		loadPNGFile(rectangular_4_small_png),
-		loadPNGFile(rectangular_4_png)
+		loadPNGFile(rectangular_4_png),
+		nullptr
 	);
 	sprite_space[EDITOR_SPRITE_BRUSH_SD_9x9] = newd EditorSprite(
 		loadPNGFile(rectangular_5_small_png),
-		loadPNGFile(rectangular_5_png)
+		loadPNGFile(rectangular_5_png),
+		nullptr
 	);
 	sprite_space[EDITOR_SPRITE_BRUSH_SD_15x15] = newd EditorSprite(
 		loadPNGFile(rectangular_6_small_png),
-		loadPNGFile(rectangular_6_png)
+		loadPNGFile(rectangular_6_png),
+		nullptr
 	);
 	sprite_space[EDITOR_SPRITE_BRUSH_SD_19x19] = newd EditorSprite(
 		loadPNGFile(rectangular_7_small_png),
-		loadPNGFile(rectangular_7_png)
+		loadPNGFile(rectangular_7_png),
+		nullptr
 	);
 
 	sprite_space[EDITOR_SPRITE_OPTIONAL_BORDER_TOOL] = newd EditorSprite(
 		loadPNGFile(optional_border_small_png),
-		loadPNGFile(optional_border_png)
+		loadPNGFile(optional_border_png),
+		nullptr
 	);
 	sprite_space[EDITOR_SPRITE_ERASER] = newd EditorSprite(
 		loadPNGFile(eraser_small_png),
-		loadPNGFile(eraser_png)
+		loadPNGFile(eraser_png),
+		nullptr
 	);
 	sprite_space[EDITOR_SPRITE_PZ_TOOL] = newd EditorSprite(
 		loadPNGFile(protection_zone_small_png),
-		loadPNGFile(protection_zone_png)
+		loadPNGFile(protection_zone_png),
+		nullptr
 	);
 	sprite_space[EDITOR_SPRITE_PVPZ_TOOL] = newd EditorSprite(
 		loadPNGFile(pvp_zone_small_png),
-		loadPNGFile(pvp_zone_png)
+		loadPNGFile(pvp_zone_png),
+		nullptr
 	);
 	sprite_space[EDITOR_SPRITE_ZONE_TOOL] = newd EditorSprite(
 		loadPNGFile(zone_brush_small_png),
@@ -377,52 +396,64 @@ bool GraphicManager::loadEditorSprites() {
 	);
 	sprite_space[EDITOR_SPRITE_NOLOG_TOOL] = newd EditorSprite(
 		loadPNGFile(no_logout_small_png),
-		loadPNGFile(no_logout_png)
+		loadPNGFile(no_logout_png),
+		nullptr
 	);
 	sprite_space[EDITOR_SPRITE_NOPVP_TOOL] = newd EditorSprite(
 		loadPNGFile(no_pvp_small_png),
-		loadPNGFile(no_pvp_png)
+		loadPNGFile(no_pvp_png),
+		nullptr
 	);
 
 	sprite_space[EDITOR_SPRITE_DOOR_NORMAL] = newd EditorSprite(
 		newd wxBitmap(door_normal_small_xpm),
-		newd wxBitmap(door_normal_xpm)
+		newd wxBitmap(door_normal_xpm),
+		nullptr
 	);
 	sprite_space[EDITOR_SPRITE_DOOR_LOCKED] = newd EditorSprite(
 		newd wxBitmap(door_locked_small_xpm),
-		newd wxBitmap(door_locked_xpm)
+		newd wxBitmap(door_locked_xpm),
+		nullptr
 	);
 	sprite_space[EDITOR_SPRITE_DOOR_MAGIC] = newd EditorSprite(
 		newd wxBitmap(door_magic_small_xpm),
-		newd wxBitmap(door_magic_xpm)
+		newd wxBitmap(door_magic_xpm),
+		nullptr
 	);
 	sprite_space[EDITOR_SPRITE_DOOR_QUEST] = newd EditorSprite(
 		newd wxBitmap(door_quest_small_xpm),
-		newd wxBitmap(door_quest_xpm)
+		newd wxBitmap(door_quest_xpm),
+		nullptr
 	);
 	sprite_space[EDITOR_SPRITE_DOOR_NORMAL_ALT] = newd EditorSprite(
 		newd wxBitmap(door_normal_alt_small_xpm),
-		newd wxBitmap(door_normal_alt_xpm)
+		newd wxBitmap(door_normal_alt_xpm),
+		nullptr
 	);
 	sprite_space[EDITOR_SPRITE_DOOR_ARCHWAY] = newd EditorSprite(
 		newd wxBitmap(door_archway_small_xpm),
-		newd wxBitmap(door_archway_xpm)
+		newd wxBitmap(door_archway_xpm),
+		nullptr
 	);
 	sprite_space[EDITOR_SPRITE_WINDOW_NORMAL] = newd EditorSprite(
 		loadPNGFile(window_normal_small_png),
-		loadPNGFile(window_normal_png)
+		loadPNGFile(window_normal_png),
+		nullptr
 	);
 	sprite_space[EDITOR_SPRITE_WINDOW_HATCH] = newd EditorSprite(
 		loadPNGFile(window_hatch_small_png),
-		loadPNGFile(window_hatch_png)
+		loadPNGFile(window_hatch_png),
+		nullptr
 	);
 
 	sprite_space[EDITOR_SPRITE_SELECTION_GEM] = newd EditorSprite(
 		loadPNGFile(gem_edit_png),
+		nullptr,
 		nullptr
 	);
 	sprite_space[EDITOR_SPRITE_DRAWING_GEM] = newd EditorSprite(
 		loadPNGFile(gem_move_png),
+		nullptr,
 		nullptr
 	);
 
@@ -488,7 +519,8 @@ bool GraphicManager::loadSpriteMetadata(const FileName& datafile, wxString& erro
 
 	uint32_t minID = 100; // items start with id 100
 	// We don't load distance/effects, if we would, just add effect_count & distance_count here
-	uint32_t maxID = item_count + creature_count;
+	//we load effects now
+	uint32_t maxID = item_count + creature_count + effect_count + distance_count;
 
 	dat_format = client_version->getDatFormatForSignature(datSignature);
 
@@ -928,9 +960,10 @@ void GraphicManager::garbageCollection() {
 	}
 }
 
-EditorSprite::EditorSprite(wxBitmap* b16x16, wxBitmap* b32x32) {
+EditorSprite::EditorSprite(wxBitmap* b16x16, wxBitmap* b32x32, wxBitmap* b64x64) {
 	bm[SPRITE_SIZE_16x16] = b16x16;
 	bm[SPRITE_SIZE_32x32] = b32x32;
+	bm[SPRITE_SIZE_64x64] = b64x64;
 }
 
 EditorSprite::~EditorSprite() {
@@ -941,14 +974,22 @@ void EditorSprite::DrawTo(wxDC* dc, SpriteSize sz, int start_x, int start_y, int
 	wxBitmap* sp = bm[sz];
 	if (sp) {
 		dc->DrawBitmap(*sp, start_x, start_y, true);
+	} else if (sz == SPRITE_SIZE_64x64 && bm[SPRITE_SIZE_32x32]) {
+		// Fallback to 32x32 and scale it up if no 64x64 sprite is available
+		wxImage img = bm[SPRITE_SIZE_32x32]->ConvertToImage();
+		img.Rescale(64, 64, wxIMAGE_QUALITY_HIGH);
+		wxBitmap scaled(img);
+		dc->DrawBitmap(scaled, start_x, start_y, true);
 	}
 }
 
 void EditorSprite::unloadDC() {
 	delete bm[SPRITE_SIZE_16x16];
 	delete bm[SPRITE_SIZE_32x32];
+	delete bm[SPRITE_SIZE_64x64];
 	bm[SPRITE_SIZE_16x16] = nullptr;
 	bm[SPRITE_SIZE_32x32] = nullptr;
+	bm[SPRITE_SIZE_64x64] = nullptr;
 }
 
 GameSprite::GameSprite() :
@@ -1107,20 +1148,114 @@ wxMemoryDC* GameSprite::getDC(SpriteSize size) {
 
 void GameSprite::DrawTo(wxDC* dc, SpriteSize sz, int start_x, int start_y, int width, int height) {
 	if (width == -1) {
-		width = sz == SPRITE_SIZE_32x32 ? 32 : 16;
+		width = (sz == SPRITE_SIZE_32x32) ? 32 : (sz == SPRITE_SIZE_64x64 ? 64 : 16);
 	}
 	if (height == -1) {
-		height = sz == SPRITE_SIZE_32x32 ? 32 : 16;
+		height = (sz == SPRITE_SIZE_32x32) ? 32 : (sz == SPRITE_SIZE_64x64 ? 64 : 16);
 	}
-	wxDC* sdc = getDC(sz);
-	if (sdc) {
-		dc->Blit(start_x, start_y, width, height, sdc, 0, 0, wxCOPY, true);
+	
+	if (sz == SPRITE_SIZE_64x64) {
+		// For 64x64, use the 32x32 DC and scale it
+		wxDC* sdc = getDC(SPRITE_SIZE_32x32);
+		if (sdc) {
+			wxBitmap bmp(32, 32);
+			wxMemoryDC temp_dc(bmp);
+			temp_dc.Blit(0, 0, 32, 32, sdc, 0, 0, wxCOPY, true);
+			temp_dc.SelectObject(wxNullBitmap);
+			
+			wxImage img = bmp.ConvertToImage();
+			img.Rescale(64, 64, wxIMAGE_QUALITY_HIGH);
+			wxBitmap scaled(img);
+			
+			dc->DrawBitmap(scaled, start_x, start_y, true);
+		} else {
+			const wxBrush& b = dc->GetBrush();
+			dc->SetBrush(*wxRED_BRUSH);
+			dc->DrawRectangle(start_x, start_y, width, height);
+			dc->SetBrush(b);
+		}
 	} else {
-		const wxBrush& b = dc->GetBrush();
-		dc->SetBrush(*wxRED_BRUSH);
-		dc->DrawRectangle(start_x, start_y, width, height);
-		dc->SetBrush(b);
+		// Regular 16x16 or 32x32 rendering
+		wxDC* sdc = getDC(sz);
+		if (sdc) {
+			dc->Blit(start_x, start_y, width, height, sdc, 0, 0, wxCOPY, true);
+		} else {
+			const wxBrush& b = dc->GetBrush();
+			dc->SetBrush(*wxRED_BRUSH);
+			dc->DrawRectangle(start_x, start_y, width, height);
+			dc->SetBrush(b);
+		}
 	}
+}
+
+void GameSprite::DrawOutfit(wxDC* dc, SpriteSize sz, int start_x, int start_y, const Outfit& outfit) {
+	// Check if this GameSprite supports outfit coloring
+	if (layers <= 1) {
+		// No template support, fall back to regular drawing
+		DrawTo(dc, sz, start_x, start_y);
+		return;
+	}
+	
+	// For outfit sprites, we need to check if there are any colors to apply
+	bool hasOutfitColors = (outfit.lookHead > 0 || outfit.lookBody > 0 || 
+						   outfit.lookLegs > 0 || outfit.lookFeet > 0);
+	
+	if (!hasOutfitColors) {
+		// No outfit colors, use regular drawing
+		DrawTo(dc, sz, start_x, start_y);
+		return;
+	}
+	
+	// Create a templated image with the outfit colors
+	int sprite_index = getIndex(0, 0, 0, 0, 0, 0, 0); // Get base sprite index
+	TemplateImage* templateImg = getTemplateImage(sprite_index, outfit);
+	
+	if (!templateImg) {
+		// Fallback to regular drawing
+		DrawTo(dc, sz, start_x, start_y);
+		return;
+	}
+	
+	// Get the RGB data from the templated image (with outfit colors applied)
+	uint8_t* rgbData = templateImg->getRGBData();
+	if (!rgbData) {
+		// Fallback to regular drawing
+		DrawTo(dc, sz, start_x, start_y);
+		return;
+	}
+	
+	// Create wxImage from the RGB data
+	wxImage image(SPRITE_PIXELS, SPRITE_PIXELS, rgbData, true); // true = static data, don't copy
+	
+	// Set magenta as transparent color
+	image.SetMaskColour(255, 0, 255);
+	
+	// Calculate target size based on the SpriteSize parameter
+	int target_size;
+	switch (sz) {
+		case SPRITE_SIZE_16x16:
+			target_size = 16;
+			break;
+		case SPRITE_SIZE_64x64:
+			target_size = 64;
+			break;
+		case SPRITE_SIZE_32x32:
+		default:
+			target_size = 32;
+			break;
+	}
+	
+	// Scale the image if needed
+	if (target_size != SPRITE_PIXELS) {
+		image = image.Scale(target_size, target_size, wxIMAGE_QUALITY_HIGH);
+	}
+	
+	// Convert to bitmap and draw
+	wxBitmap bitmap(image);
+	dc->DrawBitmap(bitmap, start_x, start_y, true);
+	
+	// Clean up the RGB data
+	delete[] rgbData;
 }
 
 GameSprite::Image::Image() :

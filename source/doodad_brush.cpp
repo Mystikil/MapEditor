@@ -16,11 +16,55 @@
 //////////////////////////////////////////////////////////////////////
 
 #include "main.h"
+#include "gui.h"
 
 #include "doodad_brush.h"
 #include "basemap.h"
+#include "map.h"
+#include "town.h"
+#include "items.h"
+#include "complexitem.h"
+#include "settings.h"
 
 #include <boost/lexical_cast.hpp>
+
+//=============================================================================
+// Helper function to find closest temple (shared with RAWBrush)
+
+uint32_t FindClosestTempleForDepot(BaseMap* map, const Position& depotPos) {
+	if (!map) return 0;
+	
+	// Cast to Map to access towns
+	Map* fullMap = dynamic_cast<Map*>(map);
+	if (!fullMap) return 0;
+	
+	const Towns& towns = fullMap->towns;
+	if (towns.count() == 0) return 0;
+	
+	uint32_t closestTownId = 0;
+	double minDistance = std::numeric_limits<double>::max();
+	
+	for (TownMap::const_iterator town_iter = towns.begin(); town_iter != towns.end(); ++town_iter) {
+		const Town* town = town_iter->second;
+		if (!town) continue;
+		
+		const Position& templePos = town->getTemplePosition();
+		if (!templePos.isValid()) continue;
+		
+		// Calculate distance (using Euclidean distance)
+		double dx = static_cast<double>(depotPos.x - templePos.x);
+		double dy = static_cast<double>(depotPos.y - templePos.y);
+		double dz = static_cast<double>(depotPos.z - templePos.z);
+		double distance = sqrt(dx * dx + dy * dy + dz * dz);
+		
+		if (distance < minDistance) {
+			minDistance = distance;
+			closestTownId = town->getID();
+		}
+	}
+	
+	return closestTownId;
+}
 
 //=============================================================================
 // Doodad brush
@@ -324,7 +368,26 @@ void DoodadBrush::draw(BaseMap* map, Tile* tile, void* parameter) {
 		const SingleBlock& sb = *block_iter;
 		if (roll <= sb.chance) {
 			// Use this!
-			tile->addItem(sb.item->deepCopy());
+			Item* new_item = sb.item->deepCopy();
+			if (new_item && g_gui.IsCurrentActionIDEnabled()) {
+				new_item->setActionID(g_gui.GetCurrentActionID());
+			}
+			
+			// Auto-assign depot to closest temple if enabled and this is a depot item
+			if (g_settings.getBoolean(Config::AUTO_ASSIGN_DEPOT_TO_CLOSEST_TEMPLE) && new_item) {
+				const ItemType& itemType = g_items[new_item->getID()];
+				if (itemType.isDepot()) {
+					Depot* depot = dynamic_cast<Depot*>(new_item);
+					if (depot) {
+						uint32_t closestTownId = FindClosestTempleForDepot(map, tile->getPosition());
+						if (closestTownId > 0) {
+							depot->setDepotID(static_cast<uint8_t>(closestTownId));
+						}
+					}
+				}
+			}
+			
+			tile->addItem(new_item);
 			break;
 		}
 		roll -= sb.chance;

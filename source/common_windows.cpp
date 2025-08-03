@@ -100,6 +100,12 @@ MapPropertiesWindow::MapPropertiesWindow(wxWindow* parent, MapTab* view, Editor&
 
 	grid_sizer->Add(protocol_choice, wxSizerFlags(1).Expand());
 
+	// Auto update checkbox
+	grid_sizer->Add(newd wxStaticText(this, wxID_ANY, "Auto Update OTBM"));
+	auto_update_checkbox = newd wxCheckBox(this, wxID_ANY, "");
+	auto_update_checkbox->SetValue(true); // Default to enabled
+	grid_sizer->Add(auto_update_checkbox, wxSizerFlags(0).Left());
+
 	// Dimensions
 	grid_sizer->Add(newd wxStaticText(this, wxID_ANY, "Map Dimensions"));
 	{
@@ -143,6 +149,10 @@ MapPropertiesWindow::MapPropertiesWindow(wxWindow* parent, MapTab* view, Editor&
 
 	ClientVersion* current_version = ClientVersion::get(map.getVersion().client);
 	protocol_choice->SetStringSelection(wxstr(current_version->getName()));
+
+	// Bind the protocol choice event
+	protocol_choice->Bind(wxEVT_CHOICE, &MapPropertiesWindow::OnChangeVersion, this);
+	//protocol_choice->Bind(wxEVT_CHOICE, &MapPropertiesWindow::OnClientVersionChange, this);
 }
 
 void MapPropertiesWindow::UpdateProtocolList() {
@@ -166,22 +176,32 @@ void MapPropertiesWindow::OnChangeVersion(wxCommandEvent& event) {
     wxString client = protocol_choice->GetStringSelection();
     ClientVersion* version = ClientVersion::get(nstr(client));
     
-    // Get selected map version
-    wxString map_ver = version_choice->GetStringSelection();
-    
     // If client version changed, update map version
     if(version) {
         // Set map version based on client version
-        if(version->getID() <= CLIENT_VERSION_790) {
-            version_choice->SetSelection(0); // OTBM 1 - 0.5.0
-        } else if(version->getID() <= CLIENT_VERSION_800) {
-            version_choice->SetSelection(1); // OTBM 2 - 0.6.0
-        } else if(version->getID() <= CLIENT_VERSION_854) {
-            version_choice->SetSelection(2); // OTBM 3 - 0.6.1
-        } else {
-            version_choice->SetSelection(3); // OTBM 4 - 0.7.0
+        MapVersionID preferred_version = version->getPrefferedMapVersionID();
+        switch(preferred_version) {
+            case MAP_OTBM_1:
+                version_choice->SetSelection(0); // OTBM 1 - 0.5.0
+                break;
+            case MAP_OTBM_2:
+                version_choice->SetSelection(1); // OTBM 2 - 0.6.0
+                break;
+            case MAP_OTBM_3:
+                version_choice->SetSelection(2); // OTBM 3 - 0.6.1
+                break;
+            case MAP_OTBM_4:
+                version_choice->SetSelection(3); // OTBM 4 - 0.7.0
+                break;
+            default:
+                version_choice->SetSelection(0); // Default to OTBM 1
+                break;
         }
+        version_choice->Refresh(); // Force visual refresh
     }
+    
+    // Get selected map version
+    wxString map_ver = version_choice->GetStringSelection();
     
     // If map version changed, update client version list
     if(map_ver.Contains("0.5.0")) {
@@ -201,6 +221,38 @@ void MapPropertiesWindow::OnChangeVersion(wxCommandEvent& event) {
         UpdateProtocolList();
         protocol_choice->SetStringSelection(client);
     }
+}
+
+void MapPropertiesWindow::OnClientVersionChange(wxCommandEvent& event) {
+    // Get selected client version
+    wxString client = protocol_choice->GetStringSelection();
+    ClientVersion* version = ClientVersion::get(nstr(client));
+    
+    // Only update OTBM version if auto-update is enabled
+    if(version && auto_update_checkbox->GetValue()) {
+        // Set map version based on client version
+        MapVersionID preferred_version = version->getPrefferedMapVersionID();
+        switch(preferred_version) {
+            case MAP_OTBM_1:
+                version_choice->SetSelection(0); // OTBM 1 - 0.5.0
+                break;
+            case MAP_OTBM_2:
+                version_choice->SetSelection(1); // OTBM 2 - 0.6.0
+                break;
+            case MAP_OTBM_3:
+                version_choice->SetSelection(2); // OTBM 3 - 0.6.1
+                break;
+            case MAP_OTBM_4:
+                version_choice->SetSelection(3); // OTBM 4 - 0.7.0
+                break;
+            default:
+                version_choice->SetSelection(0); // Default to OTBM 1
+                break;
+        }
+        version_choice->Refresh();
+    }
+    
+    event.Skip();
 }
 
 struct MapConversionContext {
@@ -1194,6 +1246,9 @@ wxCoord FindDialogListBox::OnMeasureItem(size_t n) const {
 SortableListBox::SortableListBox(wxWindow* parent, wxWindowID id, const wxPoint& pos, const wxSize& size) :
 	wxListBox(parent, id, pos, size, 0, nullptr, wxLB_SINGLE | wxLB_NEEDED_SB) { }
 
+SortableListBox::SortableListBox(wxWindow* parent, wxWindowID id, const wxPoint& pos, const wxSize& size, int n, const wxString choices[], long style) :
+	wxListBox(parent, id, pos, size, n, choices, style) { }
+
 SortableListBox::~SortableListBox() { }
 
 void SortableListBox::Sort() {
@@ -1350,7 +1405,7 @@ EditTownsDialog::EditTownsDialog(wxWindow* parent, Editor& editor) :
 	name_field = newd wxTextCtrl(this, wxID_ANY, "", wxDefaultPosition, wxSize(190, 20), 0, wxTextValidator(wxFILTER_ASCII, &town_name));
 	tmpsizer->Add(name_field, 2, wxEXPAND | wxLEFT | wxBOTTOM, 5);
 
-	id_field = newd wxTextCtrl(this, wxID_ANY, "", wxDefaultPosition, wxSize(40, 20), 0, wxTextValidator(wxFILTER_NUMERIC, &town_id));
+	id_field = newd wxTextCtrl(this, wxID_ANY, "", wxDefaultPosition, wxSize(40, 20), wxTE_READONLY, wxTextValidator(wxFILTER_NUMERIC, &town_id));
 	id_field->Enable(false);
 	tmpsizer->Add(id_field, 1, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 5);
 	sizer->Add(tmpsizer, 0, wxEXPAND | wxALL, 10);
@@ -1394,11 +1449,31 @@ EditTownsDialog::~EditTownsDialog() {
 	}
 }
 
+void EditTownsDialog::SynchronizeWithMap() {
+	// Clear our local list and rebuild from the map
+	for (std::vector<Town*>::iterator town_iter = town_list.begin(); town_iter != town_list.end(); ++town_iter) {
+		delete *town_iter;
+	}
+	town_list.clear();
+	
+	// Rebuild from the actual map data
+	for (TownMap::const_iterator town_iter = editor.map.towns.begin(); town_iter != editor.map.towns.end(); ++town_iter) {
+		Town* town = town_iter->second;
+		town_list.push_back(newd Town(*town));
+		if (max_town_id < town->getID()) {
+			max_town_id = town->getID();
+		}
+	}
+}
+
 void EditTownsDialog::BuildListBox(bool doselect) {
 	long tmplong = 0;
 	max_town_id = 0;
 	wxArrayString town_name_list;
 	uint32_t selection_before = 0;
+
+	// First synchronize with the map to ensure we have current data
+	SynchronizeWithMap();
 
 	if (doselect && id_field->GetValue().ToLong(&tmplong)) {
 		uint32_t old_town_id = tmplong;
@@ -1462,14 +1537,13 @@ void EditTownsDialog::UpdateSelection(int new_selection) {
 
 			editor.map.getOrCreateTile(templePos)->getLocation()->increaseTownCount();
 
-				// printf("Changed town %d:%s\n", old_town_id, old_town->getName().c_str());
-				// printf("New values %d:%s:%d:%d:%d\n", town_id, town_name.c_str(), templepos.x, templepos.y, templepos.z);
 				old_town->setTemplePosition(templePos);
 
 			wxString new_name = name_field->GetValue();
 			wxString old_name = wxstr(old_town->getName());
 
 				old_town->setName(nstr(new_name));
+			
 				if (new_name != old_name) {
 					// Name has changed, update list
 					BuildListBox(false);
@@ -1516,12 +1590,23 @@ void EditTownsDialog::OnClickSelectTemplePosition(wxCommandEvent& WXUNUSED(event
 }
 
 void EditTownsDialog::OnClickAdd(wxCommandEvent& WXUNUSED(event)) {
-	Town* new_town = newd Town(++max_town_id);
+	// Find the next available ID
+	uint32_t new_id = 1;
+	while (editor.map.towns.getTown(new_id) != nullptr) {
+		new_id++;
+	}
+	
+	Town* new_town = newd Town(new_id);
 	new_town->setName("Unnamed Town");
 	new_town->setTemplePosition(Position(0, 0, 0));
 	town_list.push_back(new_town);
 
 	editor.map.getOrCreateTile(Position(0, 0, 0))->getLocation()->increaseTownCount();
+
+	// Update max_town_id if necessary
+	if (new_id > max_town_id) {
+		max_town_id = new_id;
+	}
 
 	BuildListBox(false);
 	UpdateSelection(town_list.size() - 1);
@@ -1615,28 +1700,9 @@ void EditTownsDialog::OnClickRemove(wxCommandEvent& WXUNUSED(event)) {
             editor.map.getOrCreateTile(town_to_remove->getTemplePosition())
                 ->getLocation()->decreaseTownCount();
 
-            // Store old ID and remove the town
-            uint32_t removed_id = town_to_remove->getID();
+            // Remove the town from the list and delete it
             town_list.erase(town_list.begin() + selected_town_index);
             delete town_to_remove;
-
-            // Reindex remaining towns and update their houses
-            for (size_t i = 0; i < town_list.size(); i++) {
-                Town* remaining_town = town_list[i];
-                if (remaining_town->getID() > removed_id) {
-                    uint32_t new_id = remaining_town->getID() - 1;
-                    // Update houses to point to the new town ID
-                    for (HouseMap::iterator house_iter = editor.map.houses.begin(); 
-                         house_iter != editor.map.houses.end(); ++house_iter) {
-                        if (house_iter->second->townid == remaining_town->getID()) {
-                            house_iter->second->townid = new_id;
-                        }
-                    }
-                    remaining_town->setID(new_id);
-                }
-            }
-
-            max_town_id = town_list.size();
             BuildListBox(false);
             
             if (selected_town_index >= int(town_list.size())) {
@@ -1675,14 +1741,13 @@ void EditTownsDialog::OnClickOK(wxCommandEvent& WXUNUSED(event)) {
 
 				editor.map.getOrCreateTile(templePos)->getLocation()->increaseTownCount();
 
-				// printf("Changed town %d:%s\n", old_town_id, old_town->getName().c_str());
-				// printf("New values %d:%s:%d:%d:%d\n", town_id, town_name.c_str(), templepos.x, templepos.y, templepos.z);
 				old_town->setTemplePosition(templePos);
 
 				wxString new_name = name_field->GetValue();
 				wxString old_name = wxstr(old_town->getName());
 
 				old_town->setName(nstr(new_name));
+				
 				if (new_name != old_name) {
 					// Name has changed, update list
 					BuildListBox(true);
@@ -1894,6 +1959,8 @@ void EditTownsDialog::ImportTownFromXML(const wxString& path) {
     BuildListBox(true);
     UpdateSelection(town_list.size() - 1);
 }
+
+
 
 // ============================================================================
 // Go To Position Dialog

@@ -43,6 +43,7 @@
 #include "map_drawer.h"
 #include "application.h"
 #include "live_server.h"
+#include "live_client.h"
 #include "browse_tile_window.h"
 
 #include "minimap_window.h"
@@ -64,7 +65,7 @@
 
 BEGIN_EVENT_TABLE(MapCanvas, wxGLCanvas)
 EVT_KEY_DOWN(MapCanvas::OnKeyDown)
-EVT_KEY_DOWN(MapCanvas::OnKeyUp)
+EVT_KEY_UP(MapCanvas::OnKeyUp)
 
 // Mouse events
 EVT_MOTION(MapCanvas::OnMouseMove)
@@ -90,13 +91,17 @@ EVT_MENU(MAP_POPUP_MENU_COPY_POSITION, MapCanvas::OnCopyPosition)
 EVT_MENU(MAP_POPUP_MENU_PASTE, MapCanvas::OnPaste)
 EVT_MENU(MAP_POPUP_MENU_DELETE, MapCanvas::OnDelete)
 EVT_MENU(MAP_POPUP_MENU_FILL, MapCanvas::OnFill)
-EVT_MENU(MAP_POPUP_MENU_GENERATE_ISLAND, MapCanvas::OnGenerateIsland)
+
 EVT_MENU(MAP_POPUP_MENU_CREATE_HOUSE, MapCanvas::OnCreateHouse)
 EVT_MENU(MAP_POPUP_MENU_FIND_SIMILAR_ITEMS, MapCanvas::OnFindSimilarItems)
 //----
 EVT_MENU(MAP_POPUP_MENU_COPY_SERVER_ID, MapCanvas::OnCopyServerId)
 EVT_MENU(MAP_POPUP_MENU_COPY_CLIENT_ID, MapCanvas::OnCopyClientId)
 EVT_MENU(MAP_POPUP_MENU_COPY_NAME, MapCanvas::OnCopyName)
+EVT_MENU(MAP_POPUP_MENU_COPY_ACTION_ID, MapCanvas::OnCopyActionId)
+EVT_MENU(MAP_POPUP_MENU_COPY_UNIQUE_ID, MapCanvas::OnCopyUniqueId)
+EVT_MENU(MAP_POPUP_MENU_PASTE_ACTION_ID, MapCanvas::OnPasteActionId)
+EVT_MENU(MAP_POPUP_MENU_PASTE_UNIQUE_ID, MapCanvas::OnPasteUniqueId)
 // ----
 EVT_MENU(MAP_POPUP_MENU_ROTATE, MapCanvas::OnRotateItem)
 EVT_MENU(MAP_POPUP_MENU_GOTO, MapCanvas::OnGotoDestination)
@@ -120,6 +125,10 @@ EVT_MENU(MAP_POPUP_MENU_PROPERTIES, MapCanvas::OnProperties)
 EVT_MENU(MAP_POPUP_MENU_BROWSE_TILE, MapCanvas::OnBrowseTile)
 // Add to the event table after other MAP_POPUP_MENU items
 EVT_MENU(MAP_POPUP_MENU_SELECTION_TO_DOODAD, MapCanvas::OnSelectionToDoodad)
+EVT_MENU(MAP_POPUP_MENU_OPEN_REVSCRIPT, MapCanvas::OnOpenRevScript)
+EVT_MENU(MAP_POPUP_MENU_OPEN_NPC_XML, MapCanvas::OnOpenNPCXML)
+EVT_MENU(MAP_POPUP_MENU_OPEN_NPC_SCRIPT, MapCanvas::OnOpenNPCScript)
+EVT_MENU(MAP_POPUP_MENU_OPEN_MONSTER_XML, MapCanvas::OnOpenMonsterXML)
 
 END_EVENT_TABLE()
 
@@ -490,6 +499,13 @@ void MapCanvas::OnMouseMove(wxMouseEvent& event) {
 			int move_x = drag_start_x - mouse_map_x;
 			int move_y = drag_start_y - mouse_map_y;
 			int move_z = drag_start_z - floor;
+			
+			// Add debugging output for drag calculations
+			char debug_msg[512];
+			sprintf(debug_msg, "DEBUG DRAG: Dragging detected - start_pos=(%d,%d,%d), mouse_pos=(%d,%d,%d), move_offset=(%d,%d,%d)\n", 
+				drag_start_x, drag_start_y, drag_start_z, mouse_map_x, mouse_map_y, floor, move_x, move_y, move_z);
+			OutputDebugStringA(debug_msg);
+			
 			ss << "Dragging " << -move_x << "," << -move_y << "," << -move_z;
 			g_gui.SetStatusText(ss);
 
@@ -628,7 +644,7 @@ void MapCanvas::OnMouseLeftDoubleClick(wxMouseEvent& event) {
 				action->addChange(newd Change(new_tile));
 				editor.addAction(action);
 			} else {
-				// Cancel!
+				// Cancel!a
 				delete new_tile;
 			}
 			w->Destroy();
@@ -948,11 +964,27 @@ void MapCanvas::OnMouseActionRelease(wxMouseEvent& event) {
 	int move_x = last_click_map_x - mouse_map_x;
 	int move_y = last_click_map_y - mouse_map_y;
 	int move_z = last_click_map_z - floor;
+	
+	// Add debugging output for mouse action release
+	char debug_msg[512];
+	sprintf(debug_msg, "DEBUG DRAG: OnMouseActionRelease - mouse_pos=(%d,%d), last_click=(%d,%d,%d), move_offset=(%d,%d,%d)\n", 
+		mouse_map_x, mouse_map_y, last_click_map_x, last_click_map_y, last_click_map_z, move_x, move_y, move_z);
+	OutputDebugStringA(debug_msg);
 
 	if (g_gui.IsSelectionMode()) {
 		if (dragging && (move_x != 0 || move_y != 0 || move_z != 0)) {
+			sprintf(debug_msg, "DEBUG DRAG: Calling editor.moveSelection with Position(%d,%d,%d), dragging=%d\n", 
+				move_x, move_y, move_z, dragging);
+			OutputDebugStringA(debug_msg);
+			
 			editor.moveSelection(Position(move_x, move_y, move_z));
+			
+			OutputDebugStringA("DEBUG DRAG: editor.moveSelection completed\n");
 		} else {
+			sprintf(debug_msg, "DEBUG DRAG: Not moving selection - dragging=%d, move_offset=(%d,%d,%d)\n", 
+				dragging, move_x, move_y, move_z);
+			OutputDebugStringA(debug_msg);
+			
 			if (boundbox_selection) {
 				if (mouse_map_x == last_click_map_x && mouse_map_y == last_click_map_y && event.ControlDown()) {
 					// Mouse hasn't moved, do control+shift thingy!
@@ -1047,6 +1079,15 @@ void MapCanvas::OnMouseActionRelease(wxMouseEvent& event) {
 					if (width < threadcount) {
 						threadcount = min(1, width);
 					}
+					
+					// CRITICAL FIX: Prevent division by zero
+					if (threadcount <= 0) {
+						char debug_msg[256];
+						sprintf(debug_msg, "DEBUG DRAG: CRITICAL ERROR! threadcount=%d, width=%d - FORCING threadcount to 1\n", threadcount, width);
+						OutputDebugStringA(debug_msg);
+						threadcount = 1;
+					}
+					
 					// Let's divide!
 					int remainder = width;
 					int cleared = 0;
@@ -1125,7 +1166,23 @@ void MapCanvas::OnMouseActionRelease(wxMouseEvent& event) {
 				int map_x = start_map_x + (end_map_x - start_map_x) / 2;
 				int map_y = start_map_y + (end_map_y - start_map_y) / 2;
 
-				int width = min(g_settings.getInteger(Config::MAX_SPAWN_RADIUS), ((end_map_x - start_map_x) / 2 + (end_map_y - start_map_y) / 2) / 2);
+				// CRITICAL FIX: Prevent division by zero in spawn size calculation
+				int raw_width = (end_map_x - start_map_x) / 2 + (end_map_y - start_map_y) / 2;
+				if (raw_width <= 0) {
+					char debug_msg[256];
+					sprintf(debug_msg, "DEBUG DRAG: WARNING! Spawn calculation resulted in width %d - FORCING TO 1\n", raw_width);
+					OutputDebugStringA(debug_msg);
+					raw_width = 1;
+				}
+				
+				int width = min(g_settings.getInteger(Config::MAX_SPAWN_RADIUS), raw_width / 2);
+				if (width <= 0) {
+					char debug_msg[256];
+					sprintf(debug_msg, "DEBUG DRAG: WARNING! Final spawn width %d - FORCING TO 1\n", width);
+					OutputDebugStringA(debug_msg);
+					width = 1;
+				}
+				
 				int old = g_gui.GetBrushSize();
 				g_gui.SetBrushSize(width);
 				editor.draw(Position(map_x, map_y, floor), event.AltDown());
@@ -1331,6 +1388,14 @@ void MapCanvas::OnMousePropertiesRelease(wxMouseEvent& event) {
 	int mouse_map_x, mouse_map_y;
 	ScreenToMap(event.GetX(), event.GetY(), &mouse_map_x, &mouse_map_y);
 
+#ifdef __WXDEBUG__
+	printf("DEBUG: Right-click release at map position %d,%d,%d\n", mouse_map_x, mouse_map_y, floor);
+	Tile* tile = editor.map.getTile(mouse_map_x, mouse_map_y, floor);
+	if (tile && tile->ground) {
+		printf("DEBUG: Tile has ground at %p\n", tile->ground);
+	}
+#endif
+
 	if (g_gui.IsDrawingMode()) {
 		g_gui.SetSelectionMode();
 	}
@@ -1465,7 +1530,33 @@ void MapCanvas::OnMousePropertiesRelease(wxMouseEvent& event) {
 	}
 
 	popup_menu->Update();
+	
+#ifdef __WXDEBUG__
+	// Debug the state of the tiles before showing popup menu
+	int debug_mouse_x, debug_mouse_y;
+	ScreenToMap(event.GetX(), event.GetY(), &debug_mouse_x, &debug_mouse_y);
+	Tile* debug_tile = editor.map.getTile(debug_mouse_x, debug_mouse_y, floor);
+	
+	printf("DEBUG: Before popup menu - Tile at %d,%d,%d: %p\n", 
+		debug_mouse_x, debug_mouse_y, floor, debug_tile);
+	if (debug_tile && debug_tile->ground) {
+		printf("DEBUG: Before popup menu - Tile has ground %p (ID:%d)\n", 
+			debug_tile->ground, debug_tile->ground->getID());
+	}
+#endif
+
 	PopupMenu(popup_menu);
+
+#ifdef __WXDEBUG__
+	// Debug the state of the tiles after showing popup menu
+	debug_tile = editor.map.getTile(debug_mouse_x, debug_mouse_y, floor);
+	printf("DEBUG: After popup menu - Tile at %d,%d,%d: %p\n", 
+		debug_mouse_x, debug_mouse_y, floor, debug_tile);
+	if (debug_tile && debug_tile->ground) {
+		printf("DEBUG: After popup menu - Tile has ground %p (ID:%d)\n", 
+			debug_tile->ground, debug_tile->ground->getID());
+	}
+#endif
 
 	editor.actionQueue->resetTimer();
 	dragging = false;
@@ -1713,6 +1804,14 @@ void MapCanvas::OnKeyDown(wxKeyEvent& event) {
 			}
 			break;
 		}
+		case WXK_F5: { // Refresh visible area (for multiplayer)
+			LiveClient* client = dynamic_cast<LiveClient*>(editor.GetLiveClient());
+			if (client) {
+				client->requestVisibleRefresh();
+				g_gui.SetStatusText("Refreshing visible area...");
+			}
+			break;
+		}
 		case WXK_DELETE: { // Delete
 			editor.destroySelection();
 			g_gui.RefreshView();
@@ -1840,6 +1939,62 @@ void MapCanvas::OnKeyDown(wxKeyEvent& event) {
 }
 
 void MapCanvas::OnKeyUp(wxKeyEvent& event) {
+	// ESC key - cancel custom brush size
+	if (event.GetKeyCode() == WXK_ESCAPE && g_gui.UseCustomBrushSize()) {
+		g_gui.SetCustomBrushSize(false);
+		g_gui.SetStatusText("Restored standard brush size");
+		Refresh();
+		return;
+	}
+	
+	// If Shift key is released while dragging with brush, set custom brush size (square brushes only)
+	if (event.GetKeyCode() == WXK_SHIFT && dragging_draw && g_gui.GetCurrentBrush() && g_gui.GetCurrentBrush()->canDrag()) {
+		int current_map_x, current_map_y;
+		MouseToMap(&current_map_x, &current_map_y);
+		
+		// Only allow custom brush size for square brushes
+		if (g_gui.GetBrushShape() == BRUSHSHAPE_SQUARE) {
+			int width = std::abs(current_map_x - last_click_map_x) + 1;  // +1 to include the tile itself
+			int height = std::abs(current_map_y - last_click_map_y) + 1; // +1 to include the tile itself
+			
+			// CRITICAL FIX: Prevent zero-sized brushes after movement
+			if (width <= 0) {
+				char debug_msg[256];
+				sprintf(debug_msg, "DEBUG DRAG: WARNING! Movement resulted in width %d - FORCING TO 1\n", width);
+				OutputDebugStringA(debug_msg);
+				width = 1;
+			}
+			
+			if (height <= 0) {
+				char debug_msg[256];
+				sprintf(debug_msg, "DEBUG DRAG: WARNING! Movement resulted in height %d - FORCING TO 1\n", height);
+				OutputDebugStringA(debug_msg);
+				height = 1;
+			}
+			
+			if (width > 0 && height > 0) {
+				// Enable custom brush dimensions with specific width and height
+				// No need to adjust for center pixel - accept any dimensions
+				g_gui.SetCustomBrushSize(true, width, height);
+				
+				// End drag drawing mode but keep drawing mode active
+				dragging_draw = false;
+				
+				// Update status bar
+				wxString ss;
+				ss << "Custom brush size set to " << width << "x" << height;
+				g_gui.SetStatusText(ss);
+			}
+			Refresh();
+		} else if (g_gui.GetBrushShape() == BRUSHSHAPE_CIRCLE) {
+			// Circle brushes use traditional radius-based sizing - no custom sizes allowed
+			// End drag drawing mode
+			dragging_draw = false;
+			g_gui.SetStatusText("Circle brushes use traditional radius sizing");
+			Refresh();
+		}
+	}
+	
 	keyCode = WXK_NONE;
 }
 
@@ -1971,6 +2126,125 @@ void MapCanvas::OnCopyName(wxCommandEvent& WXUNUSED(event)) {
 	}
 }
 
+void MapCanvas::OnCopyActionId(wxCommandEvent& WXUNUSED(event)) {
+	ASSERT(editor.selection.size() == 1);
+
+	if (wxTheClipboard->Open()) {
+		Tile* tile = editor.selection.getSelectedTile();
+		ItemVector selected_items = tile->getSelectedItems();
+		ASSERT(selected_items.size() == 1);
+
+		const Item* item = selected_items.front();
+
+		wxTextDataObject* obj = new wxTextDataObject();
+		obj->SetText(i2ws(item->getActionID()));
+		wxTheClipboard->SetData(obj);
+
+		wxTheClipboard->Close();
+	}
+}
+
+void MapCanvas::OnCopyUniqueId(wxCommandEvent& WXUNUSED(event)) {
+	ASSERT(editor.selection.size() == 1);
+
+	if (wxTheClipboard->Open()) {
+		Tile* tile = editor.selection.getSelectedTile();
+		ItemVector selected_items = tile->getSelectedItems();
+		ASSERT(selected_items.size() == 1);
+
+		const Item* item = selected_items.front();
+
+		wxTextDataObject* obj = new wxTextDataObject();
+		obj->SetText(i2ws(item->getUniqueID()));
+		wxTheClipboard->SetData(obj);
+
+		wxTheClipboard->Close();
+	}
+}
+
+void MapCanvas::OnPasteActionId(wxCommandEvent& WXUNUSED(event)) {
+	ASSERT(editor.selection.size() == 1);
+
+	if (wxTheClipboard->Open()) {
+		if (wxTheClipboard->IsSupported(wxDF_TEXT)) {
+			wxTextDataObject data;
+			wxTheClipboard->GetData(data);
+			
+			long actionId;
+			if (data.GetText().ToLong(&actionId) && actionId >= 0 && actionId <= 0xFFFF) {
+				Tile* tile = editor.selection.getSelectedTile();
+				if (!tile) {
+					wxTheClipboard->Close();
+					return;
+				}
+				
+				Tile* new_tile = tile->deepCopy(editor.map);
+				ItemVector selected_items = new_tile->getSelectedItems();
+				
+				if (selected_items.size() == 1) {
+					Item* item = selected_items.front();
+					item->setActionID(static_cast<uint16_t>(actionId));
+					
+					Action* action = editor.actionQueue->createAction(ACTION_CHANGE_PROPERTIES);
+					action->addChange(newd Change(new_tile));
+					editor.addAction(action);
+					g_gui.RefreshView();
+				} else {
+					delete new_tile;
+				}
+			} else {
+				g_gui.PopupDialog(g_gui.root, "Error", "Invalid Action ID value in clipboard. Must be a number between 0 and 65535.", wxOK);
+			}
+		}
+		wxTheClipboard->Close();
+	}
+}
+
+void MapCanvas::OnPasteUniqueId(wxCommandEvent& WXUNUSED(event)) {
+	ASSERT(editor.selection.size() == 1);
+
+	if (wxTheClipboard->Open()) {
+		if (wxTheClipboard->IsSupported(wxDF_TEXT)) {
+			wxTextDataObject data;
+			wxTheClipboard->GetData(data);
+			
+			long uniqueId;
+			if (data.GetText().ToLong(&uniqueId) && uniqueId >= 0 && uniqueId <= 0xFFFF) {
+				// Validate unique ID range (typically 1000-65535 for non-zero values)
+				if (uniqueId != 0 && (uniqueId < 1000 || uniqueId > 0xFFFF)) {
+					g_gui.PopupDialog(g_gui.root, "Error", "Unique ID must be 0 or between 1000 and 65535.", wxOK);
+					wxTheClipboard->Close();
+					return;
+				}
+				
+				Tile* tile = editor.selection.getSelectedTile();
+				if (!tile) {
+					wxTheClipboard->Close();
+					return;
+				}
+				
+				Tile* new_tile = tile->deepCopy(editor.map);
+				ItemVector selected_items = new_tile->getSelectedItems();
+				
+				if (selected_items.size() == 1) {
+					Item* item = selected_items.front();
+					item->setUniqueID(static_cast<uint16_t>(uniqueId));
+					
+					Action* action = editor.actionQueue->createAction(ACTION_CHANGE_PROPERTIES);
+					action->addChange(newd Change(new_tile));
+					editor.addAction(action);
+					g_gui.RefreshView();
+				} else {
+					delete new_tile;
+				}
+			} else {
+				g_gui.PopupDialog(g_gui.root, "Error", "Invalid Unique ID value in clipboard. Must be a number between 0 and 65535.", wxOK);
+			}
+		}
+		wxTheClipboard->Close();
+	}
+}
+
 void MapCanvas::OnBrowseTile(wxCommandEvent& WXUNUSED(event)) {
 	if (editor.selection.size() != 1) {
 		return;
@@ -1981,7 +2255,20 @@ void MapCanvas::OnBrowseTile(wxCommandEvent& WXUNUSED(event)) {
 		return;
 	}
 	ASSERT(tile->isSelected());
+	
+#ifdef __WXDEBUG__
+	if (tile->ground) {
+		printf("DEBUG: Original tile %p has ground %p before deepCopy\n", tile, tile->ground);
+	}
+#endif
+
 	Tile* new_tile = tile->deepCopy(editor.map);
+
+#ifdef __WXDEBUG__
+	if (new_tile->ground) {
+		printf("DEBUG: New tile %p has ground %p after deepCopy\n", new_tile, new_tile->ground);
+	}
+#endif
 
 	wxDialog* w = new BrowseTileWindow(g_gui.root, new_tile, wxPoint(cursor_x, cursor_y));
 
@@ -2335,7 +2622,7 @@ void MapCanvas::ChangeFloor(int new_floor) {
 	int old_floor = floor;
 	floor = new_floor;
 	
-	// Force complete minimap refresh when crossing between underground and ground level
+	// Check if crossing between underground and ground level (but no longer clearing cache)
 	bool crossing_ground_level = (old_floor > GROUND_LAYER && new_floor <= GROUND_LAYER) || 
 							   (old_floor <= GROUND_LAYER && new_floor > GROUND_LAYER);
 	
@@ -2343,15 +2630,9 @@ void MapCanvas::ChangeFloor(int new_floor) {
 		UpdatePositionStatus();
 		g_gui.root->UpdateFloorMenu();
 		
-		if (crossing_ground_level) {
-			// Force complete refresh of minimap when crossing ground level boundary
-			if (g_gui.minimap) {  // Use direct access since it's public
-				g_gui.minimap->ClearCache();
-			}
-			g_gui.UpdateMinimap(true);
-		} else {
-			g_gui.UpdateMinimap(true);
-		}
+		// No longer clearing cache or updating minimap on floor changes
+		// This allows the minimap to maintain its cache across floor changes
+		// for better performance
 	}
 	Refresh();
 }
@@ -2535,6 +2816,16 @@ void MapPopupMenu::Update() {
 				Append(MAP_POPUP_MENU_COPY_SERVER_ID, "Copy Item Server Id", "Copy the server id of this item");
 				Append(MAP_POPUP_MENU_COPY_CLIENT_ID, "Copy Item Client Id", "Copy the client id of this item");
 				Append(MAP_POPUP_MENU_COPY_NAME, "Copy Item Name", "Copy the name of this item");
+				
+				// Add copy/paste for ActionID and UniqueID
+				wxString actionIdLabel = wxString::Format("Copy action ID (%d)", topSelectedItem->getActionID());
+				wxString uniqueIdLabel = wxString::Format("Copy unique ID (%d)", topSelectedItem->getUniqueID());
+				
+				Append(MAP_POPUP_MENU_COPY_ACTION_ID, actionIdLabel, "Copy the action ID of this item");
+				Append(MAP_POPUP_MENU_COPY_UNIQUE_ID, uniqueIdLabel, "Copy the unique ID of this item");
+				Append(MAP_POPUP_MENU_PASTE_ACTION_ID, "Paste action ID", "Paste action ID from clipboard to this item");
+				Append(MAP_POPUP_MENU_PASTE_UNIQUE_ID, "Paste unique ID", "Paste unique ID from clipboard to this item");
+				
 				AppendSeparator();
 			}
 
@@ -2562,6 +2853,17 @@ void MapPopupMenu::Update() {
 
 				if (topCreature) {
 					Append(MAP_POPUP_MENU_SELECT_CREATURE_BRUSH, "Select Creature", "Uses the current creature as a creature brush");
+					
+					// Add creature-specific menu items
+					if (topCreature->isNpc()) {
+						AppendSeparator();
+						Append(MAP_POPUP_MENU_OPEN_NPC_XML, "Open NPC &XML", "Open the NPC XML file in external editor");
+						Append(MAP_POPUP_MENU_OPEN_NPC_SCRIPT, "Open NPC &Script", "Open the NPC Lua script file in external editor");
+					} else {
+						// This is a monster
+						AppendSeparator();
+						Append(MAP_POPUP_MENU_OPEN_MONSTER_XML, "Open Monster &XML", "Open the Monster XML file in external editor");
+					}
 				}
 
 				if (topSpawn) {
@@ -2609,10 +2911,66 @@ void MapPopupMenu::Update() {
 				AppendSeparator();
 
 				Append(MAP_POPUP_MENU_PROPERTIES, "&Properties", "Properties for the current object");
+				
+				// Add RevScript menu item if the selected item has scripts available
+				if (topSelectedItem) {
+					int actionId = topSelectedItem->getActionID();
+					int uniqueId = topSelectedItem->getUniqueID();
+					int itemId = topSelectedItem->getID();
+					
+					bool hasActionScript = actionId != 0 && g_gui.revscript_manager.hasScriptForActionID(actionId);
+					bool hasUniqueScript = uniqueId != 0 && g_gui.revscript_manager.hasScriptForUniqueID(uniqueId);
+					bool hasItemScript = g_gui.revscript_manager.hasScriptForItemID(itemId);
+					
+					if (actionId != 0 || uniqueId != 0 || hasItemScript) {
+						wxString revscriptLabel = "Open &RevScript";
+						wxString tooltip = "Open the script file for this item";
+						
+						// Build detailed label showing what scripts are available
+						wxArrayString scriptTypes;
+						if (hasActionScript) {
+							scriptTypes.Add(wxString::Format("AID:%d", actionId));
+						}
+						if (hasUniqueScript) {
+							scriptTypes.Add(wxString::Format("UID:%d", uniqueId));
+						}
+						if (hasItemScript) {
+							scriptTypes.Add(wxString::Format("ID:%d", itemId));
+						}
+						
+						// If scripts exist, show which ones. If not, show what we're looking for
+						if (hasActionScript || hasUniqueScript || hasItemScript) {
+							revscriptLabel = wxString::Format("Open &RevScript (%s)", wxJoin(scriptTypes, ','));
+							tooltip = "Open the script file(s) for this item";
+						} else {
+							// No scripts found, but show what we could look for
+							wxArrayString potentialTypes;
+							if (actionId != 0) potentialTypes.Add(wxString::Format("AID:%d", actionId));
+							if (uniqueId != 0) potentialTypes.Add(wxString::Format("UID:%d", uniqueId));
+							potentialTypes.Add(wxString::Format("ID:%d", itemId));
+							
+							revscriptLabel = wxString::Format("Look for &RevScript (%s)", wxJoin(potentialTypes, ','));
+							tooltip = "Search for script files for this item (no scripts currently found)";
+						}
+						
+						Append(MAP_POPUP_MENU_OPEN_REVSCRIPT, revscriptLabel, tooltip);
+					}
+				}
 			} else {
 
 				if (topCreature) {
 					Append(MAP_POPUP_MENU_SELECT_CREATURE_BRUSH, "Select Creature", "Uses the current creature as a creature brush");
+					
+					// Add creature-specific menu items
+					if (topCreature->isNpc()) {
+						AppendSeparator();
+						Append(MAP_POPUP_MENU_OPEN_NPC_XML, "Open NPC &XML", "Open the NPC XML file in external editor");
+						Append(MAP_POPUP_MENU_OPEN_NPC_SCRIPT, "Open NPC &Script", "Open the NPC Lua script file in external editor");
+					} else {
+						// This is a monster
+						AppendSeparator();
+						Append(MAP_POPUP_MENU_OPEN_MONSTER_XML, "Open Monster &XML", "Open the Monster XML file in external editor");
+					}
 				}
 
 				if (topSpawn) {
@@ -2686,20 +3044,82 @@ void MapCanvas::getTilesToDraw(int mouse_map_x, int mouse_map_y, int floor, Posi
 		floodFill(&editor.map, position, BLOCK_SIZE / 2, BLOCK_SIZE / 2, oldBrush, tilestodraw);
 
 	} else {
-		for (int y = -g_gui.GetBrushSize() - 1; y <= g_gui.GetBrushSize() + 1; y++) {
-			for (int x = -g_gui.GetBrushSize() - 1; x <= g_gui.GetBrushSize() + 1; x++) {
-				if (g_gui.GetBrushShape() == BRUSHSHAPE_SQUARE) {
-					if (x >= -g_gui.GetBrushSize() && x <= g_gui.GetBrushSize() && y >= -g_gui.GetBrushSize() && y <= g_gui.GetBrushSize()) {
+		if (g_gui.GetBrushShape() == BRUSHSHAPE_SQUARE) {
+			// Use custom dimensions for square brushes
+			int brush_width = g_gui.GetBrushWidth();
+			int brush_height = g_gui.GetBrushHeight();
+			
+			// Add debugging output for brush dimensions
+			char debug_msg[512];
+			sprintf(debug_msg, "DEBUG DRAG: Initial brush dimensions - width=%d, height=%d\n", brush_width, brush_height);
+			OutputDebugStringA(debug_msg);
+			
+			// Make sure we have valid non-zero dimensions
+			if (brush_width <= 0) {
+				OutputDebugStringA("DEBUG DRAG: WARNING! brush_width <= 0, forcing to 1\n");
+				brush_width = 1;
+			}
+			if (brush_height <= 0) {
+				OutputDebugStringA("DEBUG DRAG: WARNING! brush_height <= 0, forcing to 1\n");
+				brush_height = 1;
+			}
+			
+			sprintf(debug_msg, "DEBUG DRAG: Corrected brush dimensions - width=%d, height=%d\n", brush_width, brush_height);
+			OutputDebugStringA(debug_msg);
+			
+			// For even-sized brushes, we need to adjust the offset
+			int width_offset = (brush_width % 2 == 0) ? 0 : 1;
+			int height_offset = (brush_height % 2 == 0) ? 0 : 1;
+			
+			// Calculate the start position (top-left corner of the brush)
+			int start_x = -brush_width / 2;
+			int start_y = -brush_height / 2;
+			
+			// For even width, we need to shift by 1 to avoid center bias
+			if (brush_width % 2 == 0) start_x += 1;
+			if (brush_height % 2 == 0) start_y += 1;
+			
+			// Calculate the end position (bottom-right corner of the brush)
+			int end_x = start_x + brush_width - 1;
+			int end_y = start_y + brush_height - 1;
+			
+			// Extend by 1 for border calculation
+			int border_start_x = start_x - 1;
+			int border_start_y = start_y - 1;
+			int border_end_x = end_x + 1;
+			int border_end_y = end_y + 1;
+			
+			sprintf(debug_msg, "DEBUG DRAG: Calculated bounds - start_x=%d, start_y=%d, end_x=%d, end_y=%d\n", 
+				start_x, start_y, end_x, end_y);
+			OutputDebugStringA(debug_msg);
+				
+			// Draw with a 1-tile margin around the brush for the border/preview
+			for (int y = border_start_y; y <= border_end_y; y++) {
+				for (int x = border_start_x; x <= border_end_x; x++) {
+					// For square brushes, all tiles within the rectangle are drawn
+					if (x >= start_x && x <= end_x && y >= start_y && y <= end_y) {
 						if (tilestodraw) {
 							tilestodraw->push_back(Position(mouse_map_x + x, mouse_map_y + y, floor));
 						}
 					}
-					if (std::abs(x) - g_gui.GetBrushSize() < 2 && std::abs(y) - g_gui.GetBrushSize() < 2) {
+					
+					// Border is 1 tile around the brush edges
+					bool is_border = 
+						(x >= border_start_x && x <= border_end_x && y >= border_start_y && y <= border_end_y) && // Within extended area
+						!(x > start_x && x < end_x && y > start_y && y < end_y); // But not fully inside
+						
+					if (is_border) {
 						if (tilestoborder) {
 							tilestoborder->push_back(Position(mouse_map_x + x, mouse_map_y + y, floor));
 						}
 					}
-				} else if (g_gui.GetBrushShape() == BRUSHSHAPE_CIRCLE) {
+				}
+			}
+		} else if (g_gui.GetBrushShape() == BRUSHSHAPE_CIRCLE) {
+			// Circle brushes use traditional radius-based calculation
+			for (int y = -g_gui.GetBrushSize() - 1; y <= g_gui.GetBrushSize() + 1; y++) {
+				for (int x = -g_gui.GetBrushSize() - 1; x <= g_gui.GetBrushSize() + 1; x++) {
+					// Circle brushes use traditional radius-based calculation (ignore custom brush size)
 					double distance = sqrt(double(x * x) + double(y * y));
 					if (distance < g_gui.GetBrushSize() + 0.005) {
 						if (tilestodraw) {
@@ -3109,65 +3529,87 @@ void MapCanvas::OnSelectionToDoodad(wxCommandEvent& WXUNUSED(event)) {
     
     int tileCount = 0;
     int totalItems = 0;
+    // Use a map with Position as key to store items by their 3D coordinates
     std::map<Position, std::vector<Item*>> tileItems;
     
     OutputDebugStringA("COMMENCING TILE INSPECTION! RESISTANCE IS FUTILE!\n");
     
+    // First, analyze what's actually in the selection
     for(auto tile : editor.selection) {
         if(!tile) continue;
         
         Position tilePos(tile->getX(), tile->getY(), tile->getZ());
+        OutputDebugStringA(wxString::Format("\nTile at %d,%d,%d:\n", 
+            tilePos.x, tilePos.y, tilePos.z).c_str());
         
-        // Count ONLY selected non-border items on this tile
-        int selectedItemCount = 0;
-        for(Item* item : tile->items) {
-            if(item && item->isSelected() && !item->isBorder()) {
-                selectedItemCount++;
-            }
-        }
+        // Check if the tile itself is selected (vs just items on the tile)
+        bool tileSelected = editor.selection.getTiles().count(tile) > 0;
         
-        // If tile itself is selected OR we have non-border items selected, do full tile
-        if(tile->isSelected() || selectedItemCount > 0) {
+        // If entire tile is selected, add all its items
+        if(tileSelected) {
             if(tile->ground) {
                 tileItems[tilePos].push_back(tile->ground);
                 totalItems++;
-                OutputDebugStringA(wxString::Format("Adding ground %d from full tile\n", 
-                    tile->ground->getID()));
+                OutputDebugStringA(wxString::Format("Adding ground %d from selected tile at %d,%d,%d\n", 
+                    tile->ground->getID(), tilePos.x, tilePos.y, tilePos.z).c_str());
             }
             
             for(Item* item : tile->items) {
                 if(!item) continue;
-                tileItems[tilePos].push_back(item);
-                totalItems++;
-                OutputDebugStringA(wxString::Format("Adding item %d from full tile\n", 
-                    item->getID()));
+                if(!item->isBorder()) {
+                    tileItems[tilePos].push_back(item);
+                    totalItems++;
+                    OutputDebugStringA(wxString::Format("Adding item %d from selected tile at %d,%d,%d\n", 
+                        item->getID(), tilePos.x, tilePos.y, tilePos.z).c_str());
+                }
             }
-        }
-        // Otherwise only add specifically selected items (borders)
+        } 
+        // Otherwise, only add individually selected items
         else {
+            // First check if ground is selected
+            if(tile->ground && tile->ground->isSelected()) {
+                tileItems[tilePos].push_back(tile->ground);
+                totalItems++;
+                OutputDebugStringA(wxString::Format("Adding selected ground %d at %d,%d,%d\n",
+                    tile->ground->getID(), tilePos.x, tilePos.y, tilePos.z).c_str());
+            }
+            
+            // Then add selected items
             for(Item* item : tile->items) {
                 if(item && item->isSelected()) {
                     tileItems[tilePos].push_back(item);
                     totalItems++;
-                    OutputDebugStringA(wxString::Format("Adding selected border item %d\n", 
-                        item->getID()));
+                    OutputDebugStringA(wxString::Format("Adding selected item %d at %d,%d,%d\n",
+                        item->getID(), tilePos.x, tilePos.y, tilePos.z).c_str());
                 }
             }
         }
         
-        tileCount++;
-        
-        // Update min/max positions
-        if(tilePos.x < minPos.x) minPos.x = tilePos.x;
-        if(tilePos.y < minPos.y) minPos.y = tilePos.y;
-        if(tilePos.z < minPos.z) minPos.z = tilePos.z;
-        if(tilePos.x > maxPos.x) maxPos.x = tilePos.x;
-        if(tilePos.y > maxPos.y) maxPos.y = tilePos.y;
-        if(tilePos.z > maxPos.z) maxPos.z = tilePos.z;
+        // Only count this as a tile if we added items from it
+        if(!tileItems[tilePos].empty()) {
+            tileCount++;
+            
+            // Update min/max positions
+            if(tilePos.x < minPos.x) minPos.x = tilePos.x;
+            if(tilePos.y < minPos.y) minPos.y = tilePos.y;
+            if(tilePos.z < minPos.z) minPos.z = tilePos.z;
+            if(tilePos.x > maxPos.x) maxPos.x = tilePos.x;
+            if(tilePos.y > maxPos.y) maxPos.y = tilePos.y;
+            if(tilePos.z > maxPos.z) maxPos.z = tilePos.z;
+        } else {
+            // Remove empty position entry
+            tileItems.erase(tilePos);
+        }
     }
 
     OutputDebugStringA(wxString::Format("MWAHAHAHA! ACQUIRED %d ITEMS FROM %d TILES! THE COLLECTION GROWS!\n", 
         totalItems, tileCount).c_str());
+
+    // Display multi-floor information
+    if (minPos.z != maxPos.z) {
+        OutputDebugStringA(wxString::Format("MULTI-FLOOR SELECTION DETECTED! FROM FLOOR %d TO %d\n", 
+            minPos.z, maxPos.z).c_str());
+    }
 
     if(totalItems == 0) {
         OutputDebugStringA("WHAT IS THIS MADNESS?! NO ITEMS TO STEAL?! INCONCEIVABLE!\n");
@@ -3329,6 +3771,11 @@ void MapCanvas::OnSelectionToDoodad(wxCommandEvent& WXUNUSED(event)) {
     newBrushNode->AddAttribute("draggable", "true");
     newBrushNode->AddAttribute("on_blocking", "true");
     newBrushNode->AddAttribute("thickness", "100/100");
+    
+    // Add multi-floor support attribute if this is a multi-floor doodad
+    if (minPos.z != maxPos.z) {
+        newBrushNode->AddAttribute("multi_floor", "true");
+    }
 
     // Create the alternate/composite structure
     wxXmlNode* alternateNode = new wxXmlNode(wxXML_ELEMENT_NODE, "alternate");
@@ -3342,25 +3789,23 @@ void MapCanvas::OnSelectionToDoodad(wxCommandEvent& WXUNUSED(event)) {
         const Position& pos = tilePair.first;
         int relX = pos.x - minPos.x;
         int relY = pos.y - minPos.y;
+        int relZ = pos.z - minPos.z;  // Calculate relative Z
         
         // Create tile node once per position
         wxXmlNode* tileNode = new wxXmlNode(wxXML_ELEMENT_NODE, "tile");
         tileNode->AddAttribute("x", wxString::Format("%d", relX));
         tileNode->AddAttribute("y", wxString::Format("%d", relY));
+        tileNode->AddAttribute("z", wxString::Format("%d", relZ));  // Add Z coordinate
         
-        OutputDebugStringA(wxString::Format("Creating tile node at x=%d y=%d\n", relX, relY).c_str());
+        OutputDebugStringA(wxString::Format("Creating tile node at x=%d y=%d z=%d\n", 
+            relX, relY, relZ).c_str());
         
-        // Only add selected items to XML
+        // Add all collected items for this position
         for(Item* item : tilePair.second) {
-            if(item && item->isSelected()) {  // Double check selection state
-                wxXmlNode* itemNode = new wxXmlNode(wxXML_ELEMENT_NODE, "item");
-                itemNode->AddAttribute("id", wxString::Format("%d", item->getID()));
-                tileNode->AddChild(itemNode);
-                OutputDebugStringA(wxString::Format("  Adding item id=%d (selected=%s border=%s)\n", 
-                    item->getID(), 
-                    item->isSelected() ? "YES" : "NO",
-                    item->isBorder() ? "YES" : "NO").c_str());
-            }
+            wxXmlNode* itemNode = new wxXmlNode(wxXML_ELEMENT_NODE, "item");
+            itemNode->AddAttribute("id", wxString::Format("%d", item->getID()));
+            tileNode->AddChild(itemNode);
+            OutputDebugStringA(wxString::Format("  Adding item id=%d\n", item->getID()).c_str());
         }
         
         compositeNode->AddChild(tileNode);
@@ -3372,8 +3817,6 @@ void MapCanvas::OnSelectionToDoodad(wxCommandEvent& WXUNUSED(event)) {
     newBrushNode->AddChild(alternateNode);
     doodadsDoc.GetRoot()->AddChild(newBrushNode);
 
-      // ... keep existing doodads.xml creation code ...
-
     // Save doodads.xml
     if(!doodadsDoc.Save(doodadsPathStr)) {
         OutputDebugStringA("THE DOODADS TOME RESISTS OUR CHANGES!\n");
@@ -3381,23 +3824,8 @@ void MapCanvas::OnSelectionToDoodad(wxCommandEvent& WXUNUSED(event)) {
         return;
     }
 
-  
-
-    // Find the selected tileset
-    for(wxXmlNode* node = collectionsRoot->GetChildren(); node; node = node->GetNext()) {
-        if(node->GetName() == "tileset" && node->GetAttribute("name") == selectedTileset) {
-            firstTileset = node;
-            break;
-        }
-    }
-
-    if(!firstTileset) {
-        g_gui.PopupDialog(this, "Error", "Selected tileset not found in collections.xml!", wxOK);
-        return;
-    }
-
     // Find or create collections node in the selected tileset
-   
+    collections = firstTileset->GetChildren();
     if(!collections || collections->GetName() != "collections") {
         OutputDebugStringA("NO COLLECTIONS NODE FOUND! CREATING ONE FROM THE VOID!\n");
         collections = new wxXmlNode(wxXML_ELEMENT_NODE, "collections");
@@ -3472,53 +3900,6 @@ void MapCanvas::OnSelectionToDoodad(wxCommandEvent& WXUNUSED(event)) {
     
     successDoodadDialog->ShowModal();
     successDoodadDialog->Destroy();
-
-    OutputDebugStringA("\n=== STARTING SELECTION ANALYSIS ===\n");
-    
-    // First, let's analyze what's actually in the selection
-    OutputDebugStringA("Pre-processing Selection Analysis:\n");
-      for(auto tile : editor.selection) {
-        if(!tile) continue;
-        
-        Position tilePos(tile->getX(), tile->getY(), tile->getZ());
-        OutputDebugStringA(wxString::Format("\nTile at %d,%d,%d:\n", 
-            tilePos.x, tilePos.y, tilePos.z).c_str());
-        
-        // Check if the tile itself is in selection vs just items
-        OutputDebugStringA(wxString::Format("Tile in selection: %s\n", 
-            editor.selection.getTiles().count(tile) > 0 ? "YES" : "NO").c_str());
-            
-        // Check individual item selection states
-        if(tile->ground) {
-            OutputDebugStringA(wxString::Format("Ground %d selected: %s\n",
-                tile->ground->getID(), tile->ground->isSelected() ? "YES" : "NO").c_str());
-        }
-        
-        for(Item* item : tile->items) {
-            if(!item) continue;
-            OutputDebugStringA(wxString::Format("Item %d selected: %s (Border: %s)\n",
-                item->getID(), 
-                item->isSelected() ? "YES" : "NO",
-                item->isBorder() ? "YES" : "NO").c_str());
-        }
-    }
-    
-    // Now process for brush creation
-    for(auto tile : editor.selection) {
-        if(!tile) continue;
-        
-        Position tilePos(tile->getX(), tile->getY(), tile->getZ());
-        
-        // Only add specifically selected items
-        for(Item* item : tile->items) {
-            if(item && item->isSelected()) {
-                tileItems[tilePos].push_back(item);
-                totalItems++;
-                OutputDebugStringA(wxString::Format("Added selected item %d at %d,%d,%d\n",
-                    item->getID(), tilePos.x, tilePos.y, tilePos.z).c_str());
-            }
-        }
-    }
 }
 
 void MapCanvas::OnFindSimilarItems(wxCommandEvent& WXUNUSED(event)) {
@@ -3580,20 +3961,7 @@ void MapCanvas::OnFindSimilarItems(wxCommandEvent& WXUNUSED(event)) {
     dialog->Destroy();
 }
 
-void MapCanvas::OnGenerateIsland(wxCommandEvent& event) {
-    // Get cursor position for island generation
-    int map_x, map_y;
-    MouseToMap(&map_x, &map_y);
 
-    // Create and show the island generator dialog
-	IslandGeneratorDialog dialog(this);
-    
-    // Set the initial position to the clicked location
-	dialog.SetStartPosition(Position(map_x, map_y, floor));
-	
-	dialog.ShowModal();
-	Refresh();
-}
 
 void MapCanvas::OnCreateHouse(wxCommandEvent& event) {
     int start_map_x = last_click_map_x;
@@ -3612,502 +3980,659 @@ void MapCanvas::OnCreateHouse(wxCommandEvent& event) {
         return;
     }
 
-    struct WallSegment {
-        Position pos;
-        Direction from;  // Direction we came from
-        Direction to;    // Direction we're going
-    };
-
-    enum Direction {
-        NORTH = 0,
-        EAST = 1,
-        SOUTH = 2,
-        WEST = 3,
-        NONE = -1
-    };
-
-    struct FloorData {
-        std::vector<std::vector<Position>> wall_loops;  // Each vector is a complete wall loop
-        std::set<Position> ground_tiles;
-        std::set<Position> processed_walls;
+    // Structure to hold detected house data by floor
+    struct HouseFloorData {
+        std::set<Position> wall_positions;
+        std::set<Position> interior_positions;
         Position exit_pos;
+        bool has_exit = false;
     };
-
-    std::map<int, FloorData> floors_data;
     
-    // Find a starting wall tile
-    Position wall_start;
-    bool found_start = false;
+    std::map<int, HouseFloorData> house_floors;
+    auto& current_floor_data = house_floors[current_floor];
     
-    // Search in a spiral pattern for the nearest wall
-    int spiral_size = 1;
-    while (!found_start && spiral_size < 10) {
-        for (int y = -spiral_size; y <= spiral_size; y++) {
-            for (int x = -spiral_size; x <= spiral_size; x++) {
-                Position check_pos(start_map_x + x, start_map_y + y, current_floor);
-                Tile* check_tile = editor.map.getTile(check_pos);
-                if (check_tile && hasHouseWall(check_tile)) {
-                    wall_start = check_pos;
-                    found_start = true;
+    // Step 1: First, detect the house from the clicked position
+    // We'll look for walls in a small radius to determine if we're inside a house
+    const int WALL_SEARCH_RADIUS = 10;
+    bool found_wall = false;
+    
+    for (int r = 1; r <= WALL_SEARCH_RADIUS && !found_wall; r++) {
+        for (int y = -r; y <= r; y++) {
+            for (int x = -r; x <= r; x++) {
+                // Only check perimeter
+                if (std::abs(x) != r && std::abs(y) != r) continue;
+                
+                Position pos(start_map_x + x, start_map_y + y, current_floor);
+                Tile* tile = editor.map.getTile(pos);
+                
+                if (tile && hasHouseWall(tile)) {
+                    found_wall = true;
                     break;
                 }
             }
-            if (found_start) break;
+            if (found_wall) break;
         }
-        spiral_size++;
     }
-
-    if (!found_start) {
-        g_gui.PopupDialog("Error", "Could not find any walls near the selected position.", wxOK);
+    
+    if (!found_wall) {
+        g_gui.PopupDialog("Error", "Could not find any walls near the selected position. Please click inside a house.", wxOK);
         return;
     }
+    
+    // Step 2: Find a door - it's likely that a house has at least one door
+    Position door_pos;
+    bool found_door = false;
+    const int DOOR_SEARCH_RADIUS = 15;
+    
+    for (int r = 1; r <= DOOR_SEARCH_RADIUS && !found_door; r++) {
+        for (int y = -r; y <= r; y++) {
+            for (int x = -r; x <= r; x++) {
+                // Only check perimeter
+                if (std::abs(x) != r && std::abs(y) != r) continue;
+                
+                Position pos(start_map_x + x, start_map_y + y, current_floor);
+                Tile* tile = editor.map.getTile(pos);
+                
+                if (tile && hasDoor(tile)) {
+                    door_pos = pos;
+                            found_door = true;
+                                break;
+                        }
+            }
+            if (found_door) break;
+        }
+    }
 
-    // Function to get the next wall position in a direction
-    auto getNextWallPos = [&](const Position& current, Direction dir) -> std::pair<Position, bool> {
-        Position next = current;
-        switch (dir) {
-            case NORTH: next.y--; break;
-            case EAST:  next.x++; break;
-            case SOUTH: next.y++; break;
-            case WEST:  next.x--; break;
-            default: break;
+    // If no door is found, we'll just use the start position
+    if (!found_door) {
+        door_pos = Position(start_map_x, start_map_y, current_floor);
+    }
+    
+    // Step 3: First pass - identify all walls
+    std::set<Position> all_walls;
+    std::queue<Position> wall_queue;
+    
+    // Begin by finding walls around the start position
+    const int INITIAL_WALL_RADIUS = 3;
+    for (int y = -INITIAL_WALL_RADIUS; y <= INITIAL_WALL_RADIUS; y++) {
+        for (int x = -INITIAL_WALL_RADIUS; x <= INITIAL_WALL_RADIUS; x++) {
+            Position pos(start_map_x + x, start_map_y + y, current_floor);
+            Tile* tile = editor.map.getTile(pos);
+            
+            if (tile && hasHouseWall(tile)) {
+                wall_queue.push(pos);
+                all_walls.insert(pos);
+            }
+        }
+    }
+    
+    // BFS to find all connected walls (limited depth to prevent crossing to adjacent houses)
+    const int MAX_WALL_EXPANSION = 25; // Limit how far we expand from start
+    std::set<Position> visited_walls;
+    
+    while (!wall_queue.empty()) {
+        Position current = wall_queue.front();
+        wall_queue.pop();
+        
+        if (visited_walls.count(current) > 0) continue;
+        visited_walls.insert(current);
+        
+        current_floor_data.wall_positions.insert(current);
+        
+        // Check for door exits
+            Tile* tile = editor.map.getTile(current);
+        if (tile && hasDoor(tile)) {
+            // Check outside the door
+            const int dirs[4][2] = {{0,-1}, {1,0}, {0,1}, {-1,0}};
+            for (int d = 0; d < 4; d++) {
+                Position exit_pos(current.x + dirs[d][0], current.y + dirs[d][1], current.z);
+                Tile* exit_tile = editor.map.getTile(exit_pos);
+                
+                // Skip walls and existing house tiles
+                if (!exit_tile || hasHouseWall(exit_tile) || exit_tile->isHouseTile()) continue;
+                
+                // Found a potential exit
+                current_floor_data.exit_pos = exit_pos;
+                current_floor_data.has_exit = true;
+                                    break;
+            }
         }
         
-        Tile* tile = editor.map.getTile(next);
-        return {next, tile && hasHouseWall(tile)};
-    };
-
-    // Function to trace a wall loop
-    auto traceWallLoop = [&](const Position& start, FloorData& floor_data) -> std::vector<Position> {
-        std::vector<Position> wall_loop;
-        Position current = start;
-        Direction current_dir = EAST; // Start by trying east
-        std::set<Position> loop_positions; // Track positions in this loop
-        
-        do {
-            wall_loop.push_back(current);
-            loop_positions.insert(current);
-            floor_data.processed_walls.insert(current);
+        // Only expand to nearby walls
+        if (std::abs(current.x - start_map_x) <= MAX_WALL_EXPANSION && 
+            std::abs(current.y - start_map_y) <= MAX_WALL_EXPANSION) {
             
-            // Check for doors
-            Tile* tile = editor.map.getTile(current);
-            if (tile) {
-                for (Item* item : tile->items) {
-                    if (item && item->isDoor()) {
-                        // For doors, check all 4 directions for a non-wall tile
-                        // that is NOT within our wall loop
-                        Position adjacent[4] = {
-                            Position(current.x, current.y - 1, current.z), // North
-                            Position(current.x + 1, current.y, current.z), // East
-                            Position(current.x, current.y + 1, current.z), // South
-                            Position(current.x - 1, current.y, current.z)  // West
-                        };
-
-                        for (const Position& exit_pos : adjacent) {
-                            // Skip if this position is part of our wall loop
-                            if (loop_positions.count(exit_pos) > 0) continue;
+            // Check adjacent positions for more walls (including diagonals for better connectivity)
+            for (int y = -1; y <= 1; y++) {
+                for (int x = -1; x <= 1; x++) {
+                    if (x == 0 && y == 0) continue;
+                    
+                    Position next(current.x + x, current.y + y, current.z);
+                    
+                    // Only visit each wall once
+                    if (visited_walls.count(next) > 0) continue;
+                    
+                    Tile* next_tile = editor.map.getTile(next);
+                    if (next_tile && hasHouseWall(next_tile)) {
+                        wall_queue.push(next);
+                    }
+                }
+            }
+        }
+    }
+    
+    // Step 4: Calculate bounding box of house walls
+            int min_x = std::numeric_limits<int>::max();
+            int min_y = std::numeric_limits<int>::max();
+            int max_x = std::numeric_limits<int>::min();
+            int max_y = std::numeric_limits<int>::min();
+            
+    for (const Position& pos : current_floor_data.wall_positions) {
+        min_x = std::min(min_x, pos.x);
+        min_y = std::min(min_y, pos.y);
+        max_x = std::max(max_x, pos.x);
+        max_y = std::max(max_y, pos.y);
+    }
+    
+    // Expand bounds slightly
+    min_x = std::max(0, min_x - 1);
+    min_y = std::max(0, min_y - 1);
+    max_x = std::min(editor.map.getWidth(), max_x + 1);
+    max_y = std::min(editor.map.getHeight(), max_y + 1);
+    
+    // Step 5: Flood fill interior from clicked position
+    std::set<Position> visited_interior;
+    std::queue<Position> interior_queue;
+    
+    // Start from the user's click position
+    Position fill_start(start_map_x, start_map_y, current_floor);
+    interior_queue.push(fill_start);
+    
+    while (!interior_queue.empty()) {
+        Position current = interior_queue.front();
+        interior_queue.pop();
+        
+        // Skip if outside bounds, already visited, or a wall
+        if (current.x < min_x || current.x > max_x || 
+            current.y < min_y || current.y > max_y ||
+            visited_interior.count(current) > 0 ||
+            current_floor_data.wall_positions.count(current) > 0) {
+                        continue;
+                    }
+                    
+        // Mark as visited
+        visited_interior.insert(current);
+        
+        // For interior, we require being inside the wall boundary
+        // Check if this position is inside using a smarter approach
+        
+        // Use a more reliable method to check if point is inside
+        bool is_inside = true;
+        
+        // Cast rays in 8 directions to better detect enclosed spaces
+        const int directions[8][2] = {
+            {1, 0},   // right
+            {-1, 0},  // left
+            {0, 1},   // down
+            {0, -1},  // up
+            {1, 1},   // down-right
+            {-1, -1}, // up-left
+            {1, -1},  // up-right
+            {-1, 1}   // down-left
+        };
+        
+        int wall_hits = 0;
+        for (int d = 0; d < 8; d++) {
+            bool found_wall = false;
+            int ray_dist = 0;
+            int max_ray_dist = 2 * std::max(max_x - min_x, max_y - min_y); // Increase ray distance
+            
+            for (int dist = 1; dist <= max_ray_dist; dist++) {
+                int ray_x = current.x + (directions[d][0] * dist);
+                int ray_y = current.y + (directions[d][1] * dist);
+                
+                // Stop if we're outside the bounding box with larger margin
+                if (ray_x < min_x - 5 || ray_x > max_x + 5 || ray_y < min_y - 5 || ray_y > max_y + 5) {
+                    break;
+                }
+                
+                Position ray_pos(ray_x, ray_y, current.z);
+                if (current_floor_data.wall_positions.count(ray_pos) > 0) {
+                    found_wall = true;
+                    ray_dist = dist;
+                    break;
+                }
+            }
+            
+            if (found_wall) {
+                wall_hits++;
+            }
+        }
+        
+        // More permissive check - if we hit walls in at least 5 of 8 directions for diagonal rays
+        // or at least 2 of 4 cardinal directions, consider it inside
+        if (wall_hits >= 5 || (
+            (current_floor_data.wall_positions.count(Position(current.x + 1, current.y, current.z)) > 0 ? 1 : 0) +
+            (current_floor_data.wall_positions.count(Position(current.x - 1, current.y, current.z)) > 0 ? 1 : 0) +
+            (current_floor_data.wall_positions.count(Position(current.x, current.y + 1, current.z)) > 0 ? 1 : 0) +
+            (current_floor_data.wall_positions.count(Position(current.x, current.y - 1, current.z)) > 0 ? 1 : 0) >= 2
+        )) {
+            current_floor_data.interior_positions.insert(current);
+            
+            // Use only cardinal directions (4-way) for expanding the fill
+            const int fillDirections[4][2] = {
+                {1, 0}, {-1, 0}, {0, 1}, {0, -1}
+            };
+            
+            // Add neighboring tiles
+            for (int d = 0; d < 4; d++) {
+                Position next(current.x + fillDirections[d][0], 
+                             current.y + fillDirections[d][1], 
+                             current.z);
+                
+                // Only queue if we haven't visited and it's not a wall
+                if (visited_interior.count(next) == 0 && 
+                    current_floor_data.wall_positions.count(next) == 0) {
+                    interior_queue.push(next);
+                }
+            }
+        }
+    }
+    
+    // Step 6: Check for floors above and below (expanded to handle multiple floors)
+    std::set<int> processed_floors;
+    processed_floors.insert(current_floor);
+    std::queue<int> floors_to_check;
+    
+    // First add adjacent floors
+    if (current_floor - 1 >= 0) floors_to_check.push(current_floor - 1);
+    if (current_floor + 1 < MAP_LAYERS) floors_to_check.push(current_floor + 1);
+    
+    // Process floors in queue and potentially add more
+    while (!floors_to_check.empty()) {
+        int check_floor = floors_to_check.front();
+        floors_to_check.pop();
+        
+        // Skip if already processed or outside valid range
+        if (processed_floors.count(check_floor) > 0 || check_floor < 0 || check_floor >= MAP_LAYERS) 
+            continue;
+        
+        processed_floors.insert(check_floor);
+        auto& floor_data = house_floors[check_floor];
+        
+        // Connect via walls/stairs from already processed floors
+        bool floor_connected = false;
+        
+        // Try to find connections from any previously processed floor
+        for (int processed_floor : processed_floors) {
+            if (processed_floor == check_floor) continue;
+            
+            Position stair_pos;
+            bool found_stair_connection = false;
+            
+            // Check for stair connections only if floors are not adjacent
+            if (std::abs(processed_floor - check_floor) > 1) {
+                // Look for stairs in the processed floor
+                for (const Position& pos : house_floors[processed_floor].interior_positions) {
+                    Position check_stair_pos(pos.x, pos.y, processed_floor);
+                    Tile* tile = editor.map.getTile(check_stair_pos);
+                    
+                    if (tile && hasStairsOrLadder(tile)) {
+                        // Check if there's a corresponding stair/ladder on target floor
+                        Position target_stair_pos(pos.x, pos.y, check_floor);
+                        Tile* target_tile = editor.map.getTile(target_stair_pos);
+                        
+                        if (target_tile && hasStairsOrLadder(target_tile)) {
+                            found_stair_connection = true;
+                            stair_pos = target_stair_pos;
+                break;
+                        }
+                    }
+                }
+                
+                if (found_stair_connection) {
+                    floor_connected = true;
+                    // Start wall and interior detection from stair position
+                    Position start_point = stair_pos;
+                    
+                    // Find walls around stair position
+                    std::set<Position> floor_visited_walls;
+                    std::queue<Position> floor_wall_queue;
+                    
+                    for (int y = -2; y <= 2; y++) {
+                        for (int x = -2; x <= 2; x++) {
+                            Position pos(start_point.x + x, start_point.y + y, check_floor);
+                            Tile* tile = editor.map.getTile(pos);
                             
-                            // Check if this position has a wall
-                            Tile* exit_tile = editor.map.getTile(exit_pos);
-                            if (!exit_tile || !hasHouseWall(exit_tile)) {
-                                // Found valid exit - outside walls
-                                floor_data.exit_pos = exit_pos;
+                            if (tile && hasHouseWall(tile)) {
+                                floor_wall_queue.push(pos);
                                 break;
                             }
                         }
+                        if (!floor_wall_queue.empty()) break;
                     }
-                }
-            }
-
-            // Try all possible directions, prioritizing continuing in same direction
-            bool found_next = false;
-            for (int i = 0; i < 4; i++) {
-                Direction try_dir = (Direction)((current_dir + i) % 4);
-                auto [next_pos, has_wall] = getNextWallPos(current, try_dir);
-                
-                if (has_wall && (next_pos == start || floor_data.processed_walls.count(next_pos) == 0)) {
-                    current = next_pos;
-                    current_dir = try_dir;
-                    found_next = true;
-                    break;
-                }
-            }
-            
-            if (!found_next) break;
-
-        } while (current != start);
-
-        return wall_loop;
-    };
-
-    // Function to flood fill inside a wall loop
-    auto floodFillInside = [&](const std::vector<Position>& wall_loop, FloorData& floor_data) {
-        if (wall_loop.empty()) return;
-
-        // Find the boundary rectangle
-        int min_x = wall_loop[0].x;
-        int max_x = wall_loop[0].x;
-        int min_y = wall_loop[0].y;
-        int max_y = wall_loop[0].y;
-        int z = wall_loop[0].z;
-
-        for (const Position& pos : wall_loop) {
-            min_x = std::min(min_x, pos.x);
-            max_x = std::max(max_x, pos.x);
-            min_y = std::min(min_y, pos.y);
-            max_y = std::max(max_y, pos.y);
-        }
-
-        // First pass - collect all walls in the area
-        std::set<Position> all_walls;
-        for (int y = min_y - 1; y <= max_y + 1; y++) {
-            for (int x = min_x - 1; x <= max_x + 1; x++) {
-                Position pos(x, y, z);
-                Tile* tile = editor.map.getTile(pos);
-                if (tile && hasHouseWall(tile)) {
-                    all_walls.insert(pos);
-                }
-            }
-        }
-
-        // Function to check if a wall is connected to others
-        auto isConnectedWall = [&](const Position& pos) -> bool {
-            Position adjacent[4] = {
-                Position(pos.x, pos.y - 1, z),
-                Position(pos.x + 1, pos.y, z),
-                Position(pos.x, pos.y + 1, z),
-                Position(pos.x - 1, pos.y, z)
-            };
-            
-            int connected_count = 0;
-            for (const Position& adj : adjacent) {
-                if (all_walls.count(adj) > 0) {
-                    connected_count++;
-                }
-            }
-            return connected_count >= 2; // Need at least 2 connections for a proper wall
-        };
-
-        // Check for disconnected walls and gaps
-        std::vector<Position> disconnected_walls;
-        std::vector<std::pair<Position, Position>> gaps;
-        
-        for (const Position& wall_pos : all_walls) {
-            if (!isConnectedWall(wall_pos)) {
-                disconnected_walls.push_back(wall_pos);
-                
-                // Look for nearest wall to potentially connect to
-                Position nearest_wall;
-                double min_distance = 999999.0;
-                
-                for (const Position& other_wall : all_walls) {
-                    if (other_wall == wall_pos) continue;
-                    if (!isConnectedWall(other_wall)) continue;
                     
-                    double dx = other_wall.x - wall_pos.x;
-                    double dy = other_wall.y - wall_pos.y;
-                    double distance = sqrt(dx * dx + dy * dy);
-                    
-                    if (distance < min_distance) {
-                        min_distance = distance;
-                        nearest_wall = other_wall;
+                    // If no walls found near stairs, just use the stair position
+                    if (floor_wall_queue.empty()) {
+                        floor_wall_queue.push(start_point);
                     }
-                }
-                
-                if (min_distance < 5.0) { // Only suggest connections within reasonable distance
-                    gaps.push_back(std::make_pair(wall_pos, nearest_wall));
-                }
-            }
-        }
-
-        // If we found disconnected walls, show dialog with options
-        if (!disconnected_walls.empty()) {
-            wxDialog* dialog = new wxDialog(g_gui.root, wxID_ANY, "Disconnected Walls Detected", 
-                wxDefaultPosition, wxSize(400, 300));
-            
-            wxBoxSizer* sizer = new wxBoxSizer(wxVERTICAL);
-            
-            sizer->Add(new wxStaticText(dialog, wxID_ANY, 
-                wxString::Format("Found %zu disconnected wall segments.", disconnected_walls.size())), 
-                0, wxALL, 5);
-            
-            if (!gaps.empty()) {
-                sizer->Add(new wxStaticText(dialog, wxID_ANY, 
-                    "Suggested wall connections:"), 0, wxALL, 5);
-                
-                wxListBox* gapList = new wxListBox(dialog, wxID_ANY);
-                for (const auto& gap : gaps) {
-                    gapList->Append(wxString::Format("Connect (%d,%d) to (%d,%d)", 
-                        gap.first.x, gap.first.y,
-                        gap.second.x, gap.second.y));
-                }
-                sizer->Add(gapList, 1, wxEXPAND | wxALL, 5);
-            }
-            
-            wxBoxSizer* btnSizer = new wxBoxSizer(wxHORIZONTAL);
-            wxButton* connectBtn = new wxButton(dialog, wxID_OK, "Auto-Connect Walls");
-            wxButton* cancelBtn = new wxButton(dialog, wxID_CANCEL, "Cancel House Creation");
-            wxButton* ignoreBtn = new wxButton(dialog, wxID_IGNORE, "Continue Anyway");
-            
-            btnSizer->Add(connectBtn, 0, wxALL, 5);
-            btnSizer->Add(cancelBtn, 0, wxALL, 5);
-            btnSizer->Add(ignoreBtn, 0, wxALL, 5);
-            
-            sizer->Add(btnSizer, 0, wxALIGN_CENTER | wxALL, 5);
-            
-            dialog->SetSizer(sizer);
-            
-            int result = dialog->ShowModal();
-            
-            if (result == wxID_OK) {
-                // Auto-connect walls
-                Action* action = editor.actionQueue->createAction(ACTION_DRAW);
-                
-                for (const auto& gap : gaps) {
-                    // Create walls along the path between disconnected segments
-                    int dx = gap.second.x - gap.first.x;
-                    int dy = gap.second.y - gap.first.y;
                     
-                    int steps = std::max(std::abs(dx), std::abs(dy));
-                    if (steps == 0) continue;
+                    // Continue with wall detection...
+                    // Rest of code similar to the original detection for other floors
+                }
+            } else {
+                // For adjacent floors, use wall matching as before
+                for (const Position& wall_pos : house_floors[processed_floor].wall_positions) {
+                    Position check_pos(wall_pos.x, wall_pos.y, check_floor);
+                    Tile* tile = editor.map.getTile(check_pos);
                     
-                    for (int i = 1; i < steps; i++) {
-                        Position new_wall_pos(
-                            gap.first.x + (dx * i) / steps,
-                            gap.first.y + (dy * i) / steps,
-                            z
-                        );
+                    if (tile && hasHouseWall(tile)) {
+                        floor_connected = true;
+                        Position start_point = check_pos;
                         
-                        Tile* tile = editor.map.getTile(new_wall_pos);
-                        if (!tile) {
-                            tile = editor.map.createTile(new_wall_pos.x, new_wall_pos.y, new_wall_pos.z);
-                        }
+                        // Find walls
+                        std::set<Position> floor_visited_walls;
+                        std::queue<Position> floor_wall_queue;
+                        floor_wall_queue.push(start_point);
                         
-                        // Use the same wall type as nearby walls if possible
-                        Item* wall_item = nullptr;
-                        Tile* ref_tile = editor.map.getTile(gap.first);
-                        if (ref_tile) {
-                            for (Item* item : ref_tile->items) {
-                                if (item && item->isWall()) {
-                                    wall_item = item->deepCopy();
+                        while (!floor_wall_queue.empty()) {
+                            Position current = floor_wall_queue.front();
+                            floor_wall_queue.pop();
+                            
+                            if (floor_visited_walls.count(current) > 0) continue;
+                            floor_visited_walls.insert(current);
+                            
+                            floor_data.wall_positions.insert(current);
+                            
+                            // Check for door exits
+                            Tile* tile = editor.map.getTile(current);
+                            if (tile && hasDoor(tile)) {
+                                // Check outside the door
+                                const int dirs[4][2] = {{0,-1}, {1,0}, {0,1}, {-1,0}};
+                                for (int d = 0; d < 4; d++) {
+                                    Position exit_pos(current.x + dirs[d][0], current.y + dirs[d][1], current.z);
+                                    Tile* exit_tile = editor.map.getTile(exit_pos);
+                                    
+                                    if (!exit_tile || hasHouseWall(exit_tile) || exit_tile->isHouseTile()) continue;
+                                    
+                                    floor_data.exit_pos = exit_pos;
+                                    floor_data.has_exit = true;
                                     break;
+                                }
+                            }
+                            
+                            // Only expand within the same bounds as the current floor
+                            if (current.x >= min_x && current.x <= max_x && 
+                                current.y >= min_y && current.y <= max_y) {
+                                
+                                for (int y = -1; y <= 1; y++) {
+                                    for (int x = -1; x <= 1; x++) {
+                                        if (x == 0 && y == 0) continue;
+                                        
+                                        Position next(current.x + x, current.y + y, current.z);
+                                        
+                                        if (floor_visited_walls.count(next) > 0) continue;
+                                        
+                                        Tile* next_tile = editor.map.getTile(next);
+                                        if (next_tile && hasHouseWall(next_tile)) {
+                                            floor_wall_queue.push(next);
+                                        }
+                                    }
                                 }
                             }
                         }
                         
-                        if (wall_item) {
-                            tile->addItem(wall_item);
-                            action->addChange(newd Change(tile));
-                            all_walls.insert(new_wall_pos);
-                        }
-                    }
-                }
-                
-                editor.addAction(action);
-                
-            } else if (result == wxID_CANCEL) {
-                dialog->Destroy();
-                return;
-            }
-            // wxID_IGNORE will continue with house creation
-            
-            dialog->Destroy();
-        }
-
-        // Create final boundary wall set
-        std::set<Position> boundary_walls;
-        for (const Position& wall : all_walls) {
-            boundary_walls.insert(wall);
-        }
-
-        // Check for valid door in the boundary
-        bool found_valid_door = false;
-        Position door_pos(0, 0, 0);
-        Position exit_pos(0, 0, 0);
-
-        for (const Position& wall_pos : boundary_walls) {
-            Tile* tile = editor.map.getTile(wall_pos);
-            if (!tile) continue;
-
-            for (Item* item : tile->items) {
-                if (item && item->isDoor()) {
-                    // Check all adjacent positions for non-house tiles
-            Position adjacent[4] = {
-                        Position(wall_pos.x, wall_pos.y - 1, z),
-                        Position(wall_pos.x + 1, wall_pos.y, z),
-                        Position(wall_pos.x, wall_pos.y + 1, z),
-                        Position(wall_pos.x - 1, wall_pos.y, z)
-                    };
-
-                    for (const Position& adj : adjacent) {
-                        // Skip if adjacent position is a boundary wall
-                        if (boundary_walls.count(adj) > 0) continue;
-
-                        // Check if this position is outside the boundary
-                        bool is_outside = true;
-                        for (const Position& wall : boundary_walls) {
-                            if (wall == adj) {
-                                is_outside = false;
-                                break;
+                        // Find interior
+                        std::set<Position> floor_visited_interior;
+                        std::queue<Position> floor_interior_queue;
+                        
+                        // Try to find a good interior starting point
+                        Position floor_fill_start;
+                        bool found_interior_start = false;
+                        
+                        // First try to match with a stair position from the previous floor
+                        for (const Position& interior_pos : house_floors[processed_floor].interior_positions) {
+                            Position check_pos(interior_pos.x, interior_pos.y, check_floor);
+                            Tile* tile = editor.map.getTile(check_pos);
+                            
+                            if (tile && !hasHouseWall(tile)) {
+                                // If there's a stair here, this is an ideal starting point
+                                if (hasStairsOrLadder(tile)) {
+                                    floor_fill_start = check_pos;
+                                    found_interior_start = true;
+                                    break;
+                                }
+                                
+                                // Otherwise remember this as a potential start
+                                if (!found_interior_start) {
+                                    floor_fill_start = check_pos;
+                                    found_interior_start = true;
+                                }
                             }
                         }
-
-                        if (is_outside) {
-                            found_valid_door = true;
-                            door_pos = wall_pos;
-                            exit_pos = adj;
-                            floor_data.exit_pos = adj;
-                            break;
+                        
+                        // If we didn't find a good start point, use same x,y as original start
+                        if (!found_interior_start) {
+                            floor_fill_start = Position(start_map_x, start_map_y, check_floor);
                         }
+                        
+                        Tile* start_floor_tile = editor.map.getTile(floor_fill_start);
+                        if (start_floor_tile && !hasHouseWall(start_floor_tile)) {
+                            floor_interior_queue.push(floor_fill_start);
+                            
+                            // Similar interior flood fill as before...
+                            while (!floor_interior_queue.empty()) {
+                                Position current = floor_interior_queue.front();
+                                floor_interior_queue.pop();
+                                
+                                if (current.x < min_x || current.x > max_x || 
+                                    current.y < min_y || current.y > max_y ||
+                                    floor_visited_interior.count(current) > 0 ||
+                                    floor_data.wall_positions.count(current) > 0) {
+                                    continue;
+                                }
+                                
+                                floor_visited_interior.insert(current);
+                                
+                                // Cast rays to check if inside
+                                int wall_hits = 0;
+                                // Define directions array
+                                const int directions[8][2] = {
+                                    {1, 0},   // right
+                                    {-1, 0},  // left
+                                    {0, 1},   // down
+                                    {0, -1},  // up
+                                    {1, 1},   // down-right
+                                    {-1, -1}, // up-left
+                                    {1, -1},  // up-right
+                                    {-1, 1}   // down-left
+                                };
+                                
+                                for (int d = 0; d < 8; d++) {
+                                    bool found_wall = false;
+                                    int max_ray_dist = 2 * std::max(max_x - min_x, max_y - min_y);
+                                    
+                                    for (int dist = 1; dist <= max_ray_dist; dist++) {
+                                        int ray_x = current.x + (directions[d][0] * dist);
+                                        int ray_y = current.y + (directions[d][1] * dist);
+                                        
+                                        if (ray_x < min_x - 5 || ray_x > max_x + 5 || ray_y < min_y - 5 || ray_y > max_y + 5) {
+                                            break;
+                                        }
+                                        
+                                        Position ray_pos(ray_x, ray_y, current.z);
+                                        if (floor_data.wall_positions.count(ray_pos) > 0) {
+                                            found_wall = true;
+                                            break;
+                                        }
+                                    }
+                                    
+                                    if (found_wall) {
+                                        wall_hits++;
+                                    }
+                                }
+                                
+                                // More permissive check - if we hit walls in at least 5 of 8 directions for diagonal rays
+                                // or at least 2 of 4 cardinal directions, consider it inside
+                                if (wall_hits >= 5 || (
+                                    (floor_data.wall_positions.count(Position(current.x + 1, current.y, current.z)) > 0 ? 1 : 0) +
+                                    (floor_data.wall_positions.count(Position(current.x - 1, current.y, current.z)) > 0 ? 1 : 0) +
+                                    (floor_data.wall_positions.count(Position(current.x, current.y + 1, current.z)) > 0 ? 1 : 0) +
+                                    (floor_data.wall_positions.count(Position(current.x, current.y - 1, current.z)) > 0 ? 1 : 0) >= 2
+                                )) {
+                                    floor_data.interior_positions.insert(current);
+                                    
+                                    // Define directions array for neighbors - use only cardinal directions for expansion
+                                    const int fillDirections[4][2] = {
+                                        {1, 0},   // right
+                                        {-1, 0},  // left
+                                        {0, 1},   // down
+                                        {0, -1}   // up
+                                    };
+                                    
+                                    for (int d = 0; d < 4; d++) {
+                                        Position next(current.x + fillDirections[d][0], 
+                                                     current.y + fillDirections[d][1], 
+                                                     current.z);
+                                        
+                                        // Only queue if we haven't visited and it's not a wall
+                                        if (floor_visited_interior.count(next) == 0 && 
+                                            floor_data.wall_positions.count(next) == 0) {
+                                            floor_interior_queue.push(next);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        break; // Found a connection, no need to check more walls
                     }
-                    if (found_valid_door) break;
                 }
             }
-            if (found_valid_door) break;
-        }
-
-        if (!found_valid_door) {
-            OutputDebugStringA("WARNING: No valid door found in house boundary!\n");
-        }
-
-        // Add all boundary walls to house tiles
-        for (const Position& wall : boundary_walls) {
-            floor_data.ground_tiles.insert(wall);
-        }
-
-        // Fill all tiles within the boundary
-        for (int y = min_y; y <= max_y; y++) {
-            for (int x = min_x; x <= max_x; x++) {
-                Position pos(x, y, z);
-                
-                // Skip if it's already added as a wall
-                if (boundary_walls.count(pos) > 0) continue;
-
-                // Use ray casting to determine if the point is inside
-                int intersections = 0;
-                
-                // Cast ray to the right
-                for (int test_x = x + 1; test_x <= max_x; test_x++) {
-                    Position test_pos(test_x, y, z);
-                    if (boundary_walls.count(test_pos) > 0) {
-                        intersections++;
-                    }
-                }
-                
-                // Odd number of intersections means we're inside
-                if (intersections % 2 == 1) {
-                    floor_data.ground_tiles.insert(pos);
-                }
-            }
-        }
-    };
-
-    // Process current floor
-    FloorData& ground_floor = floors_data[current_floor];
-    
-    // Find all wall loops on this floor
-    std::queue<Position> wall_starts;
-    wall_starts.push(wall_start);
-
-    while (!wall_starts.empty()) {
-        Position start = wall_starts.front();
-        wall_starts.pop();
-
-        if (ground_floor.processed_walls.count(start) > 0) continue;
-
-        std::vector<Position> wall_loop = traceWallLoop(start, ground_floor);
-        if (wall_loop.size() > 2) { // Minimum 3 walls to make a room
-            ground_floor.wall_loops.push_back(wall_loop);
             
-            // Flood fill this loop
-            floodFillInside(wall_loop, ground_floor);
-
-            // Look for more walls inside this loop
-            for (const Position& pos : ground_floor.ground_tiles) {
-                // Check adjacent positions for unprocessed walls
-                Position adjacent[4] = {
-                    Position(pos.x, pos.y - 1, pos.z),
-                    Position(pos.x + 1, pos.y, pos.z),
-                    Position(pos.x, pos.y + 1, pos.z),
-                    Position(pos.x - 1, pos.y, pos.z)
-                };
-
-                for (const Position& adj : adjacent) {
-                    if (ground_floor.processed_walls.count(adj) == 0) {
-                        Tile* tile = editor.map.getTile(adj);
-                        if (tile && hasHouseWall(tile)) {
-                            wall_starts.push(adj);
-                        }
-                    }
-                }
+            if (floor_connected) {
+                // Once we connect a floor, check for floors above and below that one as well
+                if (check_floor - 1 >= 0 && processed_floors.count(check_floor - 1) == 0) 
+                    floors_to_check.push(check_floor - 1);
+                if (check_floor + 1 < MAP_LAYERS && processed_floors.count(check_floor + 1) == 0) 
+                    floors_to_check.push(check_floor + 1);
+                break;
             }
         }
     }
-
-    // Check floors above and below for matching wall patterns
-    for (int floor_offset : {-1, 1}) {
-        int check_floor = current_floor + floor_offset;
-        if (check_floor < 0 || check_floor >= MAP_LAYERS) continue;
-
-        FloorData& floor_data = floors_data[check_floor];
-        
-        // Check each wall from ground floor loops
-        for (const auto& ground_loop : ground_floor.wall_loops) {
-            for (const Position& wall_pos : ground_loop) {
-                Position check_pos(wall_pos.x, wall_pos.y, check_floor);
-                
-                if (floor_data.processed_walls.count(check_pos) > 0) continue;
-                
-                Tile* tile = editor.map.getTile(check_pos);
-                if (tile && hasHouseWall(tile)) {
-                    // Found a matching wall on this floor, trace its loop
-                    std::vector<Position> wall_loop = traceWallLoop(check_pos, floor_data);
-                    if (wall_loop.size() > 2) {
-                        floor_data.wall_loops.push_back(wall_loop);
-                        floodFillInside(wall_loop, floor_data);
-                    }
-                }
-            }
-        }
-    }
-
-    // Combine all found tiles
+    
+    // Step 7: Create the house
     std::set<Position> all_house_tiles;
     int total_floors = 0;
     int total_tiles = 0;
     Position exit_position(0, 0, 0);
 
-    for (const auto& floor_pair : floors_data) {
-        const FloorData& floor = floor_pair.second;
-        if (!floor.ground_tiles.empty() || !floor.wall_loops.empty()) {
-            total_floors++;
+    // Add a second pass of aggressive fill for enclosed rooms
+    for (auto& [floor_z, floor_data] : house_floors) {
+        if (!floor_data.wall_positions.empty()) {
+            // Find min/max bounds for this floor
+            int local_min_x = std::numeric_limits<int>::max();
+            int local_min_y = std::numeric_limits<int>::max();
+            int local_max_x = std::numeric_limits<int>::min();
+            int local_max_y = std::numeric_limits<int>::min();
             
-            // Add all walls from all loops
-            for (const auto& loop : floor.wall_loops) {
-                all_house_tiles.insert(loop.begin(), loop.end());
-                total_tiles += loop.size();
+            for (const Position& pos : floor_data.wall_positions) {
+                local_min_x = std::min(local_min_x, pos.x);
+                local_min_y = std::min(local_min_y, pos.y);
+                local_max_x = std::max(local_max_x, pos.x);
+                local_max_y = std::max(local_max_y, pos.y);
             }
             
-            // Add ground tiles
-            all_house_tiles.insert(floor.ground_tiles.begin(), floor.ground_tiles.end());
-            total_tiles += floor.ground_tiles.size();
-
-            // Store exit position if found
-            if (floor.exit_pos != Position(0, 0, 0)) {
-                exit_position = floor.exit_pos;
+            // Expand bounds slightly inward for safety
+            local_min_x = local_min_x + 1;
+            local_min_y = local_min_y + 1;
+            local_max_x = local_max_x - 1;
+            local_max_y = local_max_y - 1;
+            
+            // Create a map of enclosed cells
+            std::vector<std::vector<bool>> enclosed_map(local_max_y - local_min_y + 3, 
+                                                      std::vector<bool>(local_max_x - local_min_x + 3, false));
+            
+            // Mark all wall positions on the map
+            for (const Position& wall : floor_data.wall_positions) {
+                int map_x = wall.x - local_min_x + 1;
+                int map_y = wall.y - local_min_y + 1;
+                
+                if (map_x >= 0 && map_y >= 0 && 
+                    map_x < enclosed_map[0].size() && map_y < enclosed_map.size()) {
+                    enclosed_map[map_y][map_x] = true;
+                }
+            }
+            
+            // Do a simple flood fill from outside to mark external cells
+            std::vector<std::vector<bool>> external(enclosed_map.size(), 
+                                                  std::vector<bool>(enclosed_map[0].size(), false));
+            std::queue<std::pair<int, int>> fill_queue;
+            
+            // Add border points
+            for (int y = 0; y < enclosed_map.size(); y++) {
+                fill_queue.push({0, y});
+                fill_queue.push({enclosed_map[0].size() - 1, y});
+            }
+            for (int x = 0; x < enclosed_map[0].size(); x++) {
+                fill_queue.push({x, 0});
+                fill_queue.push({x, enclosed_map.size() - 1});
+            }
+            
+            while (!fill_queue.empty()) {
+                auto [x, y] = fill_queue.front();
+                fill_queue.pop();
+                
+                if (x < 0 || y < 0 || x >= enclosed_map[0].size() || y >= enclosed_map.size() ||
+                    external[y][x] || enclosed_map[y][x]) {
+                    continue;
+                }
+                
+                external[y][x] = true;
+                
+                fill_queue.push({x+1, y});
+                fill_queue.push({x-1, y});
+                fill_queue.push({x, y+1});
+                fill_queue.push({x, y-1});
+            }
+            
+            // Any cell not marked as external and not a wall is internal
+            for (int y = 1; y < enclosed_map.size()-1; y++) {
+                for (int x = 1; x < enclosed_map[0].size()-1; x++) {
+                    if (!enclosed_map[y][x] && !external[y][x]) {
+                        Position interior_pos(x + local_min_x - 1, y + local_min_y - 1, floor_z);
+                        floor_data.interior_positions.insert(interior_pos);
+                    }
+                }
             }
         }
     }
-
-    if (all_house_tiles.empty()) {
-        g_gui.PopupDialog("Error", "Could not detect any valid house area. Please try selecting a different starting position.", wxOK);
+    
+    // Now assemble all house tiles
+    for (const auto& [floor_z, floor_data] : house_floors) {
+        if (!floor_data.wall_positions.empty() || !floor_data.interior_positions.empty()) {
+            total_floors++;
+            
+            // Add walls
+            all_house_tiles.insert(floor_data.wall_positions.begin(), floor_data.wall_positions.end());
+            total_tiles += floor_data.wall_positions.size();
+            
+            // Add interior
+            all_house_tiles.insert(floor_data.interior_positions.begin(), floor_data.interior_positions.end());
+            total_tiles += floor_data.interior_positions.size();
+            
+            // Store exit if found
+            if (floor_data.has_exit) {
+                exit_position = floor_data.exit_pos;
+            }
+        }
+    }
+    
+    if (all_house_tiles.empty() || total_tiles < 4) {
+        g_gui.PopupDialog("Error", "Could not detect any valid house area. Please ensure you clicked inside a house with proper walls.", wxOK);
         return;
     }
 
-    OutputDebugStringA(wxString::Format("Found house with %d floors and %d total tiles\n", 
-        total_floors, total_tiles).c_str());
-
-    // Create dialog to get house information
+    // Create house dialog
     wxDialog* dialog = new wxDialog(this, wxID_ANY, "Create House", wxDefaultPosition, wxSize(300, 200));
     wxBoxSizer* topsizer = new wxBoxSizer(wxVERTICAL);
 
@@ -4168,7 +4693,6 @@ void MapCanvas::OnCreateHouse(wxCommandEvent& event) {
     dialog->SetSizer(topsizer);
     topsizer->Fit(dialog);
 
-    // Show dialog and process results
     if (dialog->ShowModal() == wxID_OK) {
         // Create new house
         House* house = new House(editor.map);
@@ -4213,20 +4737,363 @@ void MapCanvas::OnCreateHouse(wxCommandEvent& event) {
     Refresh();
 }
 
-// Helper function to check if a tile has house walls
+// Helper function to check if a tile has house walls or blocking items
 bool MapCanvas::hasHouseWall(Tile* tile) {
     if (!tile) return false;
 				
     for (Item* item : tile->items) {
         if (!item) continue;
         
-        // Check for walls
-        if (item->isWall()) return true;
+        // Direct checks for brush properties - most reliable
+        if (item->getWallBrush() || item->isDoor() || item->isBrushDoor()) {
+            return true;
+        }
         
-        // Check for doors
-        if (item->isDoor()) return true;
+        // Name-based identification for common boundary elements
+        const std::string& name = item->getName();
+        std::string lowerName = name;
+        std::transform(lowerName.begin(), lowerName.end(), lowerName.begin(), ::tolower);
         
-    
+        // Only use specific wall-related terms
+        if (lowerName.find("wall") != std::string::npos ||
+            lowerName.find("door") != std::string::npos ||
+            lowerName.find("window") != std::string::npos ||
+            lowerName.find("fence") != std::string::npos ||
+            lowerName.find("gate") != std::string::npos ||
+            lowerName.find("rail") != std::string::npos ||
+			lowerName.find("pillar") != std::string::npos ||
+            lowerName.find("archway") != std::string::npos) {
+            return true;
+        }
     }
+    
     return false;
+}
+
+
+// Check if tile has a door
+bool MapCanvas::hasDoor(Tile* tile) {
+    if (!tile) return false;
+    
+    for (Item* item : tile->items) {
+        if (!item) continue;
+        
+        if (item->isDoor() || item->isBrushDoor()) {
+            return true;
+        }
+        
+        const std::string& name = item->getName();
+        std::string lowerName = name;
+        std::transform(lowerName.begin(), lowerName.end(), lowerName.begin(), ::tolower);
+        
+        if (lowerName.find("door") != std::string::npos ||
+            lowerName.find("gate") != std::string::npos) {
+            return true;
+        }
+    }
+    
+    return false;
+}
+
+// Check if tile has stairs or a ladder
+bool MapCanvas::hasStairsOrLadder(Tile* tile) {
+    // Check if the tile is null
+    if (!tile) return false;
+    
+    // First pass: check for obviously visible stairs/ladders
+    for (Item* item : tile->items) {
+        if (!item) continue;
+        
+        // Check special types of stairs and ladders
+        if (item->isStairs() || item->isLadder()) {
+            return true;
+        }
+        
+        // Check names for various stair and ladder types
+        std::string lowerName = item->getName();
+        std::transform(lowerName.begin(), lowerName.end(), lowerName.begin(), ::tolower);
+        
+        if (lowerName.find("stair") != std::string::npos ||
+            lowerName.find("ladder") != std::string::npos ||
+            lowerName.find("ramp") != std::string::npos ||
+            lowerName.find("elevator") != std::string::npos ||
+            lowerName.find("escalator") != std::string::npos) {
+            return true;
+        }
+    }
+    
+    // Second pass: check for railings that might be on top of stairs
+    bool has_railing = false;
+    for (Item* item : tile->items) {
+        if (!item) continue;
+        
+        std::string lowerName = item->getName();
+        std::transform(lowerName.begin(), lowerName.end(), lowerName.begin(), ::tolower);
+        
+        if (lowerName.find("rail") != std::string::npos) {
+            has_railing = true;
+            break;
+        }
+    }
+    
+    // If we found a railing, we need to check the floor below for stairs
+    if (has_railing && tile->getPosition().z > 0) {
+        Position pos_below(tile->getPosition().x, tile->getPosition().y, tile->getPosition().z - 1);
+        Tile* tile_below = editor.map.getTile(pos_below);
+        
+        if (tile_below) {
+            for (Item* item : tile_below->items) {
+                if (!item) continue;
+                
+                if (item->isStairs() || item->isLadder()) {
+                    return true;
+                }
+                
+                std::string lowerName = item->getName();
+                std::transform(lowerName.begin(), lowerName.end(), lowerName.begin(), ::tolower);
+                
+                if (lowerName.find("stair") != std::string::npos ||
+                    lowerName.find("ladder") != std::string::npos ||
+                    lowerName.find("ramp") != std::string::npos) {
+                    return true;
+                }
+            }
+        }
+    }
+    
+    // Check for possible floor transition items underneath
+    if (tile->ground && (tile->ground->isStairs() || tile->ground->isLadder())) {
+        return true;
+    }
+    
+    return false;
+}
+
+void MapCanvas::OnOpenRevScript(wxCommandEvent& WXUNUSED(event)) {
+	if (editor.selection.size() != 1) {
+		return;
+	}
+
+	Tile* tile = editor.selection.getSelectedTile();
+	if (!tile) {
+		return;
+	}
+
+	ItemVector selected_items = tile->getSelectedItems();
+	if (selected_items.empty()) {
+		return;
+	}
+
+	Item* item = selected_items.back(); // Get the top selected item
+	if (!item) {
+		return;
+	}
+
+	// Check if the RevScript manager is loaded
+	if (!g_gui.revscript_manager.isLoaded()) {
+		g_gui.PopupDialog("Script Error", "No OTS data directory has been loaded. Please load a map first or configure the OTS data directory in preferences.", wxOK);
+		return;
+	}
+
+	// Get action ID, unique ID, and item ID from the item
+	uint16_t action_id = item->getActionID();
+	uint16_t unique_id = item->getUniqueID();
+	uint16_t item_id = item->getID();
+
+	std::vector<RevScriptEntry> entries;
+
+	// Search for scripts by action ID
+	if (action_id > 0) {
+		auto aid_entries = g_gui.revscript_manager.findByActionID(action_id);
+		entries.insert(entries.end(), aid_entries.begin(), aid_entries.end());
+	}
+
+	// Search for scripts by unique ID
+	if (unique_id > 0) {
+		auto uid_entries = g_gui.revscript_manager.findByUniqueID(unique_id);
+		entries.insert(entries.end(), uid_entries.begin(), uid_entries.end());
+	}
+
+	// Search for scripts by item ID (includes XML-based actions and movements)
+	auto id_entries = g_gui.revscript_manager.findByItemID(item_id);
+	entries.insert(entries.end(), id_entries.begin(), id_entries.end());
+
+	if (entries.empty()) {
+		wxString message = "No script entries found for this item.";
+		message += wxString::Format("\nChecked: Item ID %d", item_id);
+		if (action_id > 0) {
+			message += wxString::Format(", Action ID %d", action_id);
+		}
+		if (unique_id > 0) {
+			message += wxString::Format(", Unique ID %d", unique_id);
+		}
+		message += "\nSearched: RevScript files, Actions XML, and Movements XML";
+		g_gui.PopupDialog("Script Not Found", message, wxOK);
+		return;
+	}
+
+	// If only one entry found, open it directly
+	if (entries.size() == 1) {
+		const RevScriptEntry& entry = entries[0];
+		if (!g_gui.revscript_manager.openRevScript(entry)) {
+			g_gui.PopupDialog("Error", "Failed to open the script file. Make sure you have a text editor installed.", wxOK);
+		}
+		return;
+	}
+
+	// Multiple entries found, show a selection dialog
+	wxArrayString choices;
+	for (const auto& entry : entries) {
+		wxString choice;
+		if (entry.script_type == "revscript") {
+			choice = wxString::Format("[RevScript] %s:%d - %s (%s: %d)",
+				wxstr(entry.filename), entry.line_number, 
+				wxstr(entry.function_name.empty() ? "global" : entry.function_name),
+				wxstr(entry.id_type), entry.id_value);
+		} else if (entry.script_type == "action") {
+			choice = wxString::Format("[Action] %s (%s: %d)",
+				wxstr(entry.filename),
+				wxstr(entry.id_type), entry.id_value);
+		} else if (entry.script_type == "movement") {
+			choice = wxString::Format("[Movement] %s (%s: %d)",
+				wxstr(entry.filename),
+				wxstr(entry.id_type), entry.id_value);
+		} else {
+			choice = wxString::Format("[%s] %s (%s: %d)",
+				wxstr(entry.script_type),
+				wxstr(entry.filename),
+				wxstr(entry.id_type), entry.id_value);
+		}
+		choices.Add(choice);
+	}
+
+	int selection = wxGetSingleChoiceIndex(
+		wxString::Format("Multiple script entries found for this item (Item ID: %d). Select one to open:", item_id),
+		"Select Script",
+		choices,
+		g_gui.root
+	);
+
+	if (selection != -1) {
+		const RevScriptEntry& entry = entries[selection];
+		if (!g_gui.revscript_manager.openRevScript(entry)) {
+			g_gui.PopupDialog("Error", "Failed to open the script file. Make sure you have a text editor installed.", wxOK);
+		}
+	}
+}
+
+void MapCanvas::OnOpenNPCXML(wxCommandEvent& WXUNUSED(event)) {
+	if (editor.selection.size() != 1) {
+		return;
+	}
+
+	Tile* tile = editor.selection.getSelectedTile();
+	if (!tile || !tile->creature) {
+		return;
+	}
+
+	Creature* creature = tile->creature;
+	if (!creature->isNpc()) {
+		return;
+	}
+
+	// Check if the NPC manager is loaded
+	if (!g_gui.npc_manager.isLoaded()) {
+		g_gui.PopupDialog("NPC Error", "No OTS data directory has been loaded. Please load a map first or configure the OTS data directory in preferences.", wxOK);
+		return;
+	}
+
+	// Find the NPC entry by name
+	NPCEntry* npc_entry = g_gui.npc_manager.findByName(creature->getName());
+	if (!npc_entry) {
+		g_gui.PopupDialog("NPC Not Found", 
+			wxString::Format("No NPC XML file found for '%s'.\nMake sure the NPC data directory is correctly configured in preferences.", 
+			wxstr(creature->getName())), wxOK);
+		return;
+	}
+
+	// Open the XML file
+	if (!g_gui.npc_manager.openNPCXML(*npc_entry)) {
+		g_gui.PopupDialog("Error", "Failed to open the NPC XML file. Make sure you have a text editor installed.", wxOK);
+	}
+}
+
+void MapCanvas::OnOpenNPCScript(wxCommandEvent& WXUNUSED(event)) {
+	if (editor.selection.size() != 1) {
+		return;
+	}
+
+	Tile* tile = editor.selection.getSelectedTile();
+	if (!tile || !tile->creature) {
+		return;
+	}
+
+	Creature* creature = tile->creature;
+	if (!creature->isNpc()) {
+		return;
+	}
+
+	// Check if the NPC manager is loaded
+	if (!g_gui.npc_manager.isLoaded()) {
+		g_gui.PopupDialog("NPC Error", "No OTS data directory has been loaded. Please load a map first or configure the OTS data directory in preferences.", wxOK);
+		return;
+	}
+
+	// Find the NPC entry by name
+	NPCEntry* npc_entry = g_gui.npc_manager.findByName(creature->getName());
+	if (!npc_entry) {
+		g_gui.PopupDialog("NPC Not Found", 
+			wxString::Format("No NPC XML file found for '%s'.\nMake sure the NPC data directory is correctly configured in preferences.", 
+			wxstr(creature->getName())), wxOK);
+		return;
+	}
+
+	// Check if the NPC has a script
+	if (!npc_entry->hasScript || npc_entry->script_path.empty()) {
+		g_gui.PopupDialog("No Script", 
+			wxString::Format("NPC '%s' does not have a script file configured.", 
+			wxstr(creature->getName())), wxOK);
+		return;
+	}
+
+	// Open the script file
+	if (!g_gui.npc_manager.openNPCScript(*npc_entry)) {
+		g_gui.PopupDialog("Error", "Failed to open the NPC script file. Make sure the script file exists and you have a text editor installed.", wxOK);
+	}
+}
+
+void MapCanvas::OnOpenMonsterXML(wxCommandEvent& WXUNUSED(event)) {
+	if (editor.selection.size() != 1) {
+		return;
+	}
+
+	Tile* tile = editor.selection.getSelectedTile();
+	if (!tile || !tile->creature) {
+		return;
+	}
+
+	Creature* creature = tile->creature;
+	if (creature->isNpc()) {
+		return; // This is for monsters only
+	}
+
+	// Check if the Monster manager is loaded
+	if (!g_gui.monster_manager.isLoaded()) {
+		g_gui.PopupDialog("Monster Error", "No OTS data directory has been loaded. Please load a map first or configure the OTS data directory in preferences.", wxOK);
+		return;
+	}
+
+	// Find the Monster entry by name
+	MonsterEntry* monster_entry = g_gui.monster_manager.findByName(creature->getName());
+	if (!monster_entry) {
+		g_gui.PopupDialog("Monster Not Found", 
+			wxString::Format("No Monster XML file found for '%s'.\nMake sure the Monster data directory is correctly configured in preferences.", 
+			wxstr(creature->getName())), wxOK);
+		return;
+	}
+
+	// Open the XML file
+	if (!g_gui.monster_manager.openMonsterXML(*monster_entry)) {
+		g_gui.PopupDialog("Error", "Failed to open the Monster XML file. Make sure you have a text editor installed.", wxOK);
+	}
 }

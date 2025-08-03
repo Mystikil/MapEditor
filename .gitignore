@@ -10,13 +10,11 @@ build-release
 CMakeLists.txt.user*
 *.vs
 # RME
-rme
-rme.cfg
-data/user
 
-# exe and dll
+vcproj/x64/Release/data/800/Tibia.spr
+vcproj/x64/Release/data/800/Tibia.dat
 
-
+vcproj/enc_temp_folder/*
 # assets
 *.spr
 *.dat
@@ -54,9 +52,6 @@ xcuserdata
 .idea/
 cmake-build-debug/
 
-# Notepad++
-*.bak
-.github/workflows/clang-format.yml
-ACOLINNNNNNNNNNNNNNNNNNNNNNNNNNNNNNN/forgottenserver-1.4.2/independence/data/creaturescripts/scripts/loginmotd.lua
-jo ininnn.txt
-fix-commits.ps1
+*.obj
+*.pdb
+/nodechatserver/node_modules

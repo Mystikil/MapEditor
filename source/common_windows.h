@@ -56,7 +56,7 @@ public:
 	virtual ~MapPropertiesWindow();
 
 	void OnChangeVersion(wxCommandEvent&);
-
+	void OnClientVersionChange(wxCommandEvent&);
 	void OnClickOK(wxCommandEvent&);
 	void OnClickCancel(wxCommandEvent&);
 
@@ -72,6 +72,7 @@ protected:
 	wxTextCtrl* description_ctrl;
 	wxTextCtrl* house_filename_ctrl;
 	wxTextCtrl* spawn_filename_ctrl;
+	wxCheckBox* auto_update_checkbox;
 
 	DECLARE_EVENT_TABLE();
 };
@@ -203,6 +204,7 @@ protected:
 class SortableListBox : public wxListBox {
 public:
 	SortableListBox(wxWindow* parent, wxWindowID id, const wxPoint& pos = wxDefaultPosition, const wxSize& size = wxDefaultSize);
+	SortableListBox(wxWindow* parent, wxWindowID id, const wxPoint& pos, const wxSize& size, int n, const wxString choices[], long style);
 	~SortableListBox();
 	void Sort();
 
@@ -342,6 +344,7 @@ public:
 protected:
 	void BuildListBox(bool doselect);
 	void UpdateSelection(int new_selection);
+	void SynchronizeWithMap();
 	void ExportTownsToXML(const wxString& path);
 	void ImportTownsFromXML(const wxString& path);
 	void ExportTownToXML(const wxString& path, Town* town);

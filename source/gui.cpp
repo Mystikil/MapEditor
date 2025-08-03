@@ -150,6 +150,7 @@
 #include "main.h"
 
 #include <wx/display.h>
+#include <wx/dir.h>
 
 #include "gui.h"
 #include "main_menubar.h"
@@ -164,6 +165,7 @@
 
 #include "common_windows.h"
 #include "result_window.h"
+#include "map_summary_window.h"
 #include "minimap_window.h"
 #include "palette_window.h"
 #include "map_display.h"
@@ -173,6 +175,8 @@
 #include "live_client.h"
 #include "live_tab.h"
 #include "live_server.h"
+#include "recent_brushes_window.h"
+#include "monster_maker_window.h"
 #include "dark_mode_manager.h"
 #include <wx/regex.h>
 
@@ -189,56 +193,125 @@ GUI g_gui;
 GUI::GUI() :
 	aui_manager(nullptr),
 	root(nullptr),
-	minimap(nullptr),
 	minimap_enabled(false),
-	gem(nullptr),
+	mode(DRAWING_MODE),
+	pasting(false),
+	hotkeys_enabled(true),
 	search_result_window(nullptr),
+	map_summary_window(nullptr),
+	monster_maker_window(nullptr),
+	loaded_version(CLIENT_VERSION_NONE),
 	secondary_map(nullptr),
-	doodad_buffer_map(nullptr),
-
+	minimap(nullptr),
+	recent_brushes_window(nullptr),
+	has_last_search(false),
+	last_search_itemid(0),
+	last_search_on_selection(false),
+	last_ignored_ids_enabled(false),
+	creature_spawntime(0),
+	gem(nullptr),
+	doodad_buffer_map(std::make_unique<BaseMap>()),
 	house_brush(nullptr),
 	house_exit_brush(nullptr),
 	waypoint_brush(nullptr),
 	optional_brush(nullptr),
 	eraser(nullptr),
+	spawn_brush(nullptr),
 	normal_door_brush(nullptr),
 	locked_door_brush(nullptr),
 	magic_door_brush(nullptr),
 	quest_door_brush(nullptr),
 	hatch_door_brush(nullptr),
+	normal_door_alt_brush(nullptr),
+	archway_door_brush(nullptr),
 	window_door_brush(nullptr),
-
+	pz_brush(nullptr),
+	rook_brush(nullptr),
+	nolog_brush(nullptr),
+	pvp_brush(nullptr),
 	OGLContext(nullptr),
-	loaded_version(CLIENT_VERSION_NONE),
-	mode(SELECTION_MODE),
-	pasting(false),
-	hotkeys_enabled(true),
-
 	current_brush(nullptr),
 	previous_brush(nullptr),
 	brush_shape(BRUSHSHAPE_SQUARE),
-	brush_size(0),
+	brush_size(1), // Initialize to 1 instead of 0 to prevent division by zero
 	brush_variation(0),
-
-	creature_spawntime(0),
 	draw_locked_doors(false),
 	use_custom_thickness(false),
 	custom_thickness_mod(0.0),
+	use_custom_brush_size(false),
+	custom_brush_width(0),
+	custom_brush_height(0),
 	progressBar(nullptr),
+	progressFrom(0),
+	progressTo(0),
+	currentProgress(0),
+	winDisabler(nullptr),
 	disabled_counter(0),
 	last_autosave(time(nullptr)),
-	last_autosave_check(time(nullptr)) {
-	doodad_buffer_map = newd BaseMap();
+	last_autosave_check(time(nullptr))
+{
 }
 
 GUI::~GUI() {
-	delete doodad_buffer_map;
-	delete g_gui.aui_manager;
-	delete OGLContext;
+    // Close all editors before deleting other resources
+    if (tabbook) {
+        CloseAllEditors();
+    }
+    
+    // Clean up brushes
+    CleanupBrushes();
+    
+    // Close any remaining detached/dockable views
+    for (auto& view_pair : detached_views) {
+        for (wxFrame* frame : view_pair.second) {
+            frame->Close(true);
+        }
+    }
+    detached_views.clear();
+    
+    for (auto& view_pair : dockable_views) {
+        for (MapWindow* window : view_pair.second) {
+            if (aui_manager && aui_manager->GetPane(window).IsOk()) {
+                aui_manager->DetachPane(window);
+                window->Destroy();
+            }
+        }
+    }
+    dockable_views.clear();
+    
+    // doodad_buffer_map and OGLContext are now managed by unique_ptr
+    
+    // NOTE: aui_manager is deleted by MainFrame's destructor
+}
+
+void GUI::CleanupBrushes() {
+    // The GUI doesn't own the brushes, they're owned by g_brushes
+    // Just nullify the pointers to avoid dangling references
+    house_brush = nullptr;
+    house_exit_brush = nullptr;
+    waypoint_brush = nullptr;
+    optional_brush = nullptr;
+    eraser = nullptr;
+    spawn_brush = nullptr;
+    normal_door_brush = nullptr;
+    locked_door_brush = nullptr;
+    magic_door_brush = nullptr;
+    quest_door_brush = nullptr;
+    hatch_door_brush = nullptr;
+    normal_door_alt_brush = nullptr;
+    archway_door_brush = nullptr;
+    window_door_brush = nullptr;
+    pz_brush = nullptr;
+    rook_brush = nullptr;
+    nolog_brush = nullptr;
+    pvp_brush = nullptr;
+    
+    current_brush = nullptr;
+    previous_brush = nullptr;
 }
 
 wxGLContext* GUI::GetGLContext(wxGLCanvas* win) {
-	if (OGLContext == nullptr) {
+	if (!OGLContext) {
 #ifdef __WXOSX__
 		/*
 		wxGLContext(AGLPixelFormat fmt, wxGLCanvas *win,
@@ -246,13 +319,13 @@ wxGLContext* GUI::GetGLContext(wxGLCanvas* win) {
 					const wxGLContext *other
 					);
 		*/
-		OGLContext = new wxGLContext(win, nullptr);
+		OGLContext = std::unique_ptr<wxGLContext>(new wxGLContext(win, nullptr));
 #else
-		OGLContext = newd wxGLContext(win);
+		OGLContext = std::unique_ptr<wxGLContext>(newd wxGLContext(win));
 #endif
 	}
 
-	return OGLContext;
+	return OGLContext.get();
 }
 
 wxString GUI::GetDataDirectory() {
@@ -492,7 +565,15 @@ bool GUI::LoadDataFiles(wxString& error, wxArrayString& warnings) {
 	}
 
 	g_gui.SetLoadDone(20, "Loading items.otb file...");
-	if (!g_items.loadFromOtb(wxString(data_path.GetPath(wxPATH_GET_VOLUME | wxPATH_GET_SEPARATOR) + "items.otb"), error, warnings)) {
+	wxString otb_path;
+	if (g_settings.getBoolean(Config::FORCE_CLIENT_ITEMS_OTB)) {
+		// Load from client folder
+		otb_path = client_path.GetPath(wxPATH_GET_VOLUME | wxPATH_GET_SEPARATOR) + "items.otb";
+	} else {
+		// Load from data folder (default behavior)
+		otb_path = data_path.GetPath(wxPATH_GET_VOLUME | wxPATH_GET_SEPARATOR) + "items.otb";
+	}
+	if (!g_items.loadFromOtb(otb_path, error, warnings)) {
 		error = "Couldn't load items.otb: " + error;
 		g_gui.DestroyLoadBar();
 		UnloadVersion();
@@ -500,7 +581,15 @@ bool GUI::LoadDataFiles(wxString& error, wxArrayString& warnings) {
 	}
 
 	g_gui.SetLoadDone(30, "Loading items.xml ...");
-	if (!g_items.loadFromGameXml(wxString(data_path.GetPath(wxPATH_GET_VOLUME | wxPATH_GET_SEPARATOR) + "items.xml"), error, warnings)) {
+	wxString xml_path;
+	if (g_settings.getBoolean(Config::FORCE_CLIENT_ITEMS_OTB)) {
+		// Load from client folder
+		xml_path = client_path.GetPath(wxPATH_GET_VOLUME | wxPATH_GET_SEPARATOR) + "items.xml";
+	} else {
+		// Load from data folder (default behavior)
+		xml_path = data_path.GetPath(wxPATH_GET_VOLUME | wxPATH_GET_SEPARATOR) + "items.xml";
+	}
+	if (!g_items.loadFromGameXml(xml_path, error, warnings)) {
 		warnings.push_back("Couldn't load items.xml: " + error);
 	}
 
@@ -560,6 +649,15 @@ void GUI::UnloadVersion() {
 	window_door_brush = nullptr;
 
 	if (loaded_version != CLIENT_VERSION_NONE) {
+		// Close all detached and dockable views
+		for (auto it = detached_views.begin(); it != detached_views.end();) {
+			auto editor_it = it;
+			++it; // Advance iterator before we potentially erase elements
+			
+			// Close all views for this editor
+			CloseDetachedViews(editor_it->first);
+		}
+		
 		// g_gui.UnloadVersion();
 		g_materials.clear();
 		g_brushes.clear();
@@ -721,11 +819,123 @@ bool GUI::LoadMap(const FileName& fileName) {
 
 	mapTab->GetView()->FitToMap();
 	UpdateTitle();
-	ListDialog("Map loader errors", mapTab->GetMap()->getWarnings());
+	
+
+	
 	root->DoQueryImportCreatures();
 
 	FitViewToMap(mapTab);
 	root->UpdateMenubar();
+
+	// Pre-cache the entire minimap for smooth performance
+	if (minimap && IsMinimapVisible()) {
+		minimap->PreCacheEntireMap();
+	}
+
+	// Load OTS scripts directory for the map
+	wxFileName mapPath(fileName.GetFullPath());
+	wxString mapDir = mapPath.GetPath();
+	
+	// Check if we can find an OTS data directory
+	bool scriptsLoaded = false;
+	bool monstersLoaded = false;
+	bool npcsLoaded = false;
+	
+	// Strategy 0: Use custom OTS Data directory if set
+	std::string customDataPath = g_settings.getString(Config::OTS_DATA_DIRECTORY);
+	if (!customDataPath.empty()) {
+		wxString customPath = wxstr(customDataPath);
+		if (wxDir::Exists(customPath)) {
+			if (revscript_manager.scanRevScriptsDirectory(customDataPath)) {
+				scriptsLoaded = true;
+			}
+			if (monster_manager.scanMonstersDirectory(customDataPath)) {
+				monstersLoaded = true;
+			}
+			if (npc_manager.scanNPCDirectory(customDataPath)) {
+				npcsLoaded = true;
+			}
+			if (scriptsLoaded || monstersLoaded || npcsLoaded) {
+				SetStatusText("OTS data directory loaded (custom): " + customPath);
+			}
+		}
+	}
+	
+	// Strategy 1: Look for data directory in same directory as map
+	if (!scriptsLoaded && !monstersLoaded && !npcsLoaded) {
+		wxString dataPath = mapDir + wxFileName::GetPathSeparator() + "data";
+		if (wxDir::Exists(dataPath)) {
+			if (revscript_manager.scanRevScriptsDirectory(nstr(dataPath))) {
+				scriptsLoaded = true;
+			}
+			if (monster_manager.scanMonstersDirectory(nstr(dataPath))) {
+				monstersLoaded = true;
+			}
+			if (npc_manager.scanNPCDirectory(nstr(dataPath))) {
+				npcsLoaded = true;
+			}
+			if (scriptsLoaded || monstersLoaded || npcsLoaded) {
+				SetStatusText("OTS data directory loaded: " + dataPath);
+			}
+		}
+	}
+	
+	// Strategy 2: Go up one directory level and look for data
+	// This handles the common case where map is in /data/world/ and we need to find /data/
+	if (!scriptsLoaded && !monstersLoaded && !npcsLoaded) {
+		wxFileName parentPath(mapDir);
+		if (parentPath.GetDirCount() > 0) {
+			parentPath.RemoveLastDir();  // Go up one level (from world to data)
+			wxString parentDataPath = parentPath.GetPath();
+			
+			// Check if this looks like the data directory (contains scripts, actions, movements, monsters, or npcs)
+			wxString scriptsCheck = parentDataPath + wxFileName::GetPathSeparator() + "scripts";
+			wxString actionsCheck = parentDataPath + wxFileName::GetPathSeparator() + "actions";
+			wxString monstersCheck = parentDataPath + wxFileName::GetPathSeparator() + "monsters";
+			wxString npcsCheck = parentDataPath + wxFileName::GetPathSeparator() + "npc";
+			if (wxDir::Exists(scriptsCheck) || wxDir::Exists(actionsCheck) || wxDir::Exists(monstersCheck) || wxDir::Exists(npcsCheck)) {
+				if (revscript_manager.scanRevScriptsDirectory(nstr(parentDataPath))) {
+					scriptsLoaded = true;
+				}
+				if (monster_manager.scanMonstersDirectory(nstr(parentDataPath))) {
+					monstersLoaded = true;
+				}
+				if (npc_manager.scanNPCDirectory(nstr(parentDataPath))) {
+					npcsLoaded = true;
+				}
+				if (scriptsLoaded || monstersLoaded || npcsLoaded) {
+					SetStatusText("OTS data directory loaded: " + parentDataPath);
+				}
+			}
+		}
+	}
+	
+	// Strategy 3: Look for data directory as sibling to map directory
+	if (!scriptsLoaded && !monstersLoaded && !npcsLoaded) {
+		wxFileName mapParent(mapDir);
+		if (mapParent.GetDirCount() > 0) {
+			mapParent.RemoveLastDir();  // Go up to parent of map directory
+			wxString siblingDataPath = mapParent.GetPath() + wxFileName::GetPathSeparator() + "data";
+			if (wxDir::Exists(siblingDataPath)) {
+				if (revscript_manager.scanRevScriptsDirectory(nstr(siblingDataPath))) {
+					scriptsLoaded = true;
+				}
+				if (monster_manager.scanMonstersDirectory(nstr(siblingDataPath))) {
+					monstersLoaded = true;
+				}
+				if (npc_manager.scanNPCDirectory(nstr(siblingDataPath))) {
+					npcsLoaded = true;
+				}
+				if (scriptsLoaded || monstersLoaded || npcsLoaded) {
+					SetStatusText("OTS data directory loaded: " + siblingDataPath);
+				}
+			}
+		}
+	}
+	
+	if (!scriptsLoaded && !monstersLoaded && !npcsLoaded) {
+		SetStatusText("No OTS data directory found");
+	}
 
 	std::string path = g_settings.getString(Config::RECENT_EDITED_MAP_PATH);
 	if (!path.empty()) {
@@ -738,6 +948,212 @@ bool GUI::LoadMap(const FileName& fileName) {
 		}
 	}
 	return true;
+}
+
+void GUI::ReloadRevScripts() {
+	if (!IsEditorOpen()) {
+		SetStatusText("No map open - cannot reload scripts");
+		return;
+	}
+	
+	// Get the current map file path
+	Editor* editor = GetCurrentEditor();
+	if (!editor || !editor->map.hasFile()) {
+		SetStatusText("Map has no file - cannot determine OTS data directory");
+		return;
+	}
+	
+	FileName fileName(wxstr(editor->map.getFilename()));
+	wxFileName mapPath(fileName.GetFullPath());
+	wxString mapDir = mapPath.GetPath();
+	
+	// Check if we can find an OTS data directory
+	bool scriptsLoaded = false;
+	bool monstersLoaded = false;
+	bool npcsLoaded = false;
+	
+	// Strategy 0: Use custom OTS Data directory if set
+	// ADDITIONALY THERE SHOULD BE FALLBACK TO CURRENTLY LOADED MAP DIR cd ..
+	// since the map dir 99% of time is /data/world which means we are 1 back dir from /data folder :D
+	std::string customDataPath = g_settings.getString(Config::OTS_DATA_DIRECTORY);
+	if (!customDataPath.empty()) {
+		wxString customPath = wxstr(customDataPath);
+		if (wxDir::Exists(customPath)) {
+			if (revscript_manager.scanRevScriptsDirectory(customDataPath)) {
+				scriptsLoaded = true;
+			}
+			if (monster_manager.scanMonstersDirectory(customDataPath)) {
+				monstersLoaded = true;
+			}
+			if (npc_manager.scanNPCDirectory(customDataPath)) {
+				npcsLoaded = true;
+			}
+			if (scriptsLoaded || monstersLoaded || npcsLoaded) {
+				SetStatusText("OTS data directory reloaded (custom): " + customPath);
+			}
+		}
+	}
+	
+	// Strategy 1: Look for data directory in same directory as map
+	if (!scriptsLoaded && !monstersLoaded && !npcsLoaded) {
+		wxString dataPath = mapDir + wxFileName::GetPathSeparator() + "data";
+		if (wxDir::Exists(dataPath)) {
+			if (revscript_manager.scanRevScriptsDirectory(nstr(dataPath))) {
+				scriptsLoaded = true;
+			}
+			if (monster_manager.scanMonstersDirectory(nstr(dataPath))) {
+				monstersLoaded = true;
+			}
+			if (npc_manager.scanNPCDirectory(nstr(dataPath))) {
+				npcsLoaded = true;
+			}
+			if (scriptsLoaded || monstersLoaded || npcsLoaded) {
+				SetStatusText("OTS data directory reloaded: " + dataPath);
+			}
+		}
+	}
+	
+	// Strategy 2: Go up one directory level and look for data
+	if (!scriptsLoaded && !monstersLoaded && !npcsLoaded) {
+		wxFileName parentPath(mapDir);
+		if (parentPath.GetDirCount() > 0) {
+			parentPath.RemoveLastDir();  // Go up one level (from world to data)
+			wxString parentDataPath = parentPath.GetPath();
+			
+			// Check if this looks like the data directory (contains scripts, actions, movements, monsters, or npcs)
+			wxString scriptsCheck = parentDataPath + wxFileName::GetPathSeparator() + "scripts";
+			wxString actionsCheck = parentDataPath + wxFileName::GetPathSeparator() + "actions";
+			wxString monstersCheck = parentDataPath + wxFileName::GetPathSeparator() + "monsters";
+			wxString npcsCheck = parentDataPath + wxFileName::GetPathSeparator() + "npc";
+			if (wxDir::Exists(scriptsCheck) || wxDir::Exists(actionsCheck) || wxDir::Exists(monstersCheck) || wxDir::Exists(npcsCheck)) {
+				if (revscript_manager.scanRevScriptsDirectory(nstr(parentDataPath))) {
+					scriptsLoaded = true;
+				}
+				if (monster_manager.scanMonstersDirectory(nstr(parentDataPath))) {
+					monstersLoaded = true;
+				}
+				if (npc_manager.scanNPCDirectory(nstr(parentDataPath))) {
+					npcsLoaded = true;
+				}
+				if (scriptsLoaded || monstersLoaded || npcsLoaded) {
+					SetStatusText("OTS data directory reloaded: " + parentDataPath);
+				}
+			}
+		}
+	}
+	
+	// Strategy 3: Look for data directory as sibling to map directory
+	if (!scriptsLoaded && !monstersLoaded && !npcsLoaded) {
+		wxFileName mapParent(mapDir);
+		if (mapParent.GetDirCount() > 0) {
+			mapParent.RemoveLastDir();  // Go up to parent of map directory
+			wxString siblingDataPath = mapParent.GetPath() + wxFileName::GetPathSeparator() + "data";
+			if (wxDir::Exists(siblingDataPath)) {
+				if (revscript_manager.scanRevScriptsDirectory(nstr(siblingDataPath))) {
+					scriptsLoaded = true;
+				}
+				if (monster_manager.scanMonstersDirectory(nstr(siblingDataPath))) {
+					monstersLoaded = true;
+				}
+				if (npc_manager.scanNPCDirectory(nstr(siblingDataPath))) {
+					npcsLoaded = true;
+				}
+				if (scriptsLoaded || monstersLoaded || npcsLoaded) {
+					SetStatusText("OTS data directory reloaded: " + siblingDataPath);
+				}
+			}
+		}
+	}
+	
+	if (!scriptsLoaded && !monstersLoaded && !npcsLoaded) {
+		SetStatusText("No OTS data directory found for reload");
+	}
+}
+
+void GUI::ReloadNPCs() {
+	if (!IsEditorOpen()) {
+		SetStatusText("No map open - cannot reload NPCs");
+		return;
+	}
+	
+	// Get the current map file path
+	Editor* editor = GetCurrentEditor();
+	if (!editor || !editor->map.hasFile()) {
+		SetStatusText("Map has no file - cannot determine OTS data directory");
+		return;
+	}
+	
+	FileName fileName(wxstr(editor->map.getFilename()));
+	wxFileName mapPath(fileName.GetFullPath());
+	wxString mapDir = mapPath.GetPath();
+	
+	// Check if we can find an OTS data directory
+	bool npcsLoaded = false;
+	
+	// Strategy 0: Use custom OTS Data directory if set
+	std::string customDataPath = g_settings.getString(Config::OTS_DATA_DIRECTORY);
+	if (!customDataPath.empty()) {
+		wxString customPath = wxstr(customDataPath);
+		if (wxDir::Exists(customPath)) {
+			if (npc_manager.scanNPCDirectory(customDataPath)) {
+				npcsLoaded = true;
+				SetStatusText("NPCs reloaded (custom): " + customPath);
+			}
+		}
+	}
+	
+	// Strategy 1: Look for data directory in same directory as map
+	if (!npcsLoaded) {
+		wxString dataPath = mapDir + wxFileName::GetPathSeparator() + "data";
+		if (wxDir::Exists(dataPath)) {
+			if (npc_manager.scanNPCDirectory(nstr(dataPath))) {
+				npcsLoaded = true;
+				SetStatusText("NPCs reloaded: " + dataPath);
+			}
+		}
+	}
+	
+	// Strategy 2: Go up one directory level and look for data
+	if (!npcsLoaded) {
+		wxFileName parentPath(mapDir);
+		if (parentPath.GetDirCount() > 0) {
+			parentPath.RemoveLastDir();  // Go up one level (from world to data)
+			wxString parentDataPath = parentPath.GetPath();
+			
+			// Check if this looks like the data directory (contains npc directory)
+			wxString npcsCheck = parentDataPath + wxFileName::GetPathSeparator() + "npc";
+			if (wxDir::Exists(npcsCheck)) {
+				if (npc_manager.scanNPCDirectory(nstr(parentDataPath))) {
+					npcsLoaded = true;
+					SetStatusText("NPCs reloaded: " + parentDataPath);
+				}
+			}
+		}
+	}
+	
+	// Strategy 3: Look for data directory as sibling to map directory
+	if (!npcsLoaded) {
+		wxFileName mapParent(mapDir);
+		if (mapParent.GetDirCount() > 0) {
+			mapParent.RemoveLastDir();  // Go up to parent of map directory
+			wxString siblingDataPath = mapParent.GetPath() + wxFileName::GetPathSeparator() + "data";
+			if (wxDir::Exists(siblingDataPath)) {
+				if (npc_manager.scanNPCDirectory(nstr(siblingDataPath))) {
+					npcsLoaded = true;
+					SetStatusText("NPCs reloaded: " + siblingDataPath);
+				}
+			}
+		}
+	}
+	
+	if (!npcsLoaded) {
+		SetStatusText("No NPC data directory found for reload");
+	} else {
+		// Show statistics for debugging
+		std::string stats = npc_manager.getScanStatistics();
+		wxString message = "NPCs reloaded!\n\n" + wxstr(stats);
+		wxMessageBox(message, "NPC Reload Complete", wxOK | wxICON_INFORMATION, this->root);
+	}
 }
 
 Editor* GUI::GetCurrentEditor() {
@@ -809,6 +1225,29 @@ void GUI::AddPendingCanvasEvent(wxEvent& event) {
 }
 
 void GUI::CloseCurrentEditor() {
+	MapTab* mapTab = GetCurrentMapTab();
+	if (mapTab) {
+		// Check if the map has detached views and warn the user
+		if (HasDetachedViews(mapTab->GetEditor())) {
+			wxString message = "This map has one or more detached views open.\n";
+			message += "You must close all detached views before closing the map.";
+			
+			int choice = wxMessageBox(
+				message,
+				"Detached Views Open",
+				wxOK | wxCANCEL | wxICON_EXCLAMATION
+			);
+			
+			if (choice == wxOK) {
+				// User chose to close detached views
+				CloseDetachedViews(mapTab->GetEditor());
+			} else {
+				// User canceled operation
+				return;
+			}
+		}
+	}
+	
 	RefreshPalettes();
 	tabbook->DeleteTab(tabbook->GetSelection());
 	root->UpdateMenubar();
@@ -839,6 +1278,28 @@ bool GUI::CloseAllEditors() {
 	for (int i = 0; i < tabbook->GetTabCount(); ++i) {
 		auto* mapTab = dynamic_cast<MapTab*>(tabbook->GetTab(i));
 		if (mapTab) {
+			// Check if the map has detached views and warn the user
+			if (HasDetachedViews(mapTab->GetEditor())) {
+				tabbook->SetFocusedTab(i);
+				
+				wxString message = "This map has one or more detached views open.\n";
+				message += "You must close all detached views before closing the map.";
+				
+				int choice = wxMessageBox(
+					message,
+					"Detached Views Open",
+					wxOK | wxCANCEL | wxICON_EXCLAMATION
+				);
+				
+				if (choice == wxOK) {
+					// User chose to close detached views
+					CloseDetachedViews(mapTab->GetEditor());
+				} else {
+					// User canceled operation
+					return false;
+				}
+			}
+		
 			if (mapTab->IsUniqueReference() && mapTab->GetMap() && mapTab->GetMap()->hasChanged()) {
 				tabbook->SetFocusedTab(i);
 				if (!root->DoQuerySave(false)) {
@@ -870,6 +1331,205 @@ void GUI::NewMapView() {
 		root->UpdateMenubar();
 		root->Refresh();
 	}
+}
+
+void GUI::NewDetachedMapView() {
+    MapTab* mapTab = GetCurrentMapTab();
+    if (mapTab) {
+        // Display options dialog for the type of view
+        wxArrayString choices;
+        choices.Add("Detached Window (Can be moved to another monitor)");
+        choices.Add("Always-on-top Window (Will stay on top of other windows)");
+        choices.Add("Dockable Panel (Can be attached like palette/minimap)");
+        
+        wxSingleChoiceDialog dialog(root, "Select type of view:", "Map View Options", choices);
+        
+        if (dialog.ShowModal() == wxID_OK) {
+            int selection = dialog.GetSelection();
+            
+            if (selection == 0 || selection == 1) {
+                // Create a standalone top-level window
+                wxFrame* detachedFrame = newd wxFrame(root, wxID_ANY, "Detached Map View", 
+                    wxDefaultPosition, wxSize(800, 600), 
+                    wxDEFAULT_FRAME_STYLE | wxRESIZE_BORDER | wxMAXIMIZE_BOX | wxMINIMIZE_BOX);
+                    
+                // Create a map window in the new frame
+                MapWindow* newMapWindow = newd MapWindow(detachedFrame, *mapTab->GetEditor());
+                
+                // Set up a basic sizer for the frame
+                wxSizer* sizer = newd wxBoxSizer(wxVERTICAL);
+                sizer->Add(newMapWindow, 1, wxEXPAND);
+                detachedFrame->SetSizer(sizer);
+                
+                // Initialize the map window to match current map view
+                newMapWindow->FitToMap();
+                
+                // Set the center position to match the current view
+                Position pos = mapTab->GetScreenCenterPosition();
+                newMapWindow->SetScreenCenterPosition(pos);
+                
+                // Configure the map window based on current editor mode
+                if (mode == SELECTION_MODE) {
+                    newMapWindow->GetCanvas()->EnterSelectionMode();
+                } else {
+                    newMapWindow->GetCanvas()->EnterDrawingMode();
+                }
+                
+                // Add a small toolbar for common functions
+                wxToolBar* toolbar = new wxToolBar(detachedFrame, wxID_ANY);
+                wxButton* syncButton = new wxButton(toolbar, wxID_ANY, "Sync View");
+                wxCheckBox* pinCheckbox = new wxCheckBox(toolbar, wxID_ANY, "Keep on Top");
+                wxCheckBox* keepOpenCheckbox = new wxCheckBox(toolbar, wxID_ANY, "Keep Open");
+                toolbar->AddControl(syncButton);
+                toolbar->AddSeparator();
+                toolbar->AddControl(pinCheckbox);
+                toolbar->AddSeparator();
+                toolbar->AddControl(keepOpenCheckbox);
+                toolbar->Realize();
+                
+                // Add the toolbar to the frame
+                sizer->Insert(0, toolbar, 0, wxEXPAND);
+                
+                // Bind toolbar events
+                syncButton->Bind(wxEVT_BUTTON, [=](wxCommandEvent& event) {
+                    // Sync button clicked
+                    MapTab* currentTab = GetCurrentMapTab();
+                    if (currentTab) {
+                        Position mainPos = currentTab->GetScreenCenterPosition();
+                        newMapWindow->SetScreenCenterPosition(mainPos);
+                    }
+                });
+                
+                pinCheckbox->Bind(wxEVT_CHECKBOX, [=](wxCommandEvent& event) {
+                    // Pin checkbox toggled
+                    bool checked = pinCheckbox->GetValue();
+                    if (checked) {
+                        detachedFrame->SetWindowStyleFlag(detachedFrame->GetWindowStyleFlag() | wxSTAY_ON_TOP);
+                    } else {
+                        detachedFrame->SetWindowStyleFlag(detachedFrame->GetWindowStyleFlag() & ~wxSTAY_ON_TOP);
+                    }
+                    
+                    // Need to update the window for the style change to take effect
+                    detachedFrame->Refresh();
+                });
+                
+                // Create a client data object to store the keep-open flag
+                // This avoids a memory leak from the heap-allocated bool
+                struct WindowData : public wxClientData {
+                    bool keepOpen = false;
+                };
+                WindowData* windowData = new WindowData();
+                detachedFrame->SetClientObject(windowData);
+                
+                // Default close behavior with flag check
+                detachedFrame->Bind(wxEVT_CLOSE_WINDOW, [detachedFrame](wxCloseEvent& event) {
+                    WindowData* data = static_cast<WindowData*>(detachedFrame->GetClientObject());
+                    if (data && data->keepOpen && event.CanVeto()) {
+                        // Minimize instead of closing
+                        event.Veto();
+                        detachedFrame->Iconize(true);
+                    } else {
+                        // Regular close
+                        detachedFrame->Destroy();
+                    }
+                });
+                
+                // Keep Open checkbox handler - updates the flag in client data
+                keepOpenCheckbox->Bind(wxEVT_CHECKBOX, [detachedFrame](wxCommandEvent& event) {
+                    wxCheckBox* cb = static_cast<wxCheckBox*>(event.GetEventObject());
+                    WindowData* data = static_cast<WindowData*>(detachedFrame->GetClientObject());
+                    if (data) {
+                        data->keepOpen = cb->GetValue();
+                    }
+                });
+                
+                // Add context menu for quick floor navigation
+                newMapWindow->Bind(wxEVT_RIGHT_DOWN, [=](wxMouseEvent& event) {
+                    wxMenu popupMenu;
+                    
+                    // Floor navigation submenu
+                    wxMenu* floorMenu = new wxMenu();
+                    for (int floor = 0; floor <= 15; floor++) {
+                        wxMenuItem* floorItem = floorMenu->Append(wxID_ANY, wxString::Format("Floor %d", floor));
+                        
+                        floorMenu->Bind(wxEVT_COMMAND_MENU_SELECTED, [=](wxCommandEvent& event) {
+                            newMapWindow->GetCanvas()->ChangeFloor(floor);
+                        }, floorItem->GetId());
+                    }
+                    popupMenu.Append(wxID_ANY, "Go to Floor", floorMenu);
+                    
+                    // Show popup menu
+                    newMapWindow->PopupMenu(&popupMenu);
+                });
+                
+                // Title should include map name
+                detachedFrame->SetTitle(wxString::Format("Detached View: %s", wxstr(mapTab->GetEditor()->map.getName())));
+                
+                // If user selected always-on-top, enable that flag
+                if (selection == 1) {
+                    detachedFrame->SetWindowStyleFlag(detachedFrame->GetWindowStyleFlag() | wxSTAY_ON_TOP);
+                    detachedFrame->SetTitle(wxString::Format("Always-on-top View: %s", wxstr(mapTab->GetEditor()->map.getName())));
+                    pinCheckbox->SetValue(true);
+                }
+                
+                // Register the detached view
+                RegisterDetachedView(mapTab->GetEditor(), detachedFrame);
+                
+                // Add cleanup to close handler to remove the frame from our registry
+                detachedFrame->Bind(wxEVT_DESTROY, [=](wxWindowDestroyEvent& event) {
+                    UnregisterDetachedView(mapTab->GetEditor(), detachedFrame);
+                });
+                
+                // Show the window
+                detachedFrame->Show();
+                
+                SetStatusText(selection == 0 ? "Created new detached view" : "Created new always-on-top view");
+            } 
+            else if (selection == 2) {
+                // Create a MapWindow as a dockable panel
+                MapWindow* newMapWindow = newd MapWindow(root, *mapTab->GetEditor());
+                
+                // Add the window to the AUI manager
+                wxAuiPaneInfo paneInfo;
+                paneInfo.Caption("Map View")
+                    .Float()
+                    .Floatable(true)
+                    .Dockable(true)
+                    .Movable(true)
+                    .Resizable(true)
+                    .MinSize(400, 300)
+                    .BestSize(640, 480);
+                    
+                aui_manager->AddPane(newMapWindow, paneInfo);
+                aui_manager->Update();
+                
+                // Initialize the map window to match current map view
+                newMapWindow->FitToMap();
+                
+                // Set the center position to match the current view
+                Position pos = mapTab->GetScreenCenterPosition();
+                newMapWindow->SetScreenCenterPosition(pos);
+                
+                // Configure the map window based on current editor mode
+                if (mode == SELECTION_MODE) {
+                    newMapWindow->GetCanvas()->EnterSelectionMode();
+                } else {
+                    newMapWindow->GetCanvas()->EnterDrawingMode();
+                }
+                
+                // Register the dockable view
+                RegisterDockableView(mapTab->GetEditor(), newMapWindow);
+                
+                // Bind cleanup event to remove the window from our registry when destroyed
+                newMapWindow->Bind(wxEVT_DESTROY, [=](wxWindowDestroyEvent& event) {
+                    UnregisterDockableView(mapTab->GetEditor(), newMapWindow);
+                    event.Skip();
+                });
+                
+                SetStatusText("Created new dockable map view");
+            }
+        }
+    }
 }
 
 void GUI::LoadPerspective() {
@@ -931,12 +1591,18 @@ void GUI::LoadPerspective() {
 				aui_manager->LoadPaneInfo(data, info);
 
 				minimap = newd MinimapWindow(root);
+				// Ensure the minimap is always dockable regardless of saved state
+				info.Dockable(true).Resizable(true).MinSize(300, 200);
+				
 				aui_manager->AddPane(minimap, info);
 			} else {
 				wxAuiPaneInfo& info = aui_manager->GetPane(minimap);
 
 				const wxString& data = wxstr(g_settings.getString(Config::MINIMAP_LAYOUT));
 				aui_manager->LoadPaneInfo(data, info);
+				
+				// Ensure the minimap is always dockable regardless of saved state
+				info.Dockable(true).Resizable(true).MinSize(300, 200);
 			}
 
 			wxAuiPaneInfo& info = aui_manager->GetPane(minimap);
@@ -1009,10 +1675,140 @@ SearchResultWindow* GUI::ShowSearchWindow() {
 	return search_result_window;
 }
 
+void GUI::HideMapSummaryWindow() {
+	if (map_summary_window) {
+		aui_manager->GetPane(map_summary_window).Show(false);
+		aui_manager->Update();
+	}
+}
+
+MapSummaryWindow* GUI::GetMapSummaryWindow() {
+	return map_summary_window;
+}
+
+MapSummaryWindow* GUI::ShowMapSummaryWindow() {
+	if (map_summary_window == nullptr) {
+		map_summary_window = newd MapSummaryWindow(root);
+		aui_manager->AddPane(map_summary_window, wxAuiPaneInfo().Caption("Map Summary"));
+	} else {
+		aui_manager->GetPane(map_summary_window).Show();
+	}
+	aui_manager->Update();
+	return map_summary_window;
+}
+
+//=============================================================================
+// Recent Brushes Window Interface Implementation
+
+void GUI::HideRecentBrushesWindow() {
+	if (recent_brushes_window) {
+		aui_manager->GetPane(recent_brushes_window).Show(false);
+		aui_manager->Update();
+	}
+}
+
+RecentBrushesWindow* GUI::GetRecentBrushesWindow() {
+	return recent_brushes_window;
+}
+
+RecentBrushesWindow* GUI::ShowRecentBrushesWindow() {
+	if (recent_brushes_window == nullptr) {
+		recent_brushes_window = newd RecentBrushesWindow(root);
+		
+		// Add as dockable pane on the right side
+		wxAuiPaneInfo paneInfo;
+		paneInfo.Caption("Recent Brushes")
+			.Right()  // Dock on the right side initially
+			.Floatable(true)
+			.Movable(true)
+			.Dockable(true)
+			.Resizable(true)
+			.MinSize(120, 200)
+			.BestSize(150, 400)
+			.DestroyOnClose(false);
+			
+		aui_manager->AddPane(recent_brushes_window, paneInfo);
+	} else {
+		aui_manager->GetPane(recent_brushes_window).Show();
+	}
+	aui_manager->Update();
+	return recent_brushes_window;
+}
+
+void GUI::AddRecentBrush(Brush* brush) {
+	// Don't add null brushes or system brushes that shouldn't be in recent list
+	if (!brush || brush == eraser) {
+		return;
+	}
+	
+	// Don't add creature, house, or waypoint brushes to recent list
+	if (brush->isCreature() || brush->isHouse() || brush->isWaypoint()) {
+		return;
+	}
+	
+	// Determine palette type for this brush
+	PaletteType palette_type = TILESET_UNKNOWN;
+	
+	// Check what type of brush this is
+	if (brush->isRaw()) {
+		palette_type = TILESET_RAW;
+	} else {
+		// For other brushes, try to determine from current palette selection
+		PaletteWindow* palette = GetPalette();
+		if (palette) {
+			palette_type = palette->GetSelectedPage();
+		}
+		
+		// If we still don't know, try to categorize by brush properties
+		if (palette_type == TILESET_UNKNOWN) {
+			if (brush->isGround()) {
+				palette_type = TILESET_TERRAIN;
+			} else if (brush->isDoodad()) {
+				palette_type = TILESET_DOODAD;
+			} else {
+				palette_type = TILESET_ITEM;
+			}
+		}
+	}
+	
+	if (recent_brushes_window) {
+		// Only add as manual selection (true) to prevent automatic palette switching additions
+		recent_brushes_window->AddRecentBrush(brush, palette_type, true);
+	}
+}
+
+//=============================================================================
+// Monster Maker Window Interface Implementation
+
+void GUI::HideMonsterMakerWindow() {
+	if (monster_maker_window) {
+		monster_maker_window->Hide();
+	}
+}
+
+MonsterMakerWindow* GUI::GetMonsterMakerWindow() {
+	return monster_maker_window;
+}
+
+MonsterMakerWindow* GUI::ShowMonsterMakerWindow() {
+	if (monster_maker_window == nullptr) {
+		monster_maker_window = newd MonsterMakerWindow(root);
+	}
+	
+	// Refresh the monster list when showing
+	monster_maker_window->RefreshMonsterList();
+	
+	// Show as detached window
+	monster_maker_window->Show(true);
+	monster_maker_window->Raise();
+	
+	return monster_maker_window;
+}
+
 //=============================================================================
 // Palette Window Interface implementation
 
-PaletteWindow* GUI::GetPalette() {
+PaletteWindow* GUI::GetPalette() const {
 	if (palettes.empty()) {
 		return nullptr;
 	}
@@ -1083,12 +1879,22 @@ void GUI::DestroyPalettes() {
 }
 
 void GUI::RebuildPalettes() {
-	// Palette lits might be modified due to active palette changes
-	// Use a temporary list for iterating
-	PaletteList tmp = palettes;
-	for (auto& piter : tmp) {
-		piter->ReloadSettings(IsEditorOpen() ? &GetCurrentMap() : nullptr);
+	// Completely recreate palettes to include/exclude tileset editing buttons
+	if (!palettes.empty()) {
+		// Remember which palette was active
+		Map* current_map = IsEditorOpen() ? &GetCurrentMap() : nullptr;
+		
+		// Destroy all palettes
+		DestroyPalettes();
+		
+		// Recreate palette
+		CreatePalette();
+		
+		// Force update
+		RefreshPalettes(current_map);
 	}
+	
+	// Update the AUI manager
 	aui_manager->Update();
 }
 
@@ -1130,42 +1936,55 @@ void GUI::CreateMinimap() {
 		return;
 	}
 
-	if (minimap_enabled) {
-		DestroyMinimap();
+	if (minimap && minimap_enabled) {
+		// If minimap exists and is enabled, hide it
+		HideMinimap();
 		minimap_enabled = false;
+	} else if (minimap) {
+		// If minimap exists but is hidden, show it
+		ShowMinimap();
+		minimap_enabled = true;
 	} else {
-		if (minimap) {
-			// If minimap exists but is hidden, show it with saved position
-			aui_manager->GetPane(minimap).Show(true);
-			aui_manager->GetPane(minimap).Float();
-			aui_manager->GetPane(minimap).FloatingSize(wxSize(640, 320));
-		} else {
-			// Create new minimap with default size
-			minimap = newd MinimapWindow(root);
-			minimap->SetSize(wxSize(640, 320));
-			minimap->Show(true);
-			
-			// Add as floating pane with fixed size
-			wxAuiPaneInfo paneInfo;
-			paneInfo.Caption("Minimap")
-					.Float()
-					.FloatingSize(wxSize(640, 320))
-					.Floatable(true)
-					.Movable(true)
-					.Dockable(false)
-					.DestroyOnClose(false);
-					
-			aui_manager->AddPane(minimap, paneInfo);
-		}
+		// Create new minimap
+		minimap = newd MinimapWindow(root);
+		minimap->SetSize(wxSize(640, 320));
+		
+		// Add as dockable pane with configurable size
+		wxAuiPaneInfo paneInfo;
+		paneInfo.Caption("Minimap")
+				.Float()
+				.FloatingSize(wxSize(640, 320))
+				.Floatable(true)
+				.Movable(true)
+				.Dockable(true)  // Allow docking
+				.Resizable(true) // Allow resizing
+				.MinSize(300, 200) // Minimum size
+				.DestroyOnClose(false);
+				
+		aui_manager->AddPane(minimap, paneInfo);
 		minimap_enabled = true;
 		aui_manager->Update();
+		
+		// Show the minimap immediately without caching
+		minimap->Show(true);
 	}
 }
 
 void GUI::HideMinimap() {
 	if (minimap) {
+		
 		aui_manager->GetPane(minimap).Show(false);
 		aui_manager->Update();
+	}
+}
+
+void GUI::ShowMinimap() {
+	if (minimap) {
+		aui_manager->GetPane(minimap).Show(true);
+		aui_manager->Update();
+	} else {
+		// Create minimap if it doesn't exist
+		CreateMinimap();
 	}
 }
 
@@ -1293,12 +2112,19 @@ void GUI::DestroyLoadBar() {
 		progressBar->Show(false);
 		currentProgress = -1;
 
-		progressBar->Destroy();
-		progressBar = nullptr;
+		// Store pointer temporarily to avoid null issues
+		wxGenericProgressDialog* tempBar = progressBar;
+		progressBar = nullptr; // Set to null before destruction to prevent recursion
+		
+		try {
+			tempBar->Destroy();
+		} catch(...) {
+			// Ignore any exceptions during destroy
+		}
 
-		if (root->IsActive()) {
+		if (root && root->IsActive()) {
 			root->Raise();
-		} else {
+		} else if (root) {
 			root->RequestUserAttention();
 		}
 	}
@@ -1306,7 +2132,7 @@ void GUI::DestroyLoadBar() {
 
 void GUI::ShowWelcomeDialog(const wxBitmap& icon) {
 	std::vector<wxString> recent_files = root->GetRecentFiles();
-	welcomeDialog = newd WelcomeDialog(__W_RME_APPLICATION_NAME__, "Version " + __W_RME_VERSION__, FROM_DIP(root, wxSize(800, 480)), icon, recent_files);
+	welcomeDialog = newd WelcomeDialog(__W_RME_APPLICATION_NAME__, "Version " + __W_RME_VERSION__, FROM_DIP(root, wxSize(1000, 480)), icon, recent_files);
 	welcomeDialog->Bind(wxEVT_CLOSE_WINDOW, &GUI::OnWelcomeDialogClosed, this);
 	welcomeDialog->Bind(WELCOME_DIALOG_ACTION, &GUI::OnWelcomeDialogAction, this);
 	welcomeDialog->Show();
@@ -1346,7 +2172,20 @@ void GUI::UpdateMenubar() {
 void GUI::SetScreenCenterPosition(Position position) {
 	MapTab* mapTab = GetCurrentMapTab();
 	if (mapTab) {
+		// Store old position for comparison
+		Position oldPosition = mapTab->GetScreenCenterPosition();
+		
+		// Set the new position
 		mapTab->SetScreenCenterPosition(position);
+		
+		// Update minimap if the position changed significantly (e.g., teleport/goto)
+		// or if the floor changed
+		if (minimap && IsMinimapVisible() && 
+		   (abs(oldPosition.x - position.x) > 10 || 
+		    abs(oldPosition.y - position.y) > 10 || 
+		    oldPosition.z != position.z)) {
+			minimap->Refresh();
+		}
 	}
 }
 
@@ -1426,10 +2265,21 @@ bool GUI::CanRedo() {
 bool GUI::DoUndo() {
 	Editor* editor = GetCurrentEditor();
 	if (editor && editor->actionQueue->canUndo()) {
+		// Store the current mode before undoing
+		EditorMode previous_mode = mode;
+		
+		// Perform the undo operation
 		editor->actionQueue->undo();
+		
+		// Switch to selection mode if there's a selection
 		if (editor->selection.size() > 0) {
 			SetSelectionMode();
+		} 
+		// If we were in drawing mode before and there's no selection now, restore drawing mode
+		else if (previous_mode == DRAWING_MODE && editor->selection.size() == 0) {
+			SetDrawingMode();
 		}
+		
 		SetStatusText("Undo action");
 		UpdateMinimap();
 		root->UpdateMenubar();
@@ -1442,10 +2292,21 @@ bool GUI::DoUndo() {
 bool GUI::DoRedo() {
 	Editor* editor = GetCurrentEditor();
 	if (editor && editor->actionQueue->canRedo()) {
+		// Store the current mode before redoing
+		EditorMode previous_mode = mode;
+		
+		// Perform the redo operation
 		editor->actionQueue->redo();
+		
+		// Switch to selection mode if there's a selection
 		if (editor->selection.size() > 0) {
 			SetSelectionMode();
 		}
+		// If we were in drawing mode before and there's no selection now, restore drawing mode
+		else if (previous_mode == DRAWING_MODE && editor->selection.size() == 0) {
+			SetDrawingMode();
+		}
+		
 		SetStatusText("Redo action");
 		UpdateMinimap();
 		root->UpdateMenubar();
@@ -1471,6 +2332,10 @@ void GUI::ChangeFloor(int new_floor) {
 
 		if (old_floor != new_floor) {
 			tab->GetCanvas()->ChangeFloor(new_floor);
+			// Only refresh minimap if it's visible - it will use cached blocks for the new floor
+			if (minimap && IsMinimapVisible()) {
+				minimap->SetMinimapFloor(new_floor);
+			}
 		}
 	}
 }
@@ -1511,9 +2376,9 @@ void GUI::SetTitle(wxString title) {
 	}
 #else
 	if (!title.empty()) {
-		g_gui.root->SetTitle(title << "Idler Map Editor - OTARMEIE" << TITLE_APPEND);
+		g_gui.root->SetTitle(title << " Idler Map Editor - JOIN IDLERS TAVERN FOR FREE C++ CODES https://discord.gg/FD2cYKBq5E" << TITLE_APPEND);
 	} else {
-		g_gui.root->SetTitle(wxString("Idler Map Editor - OTARMEIE") << TITLE_APPEND);
+		g_gui.root->SetTitle(wxString(" Idler Map Editor - JOIN IDLERS TAVERN FOR FREE C++ CODES https://discord.gg/FD2cYKBq5E") << TITLE_APPEND);
 	}
 #endif
 }
@@ -1524,6 +2389,11 @@ void GUI::UpdateTitle() {
 		for (int idx = 0; idx < tabbook->GetTabCount(); ++idx) {
 			if (tabbook->GetTab(idx)) {
 				tabbook->SetTabLabel(idx, tabbook->GetTab(idx)->GetTitle());
+				
+				// Update detached view titles if this is a map tab
+				if (auto* mapTab = dynamic_cast<MapTab*>(tabbook->GetTab(idx))) {
+					UpdateDetachedViewsTitle(mapTab->GetEditor());
+				}
 			}
 		}
 	} else {
@@ -1585,7 +2455,7 @@ void GUI::SetDrawingMode() {
 	}
 
 	if (current_brush && current_brush->isDoodad()) {
-		secondary_map = doodad_buffer_map;
+		secondary_map = doodad_buffer_map.get();
 	} else {
 		secondary_map = nullptr;
 	}
@@ -1595,23 +2465,61 @@ void GUI::SetDrawingMode() {
 }
 
 void GUI::SetBrushSizeInternal(int nz) {
-	if (nz != brush_size && current_brush && current_brush->isDoodad() && !current_brush->oneSizeFitsAll()) {
-		brush_size = nz;
-		FillDoodadPreviewBuffer();
-		secondary_map = doodad_buffer_map;
-	} else {
-		brush_size = nz;
+	// Add safety check to prevent brush_size from being 0
+	if (nz < 0) {
+		char debug_msg[256];
+		sprintf(debug_msg, "DEBUG DRAG: WARNING! SetBrushSizeInternal called with negative value %d - FORCING TO 0\n", nz);
+		OutputDebugStringA(debug_msg);
+		nz = 0; // Minimum valid brush_size index
+	}
+	
+	brush_size = nz;
+	
+	// ENHANCED FIX: Validate that the calculated actual size is safe
+	int actual_width = GetBrushWidth();
+	int actual_height = GetBrushHeight();
+	
+	if (actual_width <= 0 || actual_height <= 0) {
+		char debug_msg[512];
+		sprintf(debug_msg, "DEBUG DRAG: CRITICAL ERROR! SetBrushSizeInternal resulted in invalid dimensions: width=%d, height=%d, brush_size=%d\n", 
+			actual_width, actual_height, brush_size);
+		OutputDebugStringA(debug_msg);
+		
+		// Force to safe values
+		if (actual_width <= 0) brush_size = 0; // Reset to minimal safe brush size
+		if (actual_height <= 0) brush_size = 0;
 	}
 }
 
 void GUI::SetBrushSize(int nz) {
-	SetBrushSizeInternal(nz);
-
-	for (auto& palette : palettes) {
-		palette->OnUpdateBrushSize(brush_shape, brush_size);
+	// CRITICAL FIX: Prevent brush_size from being set to invalid values
+	if (nz < 0) {
+		char debug_msg[256];
+		sprintf(debug_msg, "DEBUG DRAG: WARNING! SetBrushSize called with negative value %d - FORCING TO 0\n", nz);
+		OutputDebugStringA(debug_msg);
+		nz = 0; // Minimum valid brush_size index
 	}
-
-	root->GetAuiToolBar()->UpdateBrushSize(brush_shape, brush_size);
+	
+	brush_size = nz;
+	
+	// ENHANCED FIX: Validate that the calculated actual size is safe
+	int actual_width = GetBrushWidth();
+	int actual_height = GetBrushHeight();
+	
+	if (actual_width <= 0 || actual_height <= 0) {
+		char debug_msg[512];
+		sprintf(debug_msg, "DEBUG DRAG: CRITICAL ERROR! SetBrushSize resulted in invalid dimensions: width=%d, height=%d, brush_size=%d\n", 
+			actual_width, actual_height, brush_size);
+		OutputDebugStringA(debug_msg);
+		
+		// Force to safe values
+		if (actual_width <= 0) brush_size = 0; // Reset to minimal safe brush size
+		if (actual_height <= 0) brush_size = 0;
+	}
+	
+	for (PaletteList::iterator iter = palettes.begin(); iter != palettes.end(); ++iter) {
+		(*iter)->OnUpdateBrushSize(brush_shape, brush_size);
+	}
 }
 
 void GUI::SetBrushVariation(int nz) {
@@ -1619,7 +2527,7 @@ void GUI::SetBrushVariation(int nz) {
 		// Monkey!
 		brush_variation = nz;
 		FillDoodadPreviewBuffer();
-		secondary_map = doodad_buffer_map;
+		secondary_map = doodad_buffer_map.get();
 	}
 }
 
@@ -1628,9 +2536,15 @@ void GUI::SetBrushShape(BrushShape bs) {
 		// Donkey!
 		brush_shape = bs;
 		FillDoodadPreviewBuffer();
-		secondary_map = doodad_buffer_map;
+		secondary_map = doodad_buffer_map.get();
 	}
 	brush_shape = bs;
+	
+	// Disable custom brush size when switching to circle brush
+	if (bs == BRUSHSHAPE_CIRCLE && use_custom_brush_size) {
+		use_custom_brush_size = false;
+		SetStatusText("Custom brush size disabled for circle brush");
+	}
 
 	for (auto& palette : palettes) {
 		palette->OnUpdateBrushSize(brush_shape, brush_size);
@@ -1794,6 +2708,11 @@ bool GUI::SelectBrush(const Brush* whatbrush, PaletteType primary) {
 			return false;
 		}
 	}
+	
+	// Reset custom brush size when switching brushes
+	if (use_custom_brush_size) {
+		use_custom_brush_size = false;
+	}
 
 	if (!palettes.front()->OnSelectBrush(whatbrush, primary)) {
 		return false;
@@ -1812,10 +2731,13 @@ void GUI::SelectBrushInternal(Brush* brush) {
 		return;
 	}
 
+	// Note: AddRecentBrush is now called manually from palette clicks and other user actions
+	// This prevents automatic additions when palettes switch and select their first brush
+
 	brush_variation = min(brush_variation, brush->getMaxVariation());
 	FillDoodadPreviewBuffer();
 	if (brush->isDoodad()) {
-		secondary_map = doodad_buffer_map;
+		secondary_map = doodad_buffer_map.get();
 	}
 
 	SetDrawingMode();
@@ -1833,7 +2755,7 @@ void GUI::FillDoodadPreviewBuffer() {
 		return;
 	}
 
-	doodad_buffer_map->clear();
+	doodad_buffer_map.get()->clear();
 
 	DoodadBrush* brush = current_brush->asDoodad();
 	if (brush->isEmpty(GetBrushVariation())) {
@@ -1856,6 +2778,7 @@ void GUI::FillDoodadPreviewBuffer() {
 	const int object_range = (use_custom_thickness ? int(area * custom_thickness_mod) : brush->getThickness() * area / max(1, brush->getThicknessCeiling()));
 	const int final_object_count = max(1, object_range + random(object_range));
 
+	// Starting position for the center of the preview
 	Position center_pos(0x8000, 0x8000, 0x8);
 
 	if (brush_size > 0 && !brush->oneSizeFitsAll()) {
@@ -1899,8 +2822,9 @@ void GUI::FillDoodadPreviewBuffer() {
 
 					// Figure out if the placement is valid
 					for (const auto& composite : composites) {
-						Position pos = center_pos + composite.first + Position(xpos, ypos, 0);
-						if (Tile* tile = doodad_buffer_map->getTile(pos)) {
+						// Include the z offset in the position calculation
+						Position pos = center_pos + Position(composite.first.x + xpos, composite.first.y + ypos, composite.first.z);
+						if (Tile* tile = doodad_buffer_map.get()->getTile(pos)) {
 							if (!tile->empty()) {
 								fail = true;
 								break;
@@ -1914,35 +2838,36 @@ void GUI::FillDoodadPreviewBuffer() {
 
 					// Transfer items to the stack
 					for (const auto& composite : composites) {
-						Position pos = center_pos + composite.first + Position(xpos, ypos, 0);
+						// Include the z offset in the position calculation
+						Position pos = center_pos + Position(composite.first.x + xpos, composite.first.y + ypos, composite.first.z);
 						const ItemVector& items = composite.second;
-						Tile* tile = doodad_buffer_map->getTile(pos);
+						Tile* tile = doodad_buffer_map.get()->getTile(pos);
 
 						if (!tile) {
-							tile = doodad_buffer_map->allocator(doodad_buffer_map->createTileL(pos));
+							tile = doodad_buffer_map.get()->allocator(doodad_buffer_map.get()->createTileL(pos));
 						}
 
 						for (auto item : items) {
 							tile->addItem(item->deepCopy());
 						}
-						doodad_buffer_map->setTile(tile->getPosition(), tile);
+						doodad_buffer_map.get()->setTile(tile->getPosition(), tile);
 					}
 					exit = true;
 				} else if (brush->hasSingleObjects(GetBrushVariation())) {
 					Position pos = center_pos + Position(xpos, ypos, 0);
-					Tile* tile = doodad_buffer_map->getTile(pos);
+					Tile* tile = doodad_buffer_map.get()->getTile(pos);
 					if (tile) {
 						if (!tile->empty()) {
 							fail = true;
 							break;
 						}
 					} else {
-						tile = doodad_buffer_map->allocator(doodad_buffer_map->createTileL(pos));
+						tile = doodad_buffer_map.get()->allocator(doodad_buffer_map.get()->createTileL(pos));
 					}
 					int variation = GetBrushVariation();
-					brush->draw(doodad_buffer_map, tile, &variation);
+					brush->draw(doodad_buffer_map.get(), tile, &variation);
 					// std::cout << "\tpos: " << tile->getPosition() << std::endl;
-					doodad_buffer_map->setTile(tile->getPosition(), tile);
+					doodad_buffer_map.get()->setTile(tile->getPosition(), tile);
 					exit = true;
 				}
 				if (fail) {
@@ -1961,21 +2886,22 @@ void GUI::FillDoodadPreviewBuffer() {
 
 			// Transfer items to the buffer
 			for (const auto& composite : composites) {
+				// Include the z offset in the position calculation 
 				Position pos = center_pos + composite.first;
 				const ItemVector& items = composite.second;
-				Tile* tile = doodad_buffer_map->allocator(doodad_buffer_map->createTileL(pos));
+				Tile* tile = doodad_buffer_map.get()->allocator(doodad_buffer_map.get()->createTileL(pos));
 				// std::cout << pos << " = " << center_pos << " + " << buffer_tile->getPosition() << std::endl;
 
 				for (auto item : items) {
 					tile->addItem(item->deepCopy());
 				}
-				doodad_buffer_map->setTile(tile->getPosition(), tile);
+				doodad_buffer_map.get()->setTile(tile->getPosition(), tile);
 			}
 		} else if (brush->hasSingleObjects(GetBrushVariation())) {
-			Tile* tile = doodad_buffer_map->allocator(doodad_buffer_map->createTileL(center_pos));
+			Tile* tile = doodad_buffer_map.get()->allocator(doodad_buffer_map.get()->createTileL(center_pos));
 			int variation = GetBrushVariation();
-			brush->draw(doodad_buffer_map, tile, &variation);
-			doodad_buffer_map->setTile(center_pos, tile);
+			brush->draw(doodad_buffer_map.get(), tile, &variation);
+			doodad_buffer_map.get()->setTile(center_pos, tile);
 		}
 	}
 }
@@ -1994,42 +2920,60 @@ long GUI::PopupDialog(wxString title, wxString text, long style, wxString config
 }
 
 void GUI::ListDialog(wxWindow* parent, wxString title, const wxArrayString& param_items) {
-	if (param_items.empty()) {
-		return;
-	}
+    if (param_items.empty()) {
+        return;
+    }
 
-	wxArrayString list_items(param_items);
+    // Check if we should suppress map warnings
+    if ((title.CmpNoCase("Warnings") == 0 || title.CmpNoCase("Warning") == 0) &&
+        g_settings.getBoolean(Config::SUPPRESS_MAP_WARNINGS)) {
+        return;
+    }
 
-	// Create the window
-	wxDialog* dlg = newd wxDialog(parent, wxID_ANY, title, wxDefaultPosition, wxDefaultSize, wxRESIZE_BORDER | wxCAPTION | wxCLOSE_BOX);
+    wxArrayString list_items(param_items);
 
-	wxSizer* sizer = newd wxBoxSizer(wxVERTICAL);
-	wxListBox* item_list = newd wxListBox(dlg, wxID_ANY, wxDefaultPosition, wxDefaultSize, 0, nullptr, wxLB_SINGLE);
-	item_list->SetMinSize(wxSize(500, 300));
+    // Create the window
+    wxDialog* dlg = newd wxDialog(parent, wxID_ANY, title, wxDefaultPosition, wxDefaultSize, wxRESIZE_BORDER | wxCAPTION | wxCLOSE_BOX);
 
-	for (size_t i = 0; i != list_items.GetCount();) {
-		wxString str = list_items[i];
-		size_t pos = str.find("\n");
-		if (pos != wxString::npos) {
-			// Split string!
-			item_list->Append(str.substr(0, pos));
-			list_items[i] = str.substr(pos + 1);
-			continue;
-		}
-		item_list->Append(list_items[i]);
-		++i;
-	}
-	sizer->Add(item_list, 1, wxEXPAND);
+    wxSizer* sizer = newd wxBoxSizer(wxVERTICAL);
+    wxListBox* item_list = newd wxListBox(dlg, wxID_ANY, wxDefaultPosition, wxDefaultSize, 0, nullptr, wxLB_SINGLE);
+    item_list->SetMinSize(wxSize(500, 300));
 
-	wxSizer* stdsizer = newd wxBoxSizer(wxHORIZONTAL);
-	stdsizer->Add(newd wxButton(dlg, wxID_OK, "OK"), wxSizerFlags(1).Center());
-	sizer->Add(stdsizer, wxSizerFlags(0).Center());
+    for (size_t i = 0; i != list_items.GetCount();) {
+        wxString str = list_items[i];
+        size_t pos = str.find("\n");
+        if (pos != wxString::npos) {
+            // Split string!
+            item_list->Append(str.substr(0, pos));
+            list_items[i] = str.substr(pos + 1);
+            continue;
+        }
+        item_list->Append(list_items[i]);
+        ++i;
+    }
+    sizer->Add(item_list, 1, wxEXPAND);
 
-	dlg->SetSizerAndFit(sizer);
+    wxCheckBox* never_show_again = nullptr;
+    if (title.CmpNoCase("Warnings") == 0 || title.CmpNoCase("Warning") == 0) {
+        never_show_again = newd wxCheckBox(dlg, wxID_ANY, "Never show again");
+        sizer->Add(never_show_again, 0, wxALL, 8);
+    }
 
-	// Show the window
-	dlg->ShowModal();
-	delete dlg;
+    wxSizer* stdsizer = newd wxBoxSizer(wxHORIZONTAL);
+    stdsizer->Add(newd wxButton(dlg, wxID_OK, "OK"), wxSizerFlags(1).Center());
+    sizer->Add(stdsizer, wxSizerFlags(0).Center());
+
+    dlg->SetSizerAndFit(sizer);
+
+    // Show the window
+    dlg->ShowModal();
+
+    // Save the setting if checked
+    if (never_show_again && never_show_again->IsChecked()) {
+        g_settings.setInteger(Config::SUPPRESS_MAP_WARNINGS, 1);
+    }
+
+    delete dlg;
 }
 
 void GUI::ShowTextBox(wxWindow* parent, wxString title, wxString content) {
@@ -2172,7 +3116,7 @@ void GUI::CheckAutoSave() {
 	last_autosave_check = now;
 
 	if (!g_settings.getBoolean(Config::AUTO_SAVE_ENABLED)) {
-		OutputDebugStringA("Autosave disabled\n");
+		//OutputDebugStringA("Autosave disabled\n");
 		return;
 	}
 	
@@ -2297,4 +3241,258 @@ void GUI::ApplyDarkMode() {
 			}
 		}
 	}
+}
+
+// Detached views management
+void GUI::RegisterDetachedView(Editor* editor, wxFrame* frame) {
+	// Add the frame to the list of detached views for this editor
+	detached_views[editor].push_back(frame);
+	
+	// Store a pointer to our detached_views map in the frame to allow proper cleanup
+	// We'll use a custom event handler to check if the editor is still valid
+	frame->Bind(wxEVT_IDLE, [this, editor, frame](wxIdleEvent& event) {
+		// Check if the editor is still in our map (it may have been deleted)
+		if (detached_views.find(editor) == detached_views.end()) {
+			// Editor was deleted, close this detached view
+			frame->Close(true);
+		}
+		event.Skip();
+	});
+}
+
+void GUI::RegisterDockableView(Editor* editor, MapWindow* window) {
+    // Skip registration if editor or window is null
+    if (!editor || !window)
+        return;
+        
+    // Add the dockable window to the list for this editor
+    dockable_views[editor].push_back(window);
+    
+    // Add a handler to check for editor validity periodically
+    window->Bind(wxEVT_IDLE, [this, editor, window](wxIdleEvent& event) {
+        // Check if the editor is still valid (might have been deleted)
+        bool editorExists = false;
+        for (int i = 0; i < tabbook->GetTabCount(); ++i) {
+            auto* mapTab = dynamic_cast<MapTab*>(tabbook->GetTab(i));
+            if (mapTab && mapTab->GetEditor() == editor) {
+                editorExists = true;
+                break;
+            }
+        }
+        
+        // If editor no longer exists, close this window
+        if (!editorExists && dockable_views.find(editor) != dockable_views.end()) {
+            if (aui_manager->GetPane(window).IsOk()) {
+                aui_manager->DetachPane(window);
+                window->Destroy();
+            }
+            // The destroy event will trigger UnregisterDockableView
+        }
+        
+        event.Skip();
+    });
+}
+
+void GUI::UnregisterDetachedView(Editor* editor, wxFrame* frame) {
+	// Remove the frame from the list of detached views for this editor
+	if (detached_views.find(editor) != detached_views.end()) {
+		detached_views[editor].remove(frame);
+		
+		// If the list is now empty, remove the editor from the map
+		if (detached_views[editor].empty()) {
+			detached_views.erase(editor);
+		}
+	}
+}
+
+void GUI::UnregisterDockableView(Editor* editor, MapWindow* window) {
+	// Remove the window from the list of dockable views for this editor
+	if (dockable_views.find(editor) != dockable_views.end()) {
+		dockable_views[editor].remove(window);
+		
+		// If the list is now empty, remove the editor from the map
+		if (dockable_views[editor].empty()) {
+			dockable_views.erase(editor);
+		}
+	}
+}
+
+bool GUI::HasDetachedViews(Editor* editor) const {
+	// Check if the editor has any detached views or dockable panels
+	auto detached_it = detached_views.find(editor);
+	auto dockable_it = dockable_views.find(editor);
+	
+	return (detached_it != detached_views.end() && !detached_it->second.empty()) || 
+	       (dockable_it != dockable_views.end() && !dockable_it->second.empty());
+}
+
+bool GUI::CloseDetachedViews(Editor* editor) {
+	bool had_views = false;
+
+	// Close all detached frame views for the given editor
+	auto frame_it = detached_views.find(editor);
+	if (frame_it != detached_views.end()) {
+		// Make a copy of the list since closing frames will modify the original
+		std::list<wxFrame*> frames_to_close = frame_it->second;
+		
+		for (wxFrame* frame : frames_to_close) {
+			// Force close the frame immediately instead of destroy
+			// This ensures synchronous closing rather than asynchronous destruction
+			frame->Close(true);
+		}
+		
+		// Clear the list
+		detached_views.erase(editor);
+		had_views = true;
+	}
+	
+	// Close all dockable panel views for the given editor
+	auto dock_it = dockable_views.find(editor);
+	if (dock_it != dockable_views.end()) {
+		// Make a copy of the list since closing windows will modify the original
+		std::list<MapWindow*> windows_to_close = dock_it->second;
+		
+		for (MapWindow* window : windows_to_close) {
+			// For dockable panels, we need to remove them from the AUI manager
+			if (aui_manager->GetPane(window).IsOk()) {
+				aui_manager->DetachPane(window);
+				window->Destroy();
+			}
+		}
+		
+		// Clear the list
+		dockable_views.erase(editor);
+		had_views = true;
+		
+		// Update the AUI manager to reflect the changes
+		aui_manager->Update();
+	}
+	
+	// Process any pending events to ensure everything is closed
+	wxTheApp->ProcessPendingEvents();
+	
+	return had_views;
+}
+
+void GUI::UpdateDetachedViewsTitle(Editor* editor) {
+	// Update titles of all detached views for this editor
+	auto it = detached_views.find(editor);
+	if (it != detached_views.end()) {
+		for (wxFrame* frame : it->second) {
+			wxString title = frame->GetTitle();
+			if (title.Contains("Always-on-top View:")) {
+				frame->SetTitle(wxString::Format("Always-on-top View: %s", wxstr(editor->map.getName())));
+			} else {
+				frame->SetTitle(wxString::Format("Detached View: %s", wxstr(editor->map.getName())));
+			}
+		}
+	}
+}
+
+void GUI::StoreSearchState(uint16_t itemId, bool onSelection) {
+	has_last_search = true;
+	last_search_itemid = itemId;
+	last_search_on_selection = onSelection;
+	
+	if (search_result_window) {
+		last_ignored_ids_text = search_result_window->GetIgnoredItemsText();
+		last_ignored_ids_enabled = search_result_window->IsIgnoreListEnabled();
+	}
+	
+	OutputDebugStringA(wxString::Format("GUI::StoreSearchState - Stored search for item ID %d, ignore list %s\n",
+		last_search_itemid, last_ignored_ids_enabled ? "enabled" : "disabled").c_str());
+}
+
+void GUI::RestoreSearchState(SearchResultWindow* window) {
+	if (!window || !has_last_search)
+		return;
+		
+	window->SetIgnoredIds(last_ignored_ids_text, last_ignored_ids_enabled);
+	
+	OutputDebugStringA(wxString::Format("GUI::RestoreSearchState - Restored search for item ID %d\n", last_search_itemid).c_str());
+}
+
+uint16_t GUI::GetCurrentActionID() const {
+    PaletteWindow* palette = GetPalette();
+    if (palette) {
+        return palette->GetActionID();
+    }
+    return 0;
+}
+
+bool GUI::IsCurrentActionIDEnabled() const {
+    PaletteWindow* palette = GetPalette();
+    if (palette) {
+        return palette->IsActionIDEnabled();
+    }
+    return false;
+}
+
+void GUI::SetCustomBrushSize(bool enable, int width, int height) {
+	// Only allow custom brush size for square brushes
+	if (enable && brush_shape != BRUSHSHAPE_SQUARE) {
+		// Silently ignore request to enable custom brush size for circle brushes
+		return;
+	}
+	
+	use_custom_brush_size = enable;
+	
+	if (width != -1) {
+		// CRITICAL FIX: Prevent zero or negative width
+		if (width <= 0) {
+			char debug_msg[256];
+			sprintf(debug_msg, "DEBUG DRAG: WARNING! SetCustomBrushSize called with invalid width %d - FORCING TO 1\n", width);
+			OutputDebugStringA(debug_msg);
+			width = 1;
+		}
+		custom_brush_width = width;
+	}
+	
+	if (height != -1) {
+		// CRITICAL FIX: Prevent zero or negative height
+		if (height <= 0) {
+			char debug_msg[256];
+			sprintf(debug_msg, "DEBUG DRAG: WARNING! SetCustomBrushSize called with invalid height %d - FORCING TO 1\n", height);
+			OutputDebugStringA(debug_msg);
+			height = 1;
+		}
+		custom_brush_height = height;
+	}
+	
+	// ENHANCED FIX: Always validate current brush dimensions
+	if (custom_brush_width <= 0) {
+		char debug_msg[256];
+		sprintf(debug_msg, "DEBUG DRAG: CRITICAL ERROR! custom_brush_width is %d - FORCING TO 1\n", custom_brush_width);
+		OutputDebugStringA(debug_msg);
+		custom_brush_width = 1;
+	}
+	
+	if (custom_brush_height <= 0) {
+		char debug_msg[256];
+		sprintf(debug_msg, "DEBUG DRAG: CRITICAL ERROR! custom_brush_height is %d - FORCING TO 1\n", custom_brush_height);
+		OutputDebugStringA(debug_msg);
+		custom_brush_height = 1;
+	}
+	
+	// Additional safety: make sure we have non-zero fallback values
+	if (custom_brush_width <= 0) {
+		custom_brush_width = std::max(1, brush_size + 1);
+	}
+	
+	if (custom_brush_height <= 0) {
+		custom_brush_height = std::max(1, brush_size + 1);
+	}
+	
+	// Unselect all brush size buttons in the UI
+	if (enable && brush_shape == BRUSHSHAPE_SQUARE) {
+		for (auto& palette : palettes) {
+			palette->OnUpdateBrushSize(brush_shape, -1);
+		}
+	} else {
+		for (auto& palette : palettes) {
+			palette->OnUpdateBrushSize(brush_shape, brush_size);
+		}
+	}
+	
+	RefreshView();
 }

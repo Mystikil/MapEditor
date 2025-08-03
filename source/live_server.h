@@ -15,12 +15,10 @@
 // along with this program. If not, see <http://www.gnu.org/licenses/>.
 //////////////////////////////////////////////////////////////////////
 
-#ifndef RME_LIVE_SERVER_H_
-#define RME_LIVE_SERVER_H_
+#ifndef _RME_LIVE_SERVER_H_
+#define _RME_LIVE_SERVER_H_
 
 #include "live_socket.h"
-#include <boost/asio.hpp>
-#include <memory>
 #include "net_connection.h"
 #include "action.h"
 
@@ -98,6 +96,7 @@ protected:
 	uint16_t port;
 
 	bool stopped;
+	bool drawingReady;  // Flag indicating server is ready for drawing operations
 
 	wxColor usedColor;
 };

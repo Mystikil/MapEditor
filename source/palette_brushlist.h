@@ -15,11 +15,32 @@
 // along with this program. If not, see <http://www.gnu.org/licenses/>.
 //////////////////////////////////////////////////////////////////////
 
-#ifndef RME_PALETTE_BRUSHLIST_
-#define RME_PALETTE_BRUSHLIST_
+#ifndef RME_PALETTE_BRUSHLIST_H_
+#define RME_PALETTE_BRUSHLIST_H_
 
-#include "main.h"
+#include <wx/panel.h>
+#include <wx/listctrl.h>
+#include <wx/vscroll.h>
+#include <wx/timer.h>
+#include <wx/dcbuffer.h>
+#include <wx/sizer.h>
+#include <wx/checkbox.h>
+#include <wx/choice.h>
+#include <wx/choicebk.h>
+
+#include <map>
+#include <set>
+#include <vector>
+
+#include "tileset.h"
 #include "palette_common.h"
+
+// Forward declarations
+class ItemPalettePanel;
+class BrushPalettePanel;
+class BrushButton;
+class BrushPanel;
+class BrushBoxInterface;
 
 enum BrushListType {
 	BRUSHLIST_LARGE_ICONS,
@@ -31,8 +52,18 @@ enum BrushListType {
 	BRUSHLIST_SEAMLESS_GRID
 };
 
+enum {
+	PALETTE_LAYOUT_STYLE_BORDER,
+	PALETTE_LAYOUT_STYLE_LARGE,
+	PALETTE_LAYOUT_STYLE_LISTBOX,
+	PALETTE_LAYOUT_STYLE_NEWUI,
+	BUTTON_QUICK_ADD_ITEM,
+	BUTTON_ADD_BORDER
+};
+
 // Custom ID for Quick Add button
 #define BUTTON_QUICK_ADD_ITEM 1001
+#define BUTTON_ADD_BORDER 1002
 
 class BrushBoxInterface {
 public:
@@ -77,6 +108,9 @@ public:
 	void OnSize(wxSizeEvent& event);
 	void OnScroll(wxScrollWinEvent& event);
 	void OnTimer(wxTimerEvent& event);
+	
+	// Make timer accessible
+	wxTimer* loading_timer;
 
 protected:
 	void RecalculateGrid();
@@ -103,8 +137,9 @@ protected:
 	bool is_large_tileset;
 	int loading_step;
 	int max_loading_steps;
-	wxTimer* loading_timer;
-	static const int LARGE_TILESET_THRESHOLD = 500; // Number of items considered "large"
+	// Moved loading_timer to public section
+
+	static const int LARGE_TILESET_THRESHOLD = 1000; // Number of items considered "large"
 
 	DECLARE_EVENT_TABLE();
 };
@@ -216,6 +251,18 @@ public:
 	// Set whether to display item IDs
 	void SetShowItemIDs(bool show) { show_item_ids = show; Refresh(); }
 	bool IsShowingItemIDs() const { return show_item_ids; }
+	
+	// Zoom level control methods
+	int GetZoomLevel() const { return zoom_level; }
+	int IncrementZoom();
+	int DecrementZoom();
+	void SetZoomLevel(int level);
+	
+	// Move to public section
+	void ClearSpriteCache();
+	
+	// Make timer accessible
+	wxTimer* loading_timer;
 
 	// Event handling
 	void OnMouseClick(wxMouseEvent& event);
@@ -229,34 +276,62 @@ public:
 protected:
 	void RecalculateGrid();
 	void DrawItemsToPanel(wxDC& dc);
+	void DrawSpriteAt(wxDC& dc, int x, int y, int index);
 	void UpdateViewableItems();
 	void StartProgressiveLoading();
-	int GetSpriteIndexAt(int x, int y) const; // Returns sprite index at screen position
-	void DrawSpriteAt(wxDC& dc, int x, int y, int index); // Helper to draw a sprite at the specified position
-	void SelectIndex(int index); // Helper to select and ensure visibility of an index
+	void UpdateGridSize();
+	// Moved ClearSpriteCache to public section
+	void ManageSpriteCache();
+	int GetSpriteIndexAt(int x, int y) const;
+	void SelectIndex(int index);
+	void CreateNavigationPanel(wxWindow* parent);
+	void UpdateNavigationPanel();
+	void OnNavigationButtonClicked(wxCommandEvent& event);
 
-protected:
+private:
 	int columns;
-	int sprite_size;     // Size of each sprite/item
-	int selected_index;  // Currently selected item index
-	int hover_index;     // Index of item under mouse cursor
+	int sprite_size;
+	int zoom_level; // Zoom level (1=32px, 2=64px, etc)
+	int selected_index;
+	int hover_index;
 	wxBitmap* buffer;
-	bool show_item_ids;  // Whether to show item IDs
-
-	// Viewport and loading management
+	bool show_item_ids;
+	
+	// Rendering optimization
 	int first_visible_row;
 	int last_visible_row;
 	int visible_rows_margin;
 	int total_rows;
 	bool need_full_redraw;
 	
-	// Progressive loading properties
+	// Progressive loading for large tilesets
 	bool use_progressive_loading;
 	bool is_large_tileset;
 	int loading_step;
 	int max_loading_steps;
-	wxTimer* loading_timer;
-	static const int LARGE_TILESET_THRESHOLD = 500;
+	// Moved loading_timer to public section
+	
+	// Chunking properties
+	int chunk_size;       // Number of items per chunk
+	int current_chunk;    // Current chunk being displayed
+	int total_chunks;     // Total number of chunks
+	wxRect prev_chunk_button; // Rectangle for previous chunk button
+	wxRect next_chunk_button; // Rectangle for next chunk button
+	wxPanel* navigation_panel; // Panel for navigation buttons
+	
+	// Constants
+	static const int LARGE_TILESET_THRESHOLD = 1000; // Number of items considered "large"
+
+	// Cache structure for sprite rendering
+	struct CachedSprite {
+		wxBitmap bitmap;
+		int zoom_level;
+		bool is_valid;
+		
+		CachedSprite() : zoom_level(1), is_valid(false) {}
+	};
+	
+	std::map<int, CachedSprite> sprite_cache;
 
 	DECLARE_EVENT_TABLE();
 };
@@ -276,6 +351,9 @@ public:
 	void SetListType(wxString ltype);
 	// Assigns a tileset to this list
 	void AssignTileset(const TilesetCategory* tileset);
+	
+	// Set whether to display item IDs
+	void SetShowItemIDs(bool show);
 
 	// Select the first brush
 	void SelectFirstBrush();
@@ -293,13 +371,19 @@ public:
 	void OnClickListBoxRow(wxCommandEvent& event);
 	void OnViewModeToggle(wxCommandEvent& event);
 	void OnShowItemIDsToggle(wxCommandEvent& event);
+	
+	// Get the panel's sizer
+	wxSizer* GetSizer() const { return sizer; }
+
+	// Make sizer public so it can be accessed from navigation panel
+	wxSizer* sizer;
 
 protected:
 	void LoadViewMode();
+	void CleanupBrushbox(BrushBoxInterface* box);
 
 protected:
 	const TilesetCategory* tileset;
-	wxSizer* sizer;
 	BrushBoxInterface* brushbox;
 	bool loaded;
 	BrushListType list_type;
@@ -323,26 +407,30 @@ public:
 	// Get currently selected brushes
 	const SelectionInfo& GetSelectionInfo() const;
 
-	virtual void InvalidateContents();
-	virtual void LoadCurrentContents();
-	virtual void LoadAllContents();
+	virtual void InvalidateContents() override;
+	virtual void LoadCurrentContents() override;
+	virtual void LoadAllContents() override;
 
-	PaletteType GetType() const;
+	PaletteType GetType() const override;
 
 	// Sets the display type (list or icons)
 	void SetListType(BrushListType ltype);
 	void SetListType(wxString ltype);
 
-	virtual void SelectFirstBrush();
-	virtual Brush* GetSelectedBrush() const;
-	virtual bool SelectBrush(const Brush* whatbrush);
+	virtual void SelectFirstBrush() override;
+	virtual Brush* GetSelectedBrush() const override;
+	virtual bool SelectBrush(const Brush* whatbrush) override;
 
-	virtual void OnSwitchIn();
+	virtual void OnSwitchIn() override;
 	void OnSwitchingPage(wxChoicebookEvent& event);
 	void OnPageChanged(wxChoicebookEvent& event);
-	void OnClickAddTileset(wxCommandEvent& WXUNUSED(event));
-	void OnClickAddItemToTileset(wxCommandEvent& WXUNUSED(event));
-	void OnClickQuickAddItem(wxCommandEvent& WXUNUSED(event));
+	void OnClickAddTileset(wxCommandEvent& event);
+	void OnClickAddItemTileset(wxCommandEvent& event);
+	void OnClickQuickAddItemTileset(wxCommandEvent& event);
+	void OnClickCreateBorder(wxCommandEvent& event);
+	
+	// Properly destroy all caches and resources
+	void DestroyAllCaches();
 
 protected:
 	wxButton* quick_add_button;

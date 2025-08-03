@@ -15,20 +15,16 @@
 // along with this program. If not, see <http://www.gnu.org/licenses/>.
 //////////////////////////////////////////////////////////////////////
 
-#ifndef RME_LIVE_CLIENT_H_
-#define RME_LIVE_CLIENT_H_
+#ifndef _RME_LIVE_CLIENT_H_
+#define _RME_LIVE_CLIENT_H_
 
 #include "live_socket.h"
-#include <boost/asio.hpp>
 #include "net_connection.h"
 
 #include <set>
-#include <memory>
 
 class DirtyList;
 class MapTab;
-class LiveLogTab;
-class Editor;
 
 class LiveClient : public LiveSocket {
 public:
@@ -49,6 +45,7 @@ public:
 	void receiveHeader() override;
 	void receive(uint32_t packetSize) override;
 	void send(NetworkMessage& message) override;
+	void sendWithoutLogging(NetworkMessage& message); // For cursor updates and other high-frequency events
 
 	//
 	void updateCursor(const Position& position) override;
@@ -69,6 +66,9 @@ public:
 	void sendChat(const wxString& chatMessage) override;
 	void sendReady();
 	void sendColorUpdate(uint32_t targetClientId, const wxColor& color);
+	
+	// Request a refresh of the visible area from the server
+	void requestVisibleRefresh();
 
 	// Flags a node as queried and stores it, need to call SendNodeRequest to send it to server
 	void queryNode(int32_t ndx, int32_t ndy, bool underground);
@@ -100,6 +100,7 @@ protected:
 	Editor* editor;
 
 	bool stopped;
+	bool isDrawingReady; // Flag indicating client is ready to handle drawing operations
 };
 
 #endif
