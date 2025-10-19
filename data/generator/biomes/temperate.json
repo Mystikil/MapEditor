@@ -1,0 +1,21 @@
+{
+  "sea_level": 0.45,
+  "mountain_level": 0.8,
+  "tiles": {
+    "deep_water": 4608,
+    "shallow_water": 4820,
+    "sand": 231,
+    "grass": 4526,
+    "rock": 918,
+    "snow": 6594,
+    "dirt": 103
+  },
+  "decor": [
+    { "name": "tree", "tile": 2701, "density": 0.0075 },
+    { "name": "bush", "tile": 2767, "density": 0.015 }
+  ],
+  "spawn": {
+    "temple_tile": 459,
+    "radius": 6
+  }
+}

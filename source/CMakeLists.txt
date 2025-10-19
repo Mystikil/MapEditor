@@ -107,6 +107,13 @@ ${CMAKE_CURRENT_LIST_DIR}/wall_brush.h
 ${CMAKE_CURRENT_LIST_DIR}/waypoint_brush.h
 ${CMAKE_CURRENT_LIST_DIR}/waypoints.h
 ${CMAKE_CURRENT_LIST_DIR}/welcome_dialog.h
+${CMAKE_CURRENT_LIST_DIR}/generator/Biomes.h
+${CMAKE_CURRENT_LIST_DIR}/generator/CaveCarver.h
+${CMAKE_CURRENT_LIST_DIR}/generator/Dungeons.h
+${CMAKE_CURRENT_LIST_DIR}/generator/MapGenerator.h
+${CMAKE_CURRENT_LIST_DIR}/generator/Noise.h
+${CMAKE_CURRENT_LIST_DIR}/generator/Rivers.h
+${CMAKE_CURRENT_LIST_DIR}/map_generator_dialog.h
 )
 
 set(rme_SRC
@@ -210,6 +217,13 @@ ${CMAKE_CURRENT_LIST_DIR}/wall_brush.cpp
 ${CMAKE_CURRENT_LIST_DIR}/waypoint_brush.cpp
 ${CMAKE_CURRENT_LIST_DIR}/waypoints.cpp
 ${CMAKE_CURRENT_LIST_DIR}/welcome_dialog.cpp
+${CMAKE_CURRENT_LIST_DIR}/generator/Biomes.cpp
+${CMAKE_CURRENT_LIST_DIR}/generator/CaveCarver.cpp
+${CMAKE_CURRENT_LIST_DIR}/generator/Dungeons.cpp
+${CMAKE_CURRENT_LIST_DIR}/generator/MapGenerator.cpp
+${CMAKE_CURRENT_LIST_DIR}/generator/Noise.cpp
+${CMAKE_CURRENT_LIST_DIR}/generator/Rivers.cpp
+${CMAKE_CURRENT_LIST_DIR}/map_generator_dialog.cpp
 ${CMAKE_CURRENT_LIST_DIR}/json/json_spirit_reader.cpp
 ${CMAKE_CURRENT_LIST_DIR}/json/json_spirit_value.cpp
 ${CMAKE_CURRENT_LIST_DIR}/json/json_spirit_writer.cpp

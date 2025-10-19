@@ -5,8 +5,7 @@
 		<item name="Open..." hotkey="Ctrl+O" action="OPEN" help="Open another map." />
 		<item name="Save" hotkey="Ctrl+S" action="SAVE" help="Save the current map." />
 		<item name="Save As..." hotkey="Ctrl+Alt+S" action="SAVE_AS" help="Save the current map as a new file." />
-		<item name="Generate Map" action="GENERATE_MAP" help="Generate a new map." hotkey="Ctrl+Shift+G" />
-			<item name="Generate Monster" action="GENERATE_MONSTER" help="Create and edit monster files." hotkey="Ctrl+Shift+M" />
+		<item name="Generate Monster" action="GENERATE_MONSTER" help="Create and edit monster files." hotkey="Ctrl+Shift+M" />
 		<item name="Close" hotkey="Shift+B" action="CLOSE" help="Closes the currently open map." />
 		<separator />
 		<menu name="Import">
@@ -81,6 +80,9 @@
 		<item name="Cleanup..." action="MAP_CLEANUP" help="Removes all items that do not exist in the OTB file (red tiles the server can't load)." />
 		<item name="Properties..." hotkey="Ctrl+P" action="MAP_PROPERTIES" help="Show and change the map properties." />
 		<item name="Statistics" hotkey="F8" action="MAP_STATISTICS" help="Show map statistics." />
+	</menu>
+	<menu name="Tools">
+		<item name="Generate Map..." action="GENERATE_MAP" help="Create a new procedural map." hotkey="Ctrl+Shift+G" />
 	</menu>
 	<menu name="Selection">
 		<item name="Replace Items on Selection" action="REPLACE_ON_SELECTION_ITEMS" help="Replace items on selected area." />
