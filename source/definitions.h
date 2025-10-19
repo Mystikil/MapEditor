@@ -58,7 +58,23 @@
 #endif
 // OS
 
-#define OTGZ_SUPPORT 1
+#ifndef OTGZ_SUPPORT
+        #define OTGZ_SUPPORT 1
+#endif
+
+#if defined(OTGZ_SUPPORT)
+        #if defined(__has_include)
+                #if !__has_include(<archive.h>)
+                        #undef OTGZ_SUPPORT
+                #endif
+        #elif defined(_MSC_VER)
+                // MSVC does not support __has_include prior to VS 2017, so allow manual opt-in
+                #ifndef HAVE_ARCHIVE_H
+                        #pragma message("OTGZ support disabled: libarchive headers not available")
+                        #undef OTGZ_SUPPORT
+                #endif
+        #endif
+#endif
 #define ASSETS_NAME "Tibia"
 
 #ifdef __VISUALC__
@@ -138,8 +154,13 @@ constexpr int TileSize = 32;
 constexpr int ClientMapWidth = 17;
 constexpr int ClientMapHeight = 13;
 
-#define MAP_LOAD_FILE_WILDCARD_OTGZ "OpenTibia Binary Map (*.otbm;*.otgz)|*.otbm;*.otgz"
-#define MAP_SAVE_FILE_WILDCARD_OTGZ "OpenTibia Binary Map (*.otbm)|*.otbm|Compressed OpenTibia Binary Map (*.otgz)|*.otgz"
+#ifdef OTGZ_SUPPORT
+        #define MAP_LOAD_FILE_WILDCARD_OTGZ "OpenTibia Binary Map (*.otbm;*.otgz)|*.otbm;*.otgz"
+        #define MAP_SAVE_FILE_WILDCARD_OTGZ "OpenTibia Binary Map (*.otbm)|*.otbm|Compressed OpenTibia Binary Map (*.otgz)|*.otgz"
+#else
+        #define MAP_LOAD_FILE_WILDCARD_OTGZ MAP_LOAD_FILE_WILDCARD
+        #define MAP_SAVE_FILE_WILDCARD_OTGZ MAP_SAVE_FILE_WILDCARD
+#endif
 
 #define MAP_LOAD_FILE_WILDCARD "OpenTibia Binary Map (*.otbm)|*.otbm"
 #define MAP_SAVE_FILE_WILDCARD "OpenTibia Binary Map (*.otbm)|*.otbm"
