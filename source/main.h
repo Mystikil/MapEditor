@@ -44,8 +44,12 @@ _Ret_bytecap_(_Size) inline void* __CRTDECL operator new[](size_t _Size, const c
 
 #else
 
-	#define newd new
+        #define newd new
 
+#endif
+
+#ifdef _MSC_VER
+        #pragma warning(disable : 4275)
 #endif
 
 // Boost libraries
