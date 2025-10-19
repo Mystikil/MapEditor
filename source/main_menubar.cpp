@@ -71,6 +71,7 @@
 #include "border_editor_window.h"
 #include "map_summary_window.h"
 #include "otmapgen_dialog.h"
+#include "map_generator_dialog.h"
 #include "notes_window.h"
 #include "add_creature_dialog.h"
 #include "doodads_filling_dialog.h"
@@ -426,7 +427,7 @@ void MainMenuBar::Update() {
 	EnableItem(CLOSE, is_local);
 	EnableItem(SAVE, is_host);
 	EnableItem(SAVE_AS, is_host);
-	EnableItem(GENERATE_MAP, false);
+        EnableItem(GENERATE_MAP, loaded);
 
 	EnableItem(IMPORT_MAP, is_local);
 	EnableItem(IMPORT_MONSTERS, is_local);
@@ -814,24 +815,8 @@ void MainMenuBar::OnNew(wxCommandEvent& WXUNUSED(event)) {
 }
 
 void MainMenuBar::OnGenerateMap(wxCommandEvent& WXUNUSED(event)) {
-	/*
-	if(!DoQuerySave()) return;
-
-	std::ostringstream os;
-	os << "Untitled-" << untitled_counter << ".otbm";
-	++untitled_counter;
-
-	editor.generateMap(wxstr(os.str()));
-
-	g_gui.SetStatusText("Generated newd map");
-
-	g_gui.UpdateTitle();
-	g_gui.RefreshPalettes();
-	g_gui.UpdateMinimap();
-	g_gui.FitViewToMap();
-	UpdateMenubar();
-	Refresh();
-	*/
+        MapGeneratorDialog dialog(frame);
+        dialog.ShowModal();
 }
 
 void MainMenuBar::OnGenerateProceduralMap(wxCommandEvent& WXUNUSED(event)) {

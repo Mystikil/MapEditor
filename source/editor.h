@@ -85,6 +85,8 @@ public: // Functions
 		return map;
 	}
 
+	void LoadGeneratedMap(const Map& generatedMap);
+
 	uint16_t getMapWidth() const {
 		return map.width;
 	}

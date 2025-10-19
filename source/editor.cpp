@@ -35,6 +35,8 @@
 #include "doodad_brush.h"
 #include "creature_brush.h"
 #include "spawn_brush.h"
+#include "house.h"
+#include "town.h"
 
 #include "live_server.h"
 #include "live_client.h"
@@ -168,6 +170,53 @@ Editor::~Editor() {
 	UnnamedRenderingLock();
 	selection.clear();
 	delete actionQueue;
+}
+
+void Editor::LoadGeneratedMap(const Map& generatedMap) {
+	map.clear(true);
+
+	// Clear existing houses if any remain
+	for (HouseMap::iterator it = map.houses.begin(); it != map.houses.end();) {
+		House* house = it->second;
+		++it;
+		map.houses.removeHouse(house);
+	}
+
+	map.towns.clear();
+
+	map.width = generatedMap.width;
+	map.height = generatedMap.height;
+	map.description = generatedMap.description;
+	map.name = generatedMap.name;
+	map.spawnfile = generatedMap.spawnfile;
+	map.housefile = generatedMap.housefile;
+	map.waypointfile = generatedMap.waypointfile;
+	map.mapVersion = generatedMap.mapVersion;
+	map.filename.clear();
+	map.unnamed = true;
+
+	Map& sourceMutable = const_cast<Map&>(generatedMap);
+	for (MapIterator it = sourceMutable.begin(); it != sourceMutable.end(); ++it) {
+		Tile* src = (*it)->get();
+		if (!src) {
+			continue;
+		}
+		Tile* copy = src->deepCopy(map);
+		map.setTile(copy, true);
+		if (copy->spawn) {
+			map.addSpawn(copy);
+		}
+	}
+
+	for (TownMap::const_iterator it = generatedMap.towns.begin(); it != generatedMap.towns.end(); ++it) {
+		if (!it->second) {
+			continue;
+		}
+		Town* copy = newd Town(*it->second);
+		map.towns.addTown(copy);
+	}
+
+	map.doChange();
 }
 
 void Editor::addBatch(BatchAction* action, int stacking_delay) {
